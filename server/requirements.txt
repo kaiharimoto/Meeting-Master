@@ -1,0 +1,11 @@
+# Meeting Master — home AI server dependencies.
+# Runtime
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+httpx>=0.27
+pydantic>=2.7
+pydantic-settings>=2.2
+
+# Tests
+pytest>=8
