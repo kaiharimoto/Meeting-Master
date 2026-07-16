@@ -88,8 +88,27 @@ function onModalKeydown(e) {
     closeModal();
     return;
   }
+  if (e.key === 'Tab') {
+    // Trap focus inside the modal: positive tabindex alone would let Tab
+    // escape to the page behind the backdrop after the last field.
+    const cycle = [questionEl, answerEl, participantEl, cancelBtn, saveBtn];
+    e.preventDefault();
+    const idx = cycle.indexOf(e.target);
+    if (idx === -1) {
+      questionEl.focus();
+      return;
+    }
+    cycle[(idx + (e.shiftKey ? cycle.length - 1 : 1)) % cycle.length].focus();
+    return;
+  }
   if (e.key === 'Enter') {
-    // Shift+Enter inserts a newline — but only in the answer textarea.
+    // Enter activates the focused button; on the fields it commits
+    // (Shift+Enter inserts a newline, but only in the answer textarea).
+    if (e.target === cancelBtn) {
+      e.preventDefault();
+      closeModal();
+      return;
+    }
     if (e.target === answerEl && e.shiftKey) return;
     e.preventDefault();
     commit();

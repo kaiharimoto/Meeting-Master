@@ -1,6 +1,6 @@
 """Meeting Master — home AI server entry point.
 
-Run from the server/ directory:  python -m app.main   (or: python app/main.py)
+Run from the server/ directory:  python -m app.main
 Listens on 0.0.0.0:8080 — reachable over Tailscale from the laptop.
 """
 

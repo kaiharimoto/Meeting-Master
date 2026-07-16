@@ -14,6 +14,15 @@ let ctx = null;
 let pollTimer = null;
 let els = null;
 
+// Upload/poll concurrency guards: `uploading` serializes uploads (and is
+// reflected in the button state); `pollInFlight` skips interval ticks while a
+// status request is pending; `pollGeneration` invalidates responses that
+// resolve after polling stopped or a newer job took over, so a slow
+// out-of-order reply can never regress the persisted job state.
+let uploading = false;
+let pollInFlight = false;
+let pollGeneration = 0;
+
 export function initGenerate(context) {
   ctx = context;
   els = {
@@ -85,19 +94,36 @@ function requireApi() {
 
 async function onPickAudio() {
   const api = requireApi();
+  if (uploading) {
+    setStatus('An upload is already in progress — wait for it to finish.');
+    return;
+  }
   const { filePath } = await api.pickWavFile();
   if (!filePath) {
     setStatus('No audio file picked — nothing was uploaded.');
     return;
   }
 
-  setStatus('Uploading the recording to the home server…', { busy: true });
-  const { jobId } = await api.uploadMeeting(buildMeetingJson(), filePath);
-
-  ctx.state.job = { id: jobId, state: 'queued' };
-  ctx.persist();
+  // "New meeting" replaces state.job with a fresh object, so holding the
+  // reference lets us detect a mid-upload reset and drop this continuation
+  // instead of attaching the old meeting's job to the new meeting.
+  const jobRef = ctx.state.job;
+  uploading = true;
   updateButtons(ctx);
-  startPolling();
+  setStatus('Uploading the recording to the home server…', { busy: true });
+  try {
+    const { jobId } = await api.uploadMeeting(buildMeetingJson(), filePath);
+    if (ctx.state.job !== jobRef) {
+      setStatus('Upload finished for a meeting that was discarded — ignored.');
+      return;
+    }
+    ctx.state.job = { id: jobId, state: 'queued' };
+    ctx.persist();
+    startPolling();
+  } finally {
+    uploading = false;
+    updateButtons(ctx);
+  }
 }
 
 // ---- Polling ----------------------------------------------------------------
@@ -109,6 +135,7 @@ function startPolling() {
 }
 
 function stopPolling() {
+  pollGeneration += 1; // invalidate any response still in flight
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
@@ -121,16 +148,40 @@ async function pollOnce() {
     stopPolling();
     return;
   }
+  if (pollInFlight) return; // a slow request is still pending — skip this tick
 
+  const gen = pollGeneration;
   let job;
+  pollInFlight = true;
   try {
     job = await ctx.api.getJobStatus(jobId);
   } catch (err) {
+    if (gen !== pollGeneration) return; // polling stopped/superseded meanwhile
+    // 401/404 cannot heal on their own — stop instead of spinning forever.
+    if (/returned 401 /.test(err.message)) {
+      stopPolling();
+      showError(
+        'The home server rejected the token (401) — make sure BEARER_TOKEN ' +
+          'matches on both machines, then upload again.'
+      );
+      return;
+    }
+    if (/returned 404 /.test(err.message)) {
+      stopPolling();
+      showError(
+        'The home server no longer knows this job (404) — its data may have ' +
+          'been cleared. Upload the recording again.'
+      );
+      return;
+    }
     // Transient network blips are expected over a home connection: keep
     // polling, but tell the operator what is happening.
     setStatus(`Waiting for the home server… (${err.message})`, { busy: true });
     return;
+  } finally {
+    pollInFlight = false;
   }
+  if (gen !== pollGeneration) return; // stale response — a newer one already won
 
   ctx.state.job.state = job.state;
   if (job.transcript) ctx.state.transcript = job.transcript;
@@ -226,7 +277,7 @@ export function updateButtons(context) {
   if (!els) return;
   const c = context || ctx;
   const hasApi = Boolean(c.api);
-  els.pick.disabled = !hasApi;
+  els.pick.disabled = !hasApi || uploading;
   els.generate.disabled = !hasApi; // PDF works even without AI results
   els.open.disabled = !hasApi || !c.state.pdfPath;
   els.send.disabled = !hasApi || !c.state.pdfPath;

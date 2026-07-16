@@ -94,7 +94,7 @@ Also see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 | `server/` | FastAPI home AI server (port 8080) |
 | `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize (Ollama) |
 | `server/app/routes/` | `/health` and `/jobs` endpoints |
-| `server/app/email/` | Gmail SMTP sender |
+| `server/app/mailer/` | Gmail SMTP sender |
 | `server/tests/` | pytest suite (with fake ffmpeg/whisper stubs) |
 | `config/` | `*.example` configuration templates (committed) |
 | `docs/` | Setup, architecture, fonts, troubleshooting |

@@ -20,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 from .. import worker
 from ..auth import verify_token
 from ..config import get_settings
-from ..email import sender
+from ..mailer import sender
 from ..models import READY_STATES, JobRecord, JobState, MeetingMeta
 from ..store import JobStore
 
@@ -67,7 +67,19 @@ async def create_job(
 
     store = _store(request)
     record = store.create(meeting_obj)
-    await _stream_upload_to(file, store.job_dir(record.id) / "raw.wav")
+    try:
+        await _stream_upload_to(file, store.job_dir(record.id) / "raw.wav")
+    except Exception as exc:
+        # A disconnect mid-upload must not leave a forever-'queued' job behind.
+        store.update(
+            record,
+            state=JobState.failed,
+            error=f"Audio upload failed or was interrupted: {exc}",
+        )
+        log.exception("Job %s: audio upload failed", record.id)
+        raise HTTPException(
+            status_code=500, detail="Audio upload failed — please retry."
+        )
     # Enqueue for the background worker — never transcribe inside the request.
     worker.enqueue(record.id)
     log.info("Job %s queued (%s)", record.id, meeting_obj.details.title)

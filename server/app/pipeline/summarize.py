@@ -24,16 +24,36 @@ SYSTEM_PROMPT = (
     "start directly with the summary text."
 )
 
-# Rough token estimate: ~3 characters per token is a conservative ratio for
-# mixed English/CJK meeting text (English alone is ~4 chars/token).
-_CHARS_PER_TOKEN = 3
+# Rough token estimate. ASCII text runs ~4 chars/token, so 3 is conservative;
+# non-ASCII scripts (CJK especially) tokenize closer to one token PER CHARACTER,
+# so they must be counted at full weight or a long non-English transcript would
+# silently overflow num_ctx — the exact truncation bug this module guards against.
+_ASCII_CHARS_PER_TOKEN = 3
 
 # Headroom reserved for the system prompt, meeting context, and chat framing.
 _PROMPT_OVERHEAD_TOKENS = 1000
 
 
 def _estimate_tokens(text: str) -> int:
-    return len(text) // _CHARS_PER_TOKEN
+    ascii_chars = sum(1 for ch in text if ord(ch) < 128)
+    return ascii_chars // _ASCII_CHARS_PER_TOKEN + (len(text) - ascii_chars)
+
+
+def _split_by_token_budget(text: str, budget_tokens: int) -> list[str]:
+    """Split text into chunks whose estimated token count fits the budget."""
+    per_ascii = 1.0 / _ASCII_CHARS_PER_TOKEN
+    chunks: list[str] = []
+    start = 0
+    weight = 0.0
+    for i, ch in enumerate(text):
+        weight += per_ascii if ord(ch) < 128 else 1.0
+        if weight >= budget_tokens:
+            chunks.append(text[start : i + 1])
+            start = i + 1
+            weight = 0.0
+    if start < len(text):
+        chunks.append(text[start:])
+    return chunks or [text]
 
 
 def _meeting_context(meeting: MeetingMeta) -> str:
@@ -85,12 +105,8 @@ async def run(transcript_text: str, meeting: MeetingMeta, settings: Settings) ->
             return await _chat(client, settings, user_prompt)
 
         # CHUNKING SAFEGUARD: the transcript likely exceeds the context window.
-        # Summarize fixed-size character chunks, then summarize the summaries.
-        chunk_chars = max(budget_tokens * _CHARS_PER_TOKEN, _CHARS_PER_TOKEN)
-        chunks = [
-            transcript_text[i : i + chunk_chars]
-            for i in range(0, len(transcript_text), chunk_chars)
-        ]
+        # Summarize token-budget-sized chunks, then summarize the summaries.
+        chunks = _split_by_token_budget(transcript_text, max(budget_tokens, 1))
         log.info(
             "Transcript ~%d tokens exceeds budget of %d — chunking into %d parts",
             _estimate_tokens(transcript_text), budget_tokens, len(chunks),

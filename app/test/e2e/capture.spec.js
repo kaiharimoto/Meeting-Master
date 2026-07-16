@@ -89,6 +89,38 @@ test('Q opens the modal; capture, commit, and edit a card with the keyboard', as
   );
 });
 
+test('focus is trapped in the modal and Enter on Cancel discards the card', async ({ page }) => {
+  const modal = page.locator('#card-modal');
+  const question = page.locator('#card-question');
+  const cancel = page.locator('#card-cancel-btn');
+  const save = page.locator('#card-save-btn');
+  const cards = page.locator('#card-list .qa-card');
+
+  await page.keyboard.press('q');
+  await expect(modal).toBeVisible();
+  await page.keyboard.type('Should this card exist?');
+
+  // Tab past the participant field must reach the modal buttons, never the
+  // page behind the backdrop — and wrap back to the question field.
+  await page.keyboard.press('Tab'); // -> answer
+  await page.keyboard.press('Tab'); // -> participant
+  await page.keyboard.press('Tab');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(save).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(question).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(save).toBeFocused();
+
+  // Enter on the focused Cancel button cancels — it must NOT save the card.
+  await page.keyboard.press('Shift+Tab');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(modal).toBeHidden();
+  await expect(cards).toHaveCount(0);
+});
+
 test("typing 'q' inside the meeting-title input does NOT open the modal", async ({ page }) => {
   const title = page.locator('#meeting-title-input');
   const modal = page.locator('#card-modal');

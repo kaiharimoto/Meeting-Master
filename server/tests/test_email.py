@@ -6,7 +6,7 @@ import smtplib
 import pytest
 
 from app.config import Settings
-from app.email import sender
+from app.mailer import sender
 from app.models import MeetingMeta
 
 TEMPLATE_TEXT = (
