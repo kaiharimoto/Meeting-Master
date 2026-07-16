@@ -1,0 +1,12 @@
+Subject: Meeting Notes — {{title}} ({{date}})
+
+Hello,
+
+Attached are the meeting notes for "{{title}}" held on {{date}} at {{time}}.
+
+Attendees: {{attendees}}
+
+The PDF includes the meeting details, the key questions and answers captured
+during the meeting, and a general summary of the discussion.
+
+— Sent automatically by Meeting Master

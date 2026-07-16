@@ -1,0 +1,13 @@
+# Fonts (not committed)
+
+Drop your licensed **Neue Haas Grotesk** files here with these exact names:
+
+- `NeueHaasGrotesk-Roman.woff2` (or `.otf` / `.ttf`)
+- `NeueHaasGrotesk-Bold.woff2` (or `.otf` / `.ttf`)
+
+The app picks up whichever extension it finds (`.woff2` preferred). If the
+files are missing, PDFs are generated with an Arial fallback and the app shows
+a non-blocking warning.
+
+See `docs/FONTS.md` for details. These files are git-ignored because the
+typeface is commercially licensed — never commit them.

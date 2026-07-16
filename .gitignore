@@ -1,0 +1,38 @@
+# Dependencies / build output
+node_modules/
+dist/
+out/
+package-lock.json.bak
+
+# Secrets and per-machine config (only *.example files are committed)
+*.env
+config/recipients.json
+config/email_template.txt
+
+# Licensed fonts — never commit (see docs/FONTS.md)
+app/assets/fonts/*
+!app/assets/fonts/README.md
+
+# Server runtime data (audio, transcripts, PDFs, job records)
+server/data/
+
+# Media / generated artifacts
+*.wav
+*.flac
+*.pdf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Test output
+test-results/
+playwright-report/
+
+# OS noise
+.DS_Store
+Thumbs.db
+*.log
