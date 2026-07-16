@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+  />
+  <title>Meeting Master</title>
+  <link rel="stylesheet" href="styles/app.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1 class="app-title">Meeting Master</h1>
+    <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
+    <div id="connection-info" class="connection-info" title="Home server connection"></div>
+  </header>
+
+  <main class="app-main">
+    <!-- ============ 1. Meeting details ============ -->
+    <section class="panel" aria-labelledby="details-heading">
+      <h2 id="details-heading">Meeting details</h2>
+
+      <div class="field-grid">
+        <div class="field field-wide">
+          <label for="meeting-title-input">Title</label>
+          <input id="meeting-title-input" type="text" autocomplete="off"
+                 placeholder="e.g. Q3 Vendor Contract Review" />
+        </div>
+
+        <div class="field">
+          <label for="meeting-date-input">Date</label>
+          <input id="meeting-date-input" type="date" />
+        </div>
+
+        <div class="field">
+          <label for="meeting-time-input">Time</label>
+          <input id="meeting-time-input" type="time" />
+        </div>
+
+        <div class="field field-wide">
+          <label for="meeting-attendees-input">Attendees</label>
+          <textarea id="meeting-attendees-input" rows="3"
+                    placeholder="One per line, or comma separated"></textarea>
+        </div>
+
+        <div class="field field-wide">
+          <label for="meeting-recipients-input">Email recipients</label>
+          <input id="meeting-recipients-input" type="text" autocomplete="off"
+                 placeholder="Leave empty to use the preset list on the home server" />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 2. Questions & answers ============ -->
+    <section class="panel" aria-labelledby="qa-heading">
+      <div class="panel-heading-row">
+        <h2 id="qa-heading">Questions &amp; answers</h2>
+        <span class="hint-chip">Press <kbd>Q</kbd> to add a question</span>
+      </div>
+
+      <div id="card-list" class="card-list" aria-live="polite"></div>
+
+      <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
+    </section>
+
+    <!-- ============ 3. Generate & send ============ -->
+    <section class="panel" aria-labelledby="generate-heading">
+      <h2 id="generate-heading">Generate &amp; send</h2>
+
+      <div class="button-row">
+        <button id="pick-audio-btn" type="button" class="btn btn-primary">Pick audio &amp; start AI</button>
+        <button id="generate-pdf-btn" type="button" class="btn btn-primary">Generate PDF</button>
+        <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
+        <button id="send-email-btn" type="button" class="btn btn-primary" disabled>Send email</button>
+      </div>
+
+      <div id="status-line" class="status-line" role="status" aria-live="polite">
+        <span id="status-spinner" class="spinner" hidden></span>
+        <span id="status-text">Ready.</span>
+      </div>
+
+      <p id="config-note" class="config-note" hidden></p>
+    </section>
+  </main>
+
+  <!-- ============ Q&A capture modal (hidden by default) ============ -->
+  <div id="card-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
+      <h3 id="card-modal-title">New question</h3>
+
+      <div class="field">
+        <label for="card-question">Question</label>
+        <input id="card-question" type="text" tabindex="1" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="card-answer">Answer</label>
+        <textarea id="card-answer" rows="4" tabindex="2"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="card-participant">Answered by</label>
+        <input id="card-participant" type="text" tabindex="3" autocomplete="off"
+               list="participant-options" placeholder="Who gave the answer?" />
+        <datalist id="participant-options"></datalist>
+      </div>
+
+      <div class="modal-actions">
+        <span class="keyboard-hint">
+          <kbd>Enter</kbd> save &middot; <kbd>Shift+Enter</kbd> newline in answer &middot; <kbd>Esc</kbd> cancel
+        </span>
+        <button id="card-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="card-save-btn" type="button" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

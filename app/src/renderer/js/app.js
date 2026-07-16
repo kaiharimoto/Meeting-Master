@@ -1,0 +1,118 @@
+// Meeting Master renderer bootstrap.
+// Owns the single state object, persistence, and wires the feature modules.
+
+import { initDetailsForm, renderDetailsForm } from './detailsForm.js';
+import { initCapture, openCardModal } from './capture.js';
+import { initCardList, renderCards } from './cardList.js';
+import { initGenerate, updateButtons } from './generate.js';
+import { initStatus, setStatus, showError } from './status.js';
+
+const STORAGE_KEY = 'meetingmaster.meeting.v1';
+
+function defaultState() {
+  return {
+    details: { title: '', date: '', time: '', attendees: [] },
+    cards: [],
+    recipients: [],
+    options: { whisperModel: 'large-v3-turbo', emailMode: 'home' },
+    job: { id: null, state: null },
+    transcript: null,
+    summary: null,
+    pdfPath: null,
+  };
+}
+
+function loadState() {
+  const state = defaultState();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      // Shallow-merge known top-level keys so a schema tweak never crashes boot.
+      for (const key of Object.keys(state)) {
+        if (saved && saved[key] !== undefined) state[key] = saved[key];
+      }
+    }
+  } catch {
+    // Corrupt storage: start fresh rather than failing to boot.
+  }
+  return state;
+}
+
+function boot() {
+  const state = loadState();
+
+  // Shared context handed to every module. `api` may be missing when the
+  // page runs outside Electron (the Playwright e2e tests stub window.api).
+  const ctx = {
+    state,
+    api: window.api || null,
+    config: null, // filled by refreshConfig()
+    persist() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        // Quota/unavailable storage should never break the app.
+      }
+    },
+    renderAll() {
+      renderDetailsForm(ctx);
+      renderCards(ctx);
+      updateButtons(ctx);
+    },
+  };
+
+  initStatus(ctx);
+  initDetailsForm(ctx);
+  initCardList(ctx, { onEditCard: (card) => openCardModal(card) });
+  initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
+  initGenerate(ctx);
+
+  document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
+
+  document.getElementById('new-meeting-btn').addEventListener('click', () => {
+    const ok = confirm('Start a new meeting? This clears the details, Q&A cards, and job state.');
+    if (!ok) return;
+    // Replace contents in place — modules hold a reference to `state`.
+    Object.assign(state, defaultState());
+    ctx.persist();
+    ctx.renderAll();
+    setStatus('New meeting started.');
+  });
+
+  ctx.renderAll();
+  refreshConfig(ctx);
+}
+
+async function refreshConfig(ctx) {
+  const infoEl = document.getElementById('connection-info');
+  const noteEl = document.getElementById('config-note');
+
+  if (!ctx.api) {
+    infoEl.textContent = 'Running outside Electron — desktop features disabled';
+    return;
+  }
+
+  try {
+    const cfg = await ctx.api.getConfig();
+    ctx.config = cfg;
+    if (cfg.serverUrl && cfg.hasToken) {
+      infoEl.textContent = `Server: ${cfg.serverUrl} · Email: ${cfg.emailMode} · ${cfg.pageSize}`;
+      noteEl.hidden = true;
+    } else {
+      infoEl.textContent = 'Home server not configured';
+      noteEl.textContent =
+        `Missing configuration — create ${cfg.configPath} from ` +
+        'config/laptop.env.example and set HOME_SERVER_URL and BEARER_TOKEN.';
+      noteEl.hidden = false;
+    }
+  } catch (err) {
+    showError(`Could not read the configuration: ${err.message}`);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}

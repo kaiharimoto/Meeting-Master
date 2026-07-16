@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Meeting Notes</title>
+  <link rel="stylesheet" href="print.css" />
+</head>
+<body>
+  <section id="details">
+    <h1 id="detail-title"></h1>
+    <p id="detail-when"></p>
+    <p id="detail-attendees"></p>
+  </section>
+
+  <section id="qa">
+    <h2 class="section-header">Questions &amp; Answers</h2>
+    <div id="qa-cards"></div>
+  </section>
+
+  <section id="summary">
+    <h2 class="section-header">General Summary</h2>
+    <div id="summary-body"></div>
+  </section>
+
+  <script>
+    // Called by src/main/pdf.js via executeJavaScript (and by the Playwright
+    // print test). Everything goes through textContent / createElement so the
+    // meeting data is never interpreted as HTML.
+    window.renderMeeting = function renderMeeting(data) {
+      data = data || {};
+      var details = data.details || {};
+
+      // ---- Details header ----
+      var title = details.title || 'Untitled meeting';
+      document.title = 'Meeting Notes — ' + title;
+      document.getElementById('detail-title').textContent = title;
+
+      var when = [details.date, details.time].filter(Boolean).join(' at ');
+      document.getElementById('detail-when').textContent = when;
+
+      var attendees = Array.isArray(details.attendees)
+        ? details.attendees.filter(Boolean)
+        : [];
+      document.getElementById('detail-attendees').textContent = attendees.length
+        ? 'Attendees: ' + attendees.join(', ')
+        : '';
+
+      // ---- Q&A cards ----
+      var cardsHost = document.getElementById('qa-cards');
+      cardsHost.textContent = '';
+      var cards = Array.isArray(data.cards) ? data.cards : [];
+
+      if (cards.length === 0) {
+        var noCards = document.createElement('p');
+        noCards.className = 'placeholder';
+        noCards.textContent = '(No questions were captured for this meeting)';
+        cardsHost.appendChild(noCards);
+      }
+
+      cards.forEach(function (card) {
+        var el = document.createElement('article');
+        el.className = 'qa-card';
+
+        var q = document.createElement('div');
+        q.className = 'question';
+        q.textContent = card.question || '';
+        el.appendChild(q);
+
+        var a = document.createElement('div');
+        a.className = 'answer';
+        a.textContent = card.answer || '';
+        el.appendChild(a);
+
+        if (card.participant) {
+          var row = document.createElement('div');
+          row.className = 'participant-row';
+          var chip = document.createElement('span');
+          chip.className = 'participant-chip';
+          chip.textContent = 'Answered by ' + card.participant;
+          row.appendChild(chip);
+          el.appendChild(row);
+        }
+
+        cardsHost.appendChild(el);
+      });
+
+      // ---- Summary (paragraphs split on blank lines) ----
+      var summaryHost = document.getElementById('summary-body');
+      summaryHost.textContent = '';
+      var summary = typeof data.summary === 'string' ? data.summary.trim() : '';
+
+      if (!summary) {
+        var placeholder = document.createElement('p');
+        placeholder.className = 'placeholder';
+        placeholder.textContent = '(No AI summary was generated for this meeting)';
+        summaryHost.appendChild(placeholder);
+        return;
+      }
+
+      summary.split(/\n\s*\n/).forEach(function (para) {
+        var trimmed = para.trim();
+        if (!trimmed) return;
+        var p = document.createElement('p');
+        p.textContent = trimmed;
+        summaryHost.appendChild(p);
+      });
+    };
+  </script>
+</body>
+</html>

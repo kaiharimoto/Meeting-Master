@@ -1,0 +1,19 @@
+# electron-builder configuration for the portable Windows build.
+# Fonts and the print template are shipped as extraResources (NOT inside the
+# asar) so src/main/paths.js can resolve them via process.resourcesPath.
+appId: com.kaiharimoto.meeting-master
+productName: MeetingMaster
+directories:
+  output: dist
+files:
+  - "src/**/*"
+  - "package.json"
+extraResources:
+  - from: assets/fonts
+    to: fonts
+  - from: src/renderer/print
+    to: print
+win:
+  target: portable
+portable:
+  artifactName: "MeetingMaster-portable-${version}.exe"

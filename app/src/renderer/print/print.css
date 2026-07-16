@@ -1,0 +1,137 @@
+/* Meeting Master — PDF typography contract.
+ *
+ * IMPORTANT: there are NO @font-face rules in this file on purpose.
+ * src/main/pdf.js injects them at runtime (webContents.insertCSS) with
+ * absolute file:// URLs, because the font directory differs between dev
+ * (app/assets/fonts) and packaged (resources/fonts) builds. When the licensed
+ * files are missing, injection is skipped and everything falls back to Arial.
+ *
+ * Contract:
+ *   - details + questions/answers: 24pt (questions/headings bold 700)
+ *   - summary: 16pt / 1.45
+ *   - print-friendly light color coding (backgrounds need printBackground)
+ */
+
+@page {
+  /* No `size` here on purpose: printToPDF's pageSize option (Letter or A4,
+     from PAGE_SIZE) picks the paper, while preferCSSPageSize keeps these
+     margins. Hardcoding a size would defeat the A4 option. */
+  margin: 18mm;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Neue Haas Grotesk', Arial, sans-serif;
+  color: #1f2937;
+  /* Backgrounds/borders must survive printing (belt-and-braces with the
+     printBackground:true option). */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+section {
+  margin: 0 0 26pt;
+}
+
+/* ---------- Section headers: deep navy + 3pt accent underline ---------- */
+
+.section-header {
+  font-size: 24pt;
+  font-weight: 700;
+  color: #1a2b4a;
+  border-bottom: 3pt solid #2563eb;
+  padding-bottom: 5pt;
+  margin: 0 0 14pt;
+}
+
+/* ---------- 1. Details header (24pt) ---------- */
+
+#details {
+  border-bottom: 3pt solid #2563eb;
+  padding-bottom: 10pt;
+}
+
+#detail-title {
+  font-size: 24pt;
+  font-weight: 700;
+  color: #1a2b4a;
+  margin: 0 0 8pt;
+}
+
+#details p {
+  font-size: 24pt;
+  font-weight: 400;
+  color: #1f2937;
+  margin: 0 0 4pt;
+}
+
+#details p:empty {
+  display: none;
+}
+
+/* ---------- 2. Q&A (24pt) ---------- */
+
+.qa-card {
+  /* Never split a question/answer pair across a page boundary. */
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 16pt;
+}
+
+.qa-card .question {
+  font-size: 24pt;
+  font-weight: 700;
+  color: #1a2b4a;
+  margin: 0 0 6pt;
+}
+
+.qa-card .answer {
+  font-size: 24pt;
+  font-weight: 400;
+  color: #1f2937;
+  background: #f1f5f9;
+  border-left: 4pt solid #2563eb;
+  padding: 8pt 12pt;
+  border-radius: 3pt;
+  white-space: pre-wrap; /* keep intentional newlines in answers */
+}
+
+/* Caption-sized attribution chip — the Q and A themselves stay at 24pt. */
+.participant-row {
+  margin-top: 5pt;
+}
+
+.participant-chip {
+  display: inline-block;
+  font-size: 12pt;
+  font-weight: 700;
+  color: #b45309;
+  background: #fff7ed;
+  border: 1pt solid #fed7aa;
+  border-radius: 10pt;
+  padding: 2pt 9pt;
+}
+
+/* ---------- 3. Summary (16pt / 1.45) ---------- */
+
+#summary-body p {
+  font-size: 16pt;
+  line-height: 1.45;
+  color: #1f2937;
+  margin: 0 0 10pt;
+}
+
+.placeholder {
+  font-size: 16pt;
+  font-style: italic;
+  color: #6b7280;
+}

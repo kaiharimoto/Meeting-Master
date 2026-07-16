@@ -1,0 +1,20 @@
+{
+  "name": "meeting-master-app",
+  "productName": "MeetingMaster",
+  "version": "0.1.0",
+  "description": "Meeting Master laptop app \u2014 capture meeting Q&A, send audio to the home AI server, render print-perfect PDFs, and email them.",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9"
+  },
+  "devDependencies": {
+    "electron": "^37",
+    "electron-builder": "^25",
+    "@playwright/test": "~1.56.0"
+  }
+}
