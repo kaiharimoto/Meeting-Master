@@ -38,7 +38,13 @@ function sanitizeFileBase(name) {
     .replace(/[<>:"\/\\|?*\x00-\x1f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return cleaned || 'meeting-notes';
+  if (!cleaned) return 'meeting-notes';
+  // Windows reserves device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) as
+  // bare base names — "CON.pdf" cannot be created.
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(cleaned)) {
+    return `${cleaned}-notes`;
+  }
+  return cleaned;
 }
 
 // First free path: base.pdf, base-2.pdf, base-3.pdf, ...
