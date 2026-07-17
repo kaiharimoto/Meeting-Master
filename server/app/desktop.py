@@ -32,11 +32,64 @@ log = logging.getLogger(__name__)
 _HOST = "0.0.0.0"  # binds loopback + LAN/Tailscale; setup routes stay loopback-only
 
 
-def _serve() -> None:
-    import uvicorn
+def _setup_logging():
+    """Log to a file and make stdout/stderr safe in a windowed build.
 
-    settings = get_settings()
-    uvicorn.run("app.main:app", host=_HOST, port=settings.SERVER_PORT, log_level="info")
+    A no-console PyInstaller app has sys.stdout/sys.stderr set to None, so ANY
+    library that writes to them — uvicorn logs a line on every startup — raises
+    and silently kills the server thread. Point both streams and the logging
+    root at <config home>\\server.log so nothing writes to a None stream and the
+    operator has a real log to read (tray → Open data & settings folder).
+    """
+    home = config_home()
+    home.mkdir(parents=True, exist_ok=True)
+    log_path = home / "server.log"
+    stream = open(log_path, "a", encoding="utf-8", buffering=1)
+    # Replace only if missing (frozen windowed); never clobber a real console.
+    if sys.stdout is None:
+        sys.stdout = stream
+    if sys.stderr is None:
+        sys.stderr = stream
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.handlers = [handler]
+    return log_path
+
+
+def _serve() -> None:
+    # Any failure here (import error, port in use, etc.) must be logged rather
+    # than vanishing with the daemon thread — otherwise the browser opens onto a
+    # dead port and the operator sees only ERR_CONNECTION_REFUSED.
+    try:
+        import uvicorn
+
+        # Pass the app OBJECT, not the "app.main:app" import string: uvicorn's
+        # string-import path is fragile in a frozen bundle.
+        from app.main import app as fastapi_app
+
+        settings = get_settings()
+        log.info("Starting uvicorn on %s:%s", _HOST, settings.SERVER_PORT)
+        uvicorn.run(fastapi_app, host=_HOST, port=settings.SERVER_PORT, log_level="info")
+    except Exception:
+        log.exception("Server thread crashed — the setup page will be unreachable")
+
+
+def _wait_for_port(host: str, port: int, timeout: float = 20.0) -> bool:
+    """Return True once something accepts connections on host:port."""
+    import socket
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            if sock.connect_ex((host, port)) == 0:
+                return True
+        time.sleep(0.3)
+    return False
 
 
 def _setup_url() -> str:
@@ -51,7 +104,9 @@ def _open_setup() -> None:
 
 
 def _open_data_folder() -> None:
-    path = str(get_settings().data_dir)
+    # The config home holds server.env, server.log and the data/ + models/
+    # folders — the one place worth opening when troubleshooting.
+    path = str(config_home())
     try:
         os.makedirs(path, exist_ok=True)
         if sys.platform == "win32":
@@ -90,7 +145,7 @@ def _run_tray() -> None:
 
     menu = pystray.Menu(
         pystray.MenuItem("Open setup / settings", _on_setup, default=True),
-        pystray.MenuItem("Open data folder", _on_data),
+        pystray.MenuItem("Open data & settings folder", _on_data),
         pystray.MenuItem("Quit", _on_quit),
     )
     icon = pystray.Icon("MeetingMaster", image, "Meeting Master Home Server", menu)
@@ -110,17 +165,27 @@ def _block_forever() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
-    config_home().mkdir(parents=True, exist_ok=True)
+    log_path = _setup_logging()
+    log.info("Meeting Master Home Server starting (log: %s)", log_path)
 
     server_thread = threading.Thread(target=_serve, daemon=True, name="uvicorn")
     server_thread.start()
 
-    # Give the server a beat to bind, then open setup on first run.
-    time.sleep(1.0)
-    if not get_settings().is_configured:
-        log.info("Server not configured yet — opening setup at %s", _setup_url())
-        _open_setup()
+    # Only open the setup page once the server is actually accepting
+    # connections — otherwise the browser lands on ERR_CONNECTION_REFUSED.
+    port = get_settings().SERVER_PORT
+    if _wait_for_port("127.0.0.1", port):
+        if not get_settings().is_configured:
+            log.info("Server not configured yet — opening setup at %s", _setup_url())
+            _open_setup()
+        else:
+            log.info("Server configured and running on port %s", port)
+    else:
+        log.error(
+            "Server never started listening on port %s — see the log above. "
+            "The port may be in use; the tray stays available.",
+            port,
+        )
 
     _run_tray()
 
