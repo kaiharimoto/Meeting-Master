@@ -234,7 +234,9 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var pollTimer = null;
-  var editedTemplate = false, editedRecipients = false;
+  // "edited" flags so a background poll never overwrites a field the operator
+  // has started filling in (the Gmail field losing its text was exactly this).
+  var editedTemplate = false, editedRecipients = false, editedUser = false, editedFrom = false;
 
   function toast(msg) {
     var t = $("#toast"); t.textContent = msg; t.classList.add("show");
@@ -289,9 +291,10 @@
   }
 
   function render(state) {
-    // Email (don't stomp fields the user is editing).
-    if (document.activeElement !== $("#smtpUser")) $("#smtpUser").value = state.email.user || "";
-    if (document.activeElement !== $("#smtpFrom")) $("#smtpFrom").value = state.email.from || "";
+    // Email (don't stomp fields the user is editing — via a persistent "edited"
+    // flag, not just current focus, so clicking away doesn't lose the text).
+    if (!editedUser && document.activeElement !== $("#smtpUser")) $("#smtpUser").value = state.email.user || "";
+    if (!editedFrom && document.activeElement !== $("#smtpFrom")) $("#smtpFrom").value = state.email.from || "";
     if ($("#smtpPass").placeholder && state.email.hasPassword)
       $("#smtpPass").placeholder = "•••••••• (saved — leave blank to keep)";
     if (!editedRecipients) $("#recipients").value = (state.recipients || []).join("\n");
@@ -363,7 +366,7 @@
       .then(function (state) {
         btn.disabled = false; $("#save-status").textContent = "Saved.";
         $("#smtpPass").value = "";
-        editedTemplate = false; editedRecipients = false;
+        editedTemplate = false; editedRecipients = false; editedUser = false; editedFrom = false;
         render(state);
         $("#code-card").scrollIntoView({ behavior: "smooth" });
       })
@@ -379,6 +382,8 @@
   $("#save").addEventListener("click", save);
   $("#template").addEventListener("input", function () { editedTemplate = true; });
   $("#recipients").addEventListener("input", function () { editedRecipients = true; });
+  $("#smtpUser").addEventListener("input", function () { editedUser = true; });
+  $("#smtpFrom").addEventListener("input", function () { editedFrom = true; });
   $("#copy").addEventListener("click", function () {
     var text = $("#code").textContent;
     navigator.clipboard.writeText(text).then(function () { toast("Copied"); },
