@@ -1,5 +1,11 @@
 # Building whisper.cpp with Vulkan (Windows, AMD RX 7900 XTX)
 
+> **You do not need this to install Meeting Master.** The home-server installer
+> already bundles a Vulkan `whisper-cli.exe` (compiled from source by CI — see
+> `.github/workflows/build-installers.yml`). This page is a **developer/CI
+> reference** for how that build is produced, and for building it by hand in a
+> source checkout.
+
 Command reference for the transcription engine on the home PC. Vulkan — not
 ROCm — is the supported way to run whisper.cpp on an AMD GPU under Windows;
 the Vulkan backend is built into whisper.cpp behind a single CMake flag.

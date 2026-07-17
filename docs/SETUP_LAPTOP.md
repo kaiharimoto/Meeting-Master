@@ -1,114 +1,61 @@
 # Laptop setup (Windows work laptop)
 
-The laptop runs the Meeting Master Electron app — a **portable single .exe**
-that needs no installer and no admin rights. Set up the
-[home PC](SETUP_HOMEPC.md) first: you need its `https://…ts.net` URL and the
-shared `BEARER_TOKEN`.
+The laptop runs the Meeting Master app. Setup is: install the app, install
+Tailscale, paste the **Connection Code** from the home PC. Set up the
+[home PC](SETUP_HOMEPC.md) first — its setup page gives you the Connection Code
+you'll paste in step 3.
 
-## 1. Get the app
+## 1. Install the app
 
-**Option A — portable exe (normal use).** Copy
-`MeetingMaster-portable-0.1.0.exe` (built in step 5) anywhere on the laptop
-and double-click it. Nothing is installed; settings live in
-`%APPDATA%\MeetingMaster\`.
+1. Download **`MeetingMaster-Setup-<version>.exe`** from the
+   [latest release](../../releases/latest). (No release yet? Open the
+   **build-installers** run under the repo's **Actions** tab and download the
+   **`laptop-installer`** artifact.)
+2. Double-click it and click through the installer. It installs per-user — **no
+   admin rights required.**
 
-**Option B — run from source (development):**
-
-```powershell
-cd app
-npm install
-npm start
-```
-
-(or run [`scripts/laptop/dev.ps1`](../scripts/laptop/dev.ps1), which does the
-same).
+**SmartScreen note:** the installer is unsigned, so the first launch may show
+"Windows protected your PC". Click **More info → Run anyway**. (Optional fix:
+Authenticode code-signing — see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md#windows-smartscreen-blocks-the-installer).)
 
 ## 2. Tailscale
 
-Install Tailscale on the laptop and sign in to the **same tailnet** as the
-home PC:
+Install **Tailscale** on the laptop and **sign in to the same account** you
+used on the home PC — both machines must be on the same tailnet. Download it
+from <https://tailscale.com/download/windows>.
 
-```powershell
-winget install Tailscale.Tailscale
-```
-
-Verify the home server is reachable by opening
-`https://homepc.tail-xxxx.ts.net/health` in a browser — it should show
-`{"status":"ok"}`.
-
-If the laptop is managed and you cannot install Tailscale, see the last-resort
-options in
+If the laptop is locked down and you cannot install Tailscale, see the
+last-resort options in
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md#managed-laptop-cant-install-tailscale).
 
-## 3. laptop.env
+## 3. Pair with the home PC
 
-The app reads its config from `laptop.env`. It shows the exact path it is
-using (and where to create the file if it doesn't exist yet) in its Settings
-area — normally:
+1. Open **Meeting Master** → **Settings**.
+2. **Paste the Connection Code** from the home PC's setup page (the string it
+   showed after *Save & Finish*).
+3. Click **Save**.
 
-```text
-C:\Users\<you>\AppData\Roaming\MeetingMaster\laptop.env
-```
-
-In development you can instead keep a `laptop.env` next to `app\package.json`
-(the user-data location wins if both exist; real environment variables
-override both).
-
-Copy the template `config\laptop.env.example` there and fill in:
-
-```ini
-HOME_SERVER_URL=https://homepc.tail-xxxx.ts.net
-BEARER_TOKEN=<same string as BEARER_TOKEN in the home PC's server.env>
-EMAIL_MODE=home
-PAGE_SIZE=Letter
-```
-
-- `EMAIL_MODE=home` (the default) keeps Gmail credentials off this laptop and
-  works even where the corporate network blocks SMTP. Only set
-  `EMAIL_MODE=laptop` (plus `SMTP_USER` / `SMTP_APP_PASSWORD`) if the home
-  path is unavailable.
-- `PAGE_SIZE` is `Letter` or `A4`.
+That's it — the code carries both the home server's tailnet URL and the shared
+secret, so there is nothing else to type. If the app later reports the code was
+rejected, regenerate it on the home PC's setup page and paste the new one
+([TROUBLESHOOTING.md](TROUBLESHOOTING.md#connection-code-rejected)).
 
 ## 4. Fonts (Neue Haas Grotesk)
 
 The PDF is rendered with your licensed **Neue Haas Grotesk** files. Drop them
-in with these exact names (details, expected filenames, and licensing notes:
-[FONTS.md](FONTS.md)):
+into the installed app's fonts folder using the exact filenames in
+[FONTS.md](FONTS.md) — for an installed build that is the
+`resources\fonts\` folder next to the app's executable
+(`NeueHaasGrotesk-Roman.woff2`/`.otf`/`.ttf` and `NeueHaasGrotesk-Bold.*`).
 
-- **Development:** `app\assets\fonts\NeueHaasGrotesk-Roman.woff2` (or
-  `.otf`/`.ttf`) and `NeueHaasGrotesk-Bold.*`.
-- **Packaged app:** the files must be in `app\assets\fonts\` **at build
-  time** — `npm run dist` copies them into the exe's `resources\fonts`
-  folder (electron-builder `extraResources`), which is where the packaged app
-  looks at runtime.
+Without them the app still works — PDFs fall back to Arial and the app shows a
+non-blocking warning.
 
-Without them the app still works — PDFs fall back to Arial and the app shows
-a non-blocking warning.
+## 5. First-run check
 
-## 5. Building the portable exe
-
-On any machine with Node.js (the fonts must be in `app\assets\fonts\` first —
-see step 4):
-
-```powershell
-cd app
-npm install
-npm run dist
-```
-
-Output: `app\dist\MeetingMaster-portable-0.1.0.exe`. Copy that single file to
-the work laptop.
-
-**SmartScreen note:** the exe is unsigned, so the first launch on a new
-machine shows "Windows protected your PC". Click **More info → Run anyway**.
-If that's unacceptable (or blocked by policy), the fix is Authenticode
-code-signing with a certificate — electron-builder supports it via its `win`
-signing options — but that is optional and costs a yearly cert fee.
-
-## 6. First-run check
-
-1. Launch the app; confirm the Settings area shows your config path and the
-   `https://…ts.net` server URL (and that a token is configured).
+1. Launch the app; confirm **Settings** shows a configured server (a green /
+   "connected" indicator) after pasting the Connection Code.
 2. Fill in a dummy meeting, press **Q**, and capture a test card
    (Q → question, Tab → answer, Tab → participant, Enter).
 3. Click **Generate PDF** (works even without an AI job — the summary shows a
@@ -119,3 +66,8 @@ signing options — but that is optional and costs a yearly cert fee.
 
 The day-to-day flow is the "Repeatable per-meeting workflow" in the
 [README](../README.md#repeatable-per-meeting-workflow).
+
+---
+
+**Developers** running the app from source (`npm start`): see the Development
+section of the [README](../README.md#development).

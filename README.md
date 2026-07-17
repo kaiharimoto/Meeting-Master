@@ -70,13 +70,24 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quickstart
 
-Two setup guides, one per machine — do the home PC first (the laptop needs its
-URL and token):
+Two installers, one per machine — do the home PC first (it produces the
+**Connection Code** the laptop needs). Download both `.exe` files from the
+[latest release](../../releases/latest) (or from the **build-installers**
+[Actions](../../actions) run: artifacts `homeserver-installer` and
+`laptop-installer`).
 
-- **Home PC** (Windows, always on, AMD GPU): [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md)
-- **Laptop** (Windows work laptop): [docs/SETUP_LAPTOP.md](docs/SETUP_LAPTOP.md)
+1. **Home PC** — run `MeetingMaster-HomeServer-Setup.exe`. It installs
+   per-user, launches, and opens a **Setup page** in your browser. There you
+   enter your Gmail App Password + recipients, click **Install** for Ollama /
+   Tailscale / the AI models (wait for green checks), sign in to Tailscale, then
+   **Save & Finish** and copy the **Connection Code**.
+2. **Laptop** — run `MeetingMaster-Setup-<version>.exe`, install Tailscale and
+   sign in to the **same** account, then open Meeting Master → **Settings** and
+   **paste the Connection Code**. Done.
 
-Also see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+Full walk-throughs: [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md) and
+[docs/SETUP_LAPTOP.md](docs/SETUP_LAPTOP.md). Also see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 [docs/FONTS.md](docs/FONTS.md), and
 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
@@ -84,35 +95,41 @@ Also see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 
 | Path | What it is |
 | --- | --- |
-| `app/` | Electron laptop app (`npm start`, portable exe via `npm run dist`) |
+| `app/` | Electron laptop app (`npm start`; NSIS setup exe via `npm run dist`) |
 | `app/src/main/` | Main process: config, IPC, PDF rendering, home-server client, SMTP |
 | `app/src/preload/` | `contextBridge` — the only bridge to `window.api` |
 | `app/src/renderer/` | UI (details form, Q&A capture, generate/send) + print template |
 | `app/src/shared/schema.js` | Single source of truth for IPC channel names + job states |
 | `app/assets/fonts/` | Licensed Neue Haas Grotesk files (git-ignored, see `docs/FONTS.md`) |
 | `app/test/e2e/` | Playwright test suite |
-| `server/` | FastAPI home AI server (port 8080) |
+| `server/` | FastAPI home AI server (port 8080; `python -m app.main` in a dev checkout) |
 | `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize (Ollama) |
 | `server/app/routes/` | `/health` and `/jobs` endpoints |
 | `server/app/mailer/` | Gmail SMTP sender |
 | `server/tests/` | pytest suite (with fake ffmpeg/whisper stubs) |
-| `config/` | `*.example` configuration templates (committed) |
+| `installer/` | Home-server packaging: PyInstaller spec, Inno Setup script, bundled `bin/` |
+| `.github/workflows/` | `build-installers.yml` — builds both Windows installers, publishes releases |
+| `config/` | `*.example` configuration templates (dev/reference only) |
 | `docs/` | Setup, architecture, fonts, troubleshooting |
-| `scripts/homepc/`, `scripts/laptop/` | Helper scripts for each machine |
+| `scripts/` | Dev helpers (`laptop/dev.ps1`, `homepc/build_whisper_vulkan.md`) — not needed for install |
 
 ## Configuration overview
 
-Only the `*.example` files are committed; every real copy is git-ignored.
+For normal use you configure nothing by hand. The home server's **Setup page**
+(`http://127.0.0.1:8080/setup`) writes its settings to
+`%APPDATA%\MeetingMaster\server.env`, and the laptop gets the server URL and the
+shared bearer token from the **Connection Code** you paste into Settings — the
+two `BEARER_TOKEN`s always match because they come from the same code.
 
-| Template (committed) | Real copy (git-ignored) | Used by |
+The committed `config/*.example` files are **dev/reference only** — they
+document the keys the setup page manages:
+
+| Template (reference) | Where the real values live | Used by |
 | --- | --- | --- |
-| `config/laptop.env.example` | `%APPDATA%\MeetingMaster\laptop.env` (dev: `app/laptop.env` next to `package.json`) | Laptop app — server URL, token, email mode, page size |
-| `config/server.env.example` | `server/server.env` | Home server — token, tool paths, models, SMTP |
-| `config/recipients.example.json` | `config/recipients.json` | Home server — preset recipient list |
-| `config/email_template.example.txt` | `config/email_template.txt` | Home server — email subject/body template |
-
-The `BEARER_TOKEN` in `laptop.env` and `server.env` must be the same string —
-it is the shared secret for every `/jobs` request.
+| `config/server.env.example` | `%APPDATA%\MeetingMaster\server.env` (written by the setup page) | Home server — token, models, SMTP |
+| `config/recipients.example.json` | `%APPDATA%\MeetingMaster\recipients.json` (set on the setup page) | Home server — preset recipient list |
+| `config/email_template.example.txt` | `%APPDATA%\MeetingMaster\email_template.txt` (set on the setup page) | Home server — email subject/body template |
+| `config/laptop.env.example` | app Settings (from the Connection Code); dev: `app/laptop.env` | Laptop app — server URL, token, email mode, page size |
 
 ## Development
 
@@ -137,9 +154,15 @@ and summary — so you can exercise PDF rendering without a home server.
 cd server
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp ../config/server.env.example server.env   # then edit it
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
+python -m app.main   # serves on 0.0.0.0:8080
 ```
+
+With no `BEARER_TOKEN` configured the server starts in **setup mode** — open
+`http://127.0.0.1:8080/setup` to configure it (the same page the installed app
+shows on first run). Settings are written to the config home
+(`$XDG_CONFIG_HOME/MeetingMaster` on Linux/macOS, `%APPDATA%\MeetingMaster` on
+Windows); override it with `MEETING_MASTER_HOME`. In a dev checkout, ffmpeg and
+`whisper-cli` are taken from `PATH`; the packaged server bundles them.
 
 **Test suites:**
 

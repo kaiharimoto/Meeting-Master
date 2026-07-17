@@ -1,268 +1,108 @@
 # Home PC setup (Windows, always on, AMD RX 7900 XTX)
 
-The home PC runs the AI job service: FastAPI on port 8080, ffmpeg for audio
-normalization, whisper.cpp (Vulkan build) for transcription, native Ollama for
-summarization, and the Gmail SMTP send. Work through the steps in order — the
-last step gives you the `https://…ts.net` URL and the bearer token the laptop
+The home PC runs the AI job service: transcription (whisper.cpp, Vulkan),
+summarization (Ollama), and the Gmail send. Setup is a single installer plus a
+guided setup page in your browser — **no PowerShell, no Python, no manual
+config-file editing.** ffmpeg and the whisper.cpp engine are already inside the
+installer; Ollama, Tailscale, and the AI models are installed for you from that
+setup page.
+
+At the end you copy one **Connection Code** — that is everything the laptop
 needs.
 
-Commands are PowerShell unless noted. Use `curl.exe` (bundled with Windows
-10/11), not plain `curl`, which PowerShell aliases to `Invoke-WebRequest`.
+## 1. Install
 
-## 1. ffmpeg
+1. Download **`MeetingMaster-HomeServer-Setup.exe`** from the
+   [latest release](../../releases/latest). (No release yet? Open the
+   **build-installers** run under the repo's **Actions** tab and download the
+   **`homeserver-installer`** artifact.)
+2. Double-click it and click through the installer. **No admin rights are
+   required** — it installs per-user.
+3. When it finishes it launches automatically, adds a **tray icon**, and opens
+   the **Setup** page in your default browser at
+   `http://127.0.0.1:8080/setup`. (If the page doesn't open on its own, browse
+   to that address — see
+   [TROUBLESHOOTING.md](TROUBLESHOOTING.md#the-setup-page-didnt-open).)
 
-```powershell
-winget install Gyan.FFmpeg
-```
+The server **auto-starts at login** from now on, so the whole stack comes back
+after a reboot with nothing to do.
 
-Open a **new** terminal (winget updates PATH) and verify:
+## 2. Work through the Setup page
 
-```powershell
-ffmpeg -version
-```
+Everything below happens on the `http://127.0.0.1:8080/setup` page.
 
-If you install ffmpeg somewhere not on PATH, set `FFMPEG_PATH` in
-`server\server.env` to the full path of `ffmpeg.exe`.
+### a. Email
 
-## 2. whisper.cpp (Vulkan build)
+- Enter your **Gmail address**, a **Gmail App Password**, and the **recipient
+  list** (who receives the meeting PDFs).
+- An App Password is **not** your normal Google password. Create one at
+  <https://myaccount.google.com/apppasswords> (you must have **2-Step
+  Verification** enabled first — App Passwords only appear once 2FA is on).
+  Google shows a 16-character password once; paste it into the App Password
+  field. The setup page links to these steps too.
 
-whisper.cpp is built with **Vulkan**, not ROCm — on Windows the Vulkan backend
-is the reliable way to run the RX 7900 XTX.
+### b. Install the dependencies (guided)
 
-Prerequisites (once):
+The page has **Install** buttons for each dependency. Click them and wait for
+the green checks — the first two are quick; the model downloads are large:
 
-- The current **AMD Adrenalin** driver (includes the Vulkan runtime).
-- **Vulkan SDK**: `winget install KhronosGroup.VulkanSDK`
-- **Visual Studio 2022** with the "Desktop development with C++" workload
-  (or the standalone VS Build Tools), **CMake**, and **git**.
+- **Ollama** — the local LLM runtime (installed natively for Windows, which is
+  what the AMD RX 7900 XTX needs — never WSL2).
+- **Tailscale** — the private network that links this PC to the laptop.
+- **AI model** — the summarization model `qwen2.5:14b-instruct-q6_K`
+  (**~9 GB** download) plus the transcription model `large-v3-turbo`
+  (**~1.6 GB** download). Expect this to take a while on a normal connection;
+  the page shows progress and turns green when each is ready.
 
-Build (full command reference with troubleshooting notes:
-[`scripts/homepc/build_whisper_vulkan.md`](../scripts/homepc/build_whisper_vulkan.md)):
+If an install button fails, just click it again, or install that one tool
+yourself from its own website and click **Detect** — see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-dependency-install-failed).
 
-```powershell
-git clone https://github.com/ggml-org/whisper.cpp C:\tools\whisper.cpp
-cd C:\tools\whisper.cpp
-cmake -B build -DGGML_VULKAN=ON
-cmake --build build --config Release
-```
+### c. Sign in to Tailscale
 
-Binaries land in `build\bin\Release\` (notably `whisper-cli.exe`).
+When prompted, **sign in to Tailscale**. Use the account you will also sign the
+laptop into — the two machines must be on the **same tailnet**. The setup page
+publishes the server on the tailnet for you once you're signed in.
 
-Download the models — default and fallback. Model files are named
-`ggml-<model>.bin` inside the models directory:
+### d. Finish and copy the Connection Code
 
-```powershell
-cd C:\tools\whisper.cpp\models
-.\download-ggml-model.cmd large-v3-turbo
-.\download-ggml-model.cmd large-v3
-```
+Click **Save & Finish**. The page shows a **Connection Code** — a single string
+that bundles the server's tailnet URL and its shared secret. **Copy it.** That
+code is the only thing you paste on the laptop (see
+[SETUP_LAPTOP.md](SETUP_LAPTOP.md)). You can reopen the setup page any time from
+the tray icon to view or regenerate it.
 
-Verify with the bundled sample (look for `ggml_vulkan: Found 1 Vulkan devices`
-followed by a transcript of the JFK quote):
-
-```powershell
-cd C:\tools\whisper.cpp
-.\build\bin\Release\whisper-cli.exe -m models\ggml-large-v3-turbo.bin -f samples\jfk.wav
-```
+## 3. Where your data and settings live
 
-These paths become `WHISPER_CLI` and `WHISPER_MODEL_DIR` in step 4.
+Everything the server writes lives under **`%APPDATA%\MeetingMaster`**:
 
-## 3. Ollama (native Windows — NOT WSL2)
+- `server.env` — settings the setup page saves (never edit by hand unless you
+  have to; prefer the setup page).
+- `models\` — the downloaded whisper models.
+- `data\<job-id>\` — per-job audio, transcript, and PDF records.
 
-> **Warning: install Ollama natively on Windows. Do NOT use WSL2.**
-> ROCm inside WSL2 needs the `/dev/kfd` kernel device, which WSL2 does not
-> expose — Ollama in WSL2 silently falls back to CPU. The native Windows
-> installer bundles its own ROCm libraries and officially supports the
-> RX 7900 XTX (gfx1100).
+Ollama stores its model separately under its own data directory. Reopen the
+setup page from the tray icon whenever you want to change email settings, the
+recipient list, or the Connection Code.
 
-Install from <https://ollama.com/download/windows> (or
-`winget install Ollama.Ollama`), then pull the model:
-
-```powershell
-ollama pull qwen2.5:14b-instruct-q6_K
-```
-
-Verify GPU use — run a prompt, then check `ollama ps` **while the model is
-loaded**; the `PROCESSOR` column must say `100% GPU`:
-
-```powershell
-ollama run qwen2.5:14b-instruct-q6_K "Reply with one word: ready"
-ollama ps
-```
-
-If it says CPU (or a CPU/GPU split), see
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md#ollama-ps-shows-cpu-not-gpu) before
-continuing.
-
-Ollama's Windows installer registers itself to start at login, so the API at
-`http://127.0.0.1:11434` is available after reboots.
-
-## 4. Python server + configuration
-
-```powershell
-cd C:\path\to\Meeting-Master\server
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-Create the real config files from the committed templates (all three are
-git-ignored):
-
-```powershell
-Copy-Item ..\config\server.env.example .\server.env
-Copy-Item ..\config\recipients.example.json ..\config\recipients.json
-Copy-Item ..\config\email_template.example.txt ..\config\email_template.txt
-```
-
-Generate a long random bearer token:
-
-```powershell
-python -c "import secrets;print(secrets.token_urlsafe(32))"
-```
-
-Edit `server\server.env`:
-
-- `BEARER_TOKEN` — the token you just generated. The laptop's `laptop.env`
-  must use the **same** string.
-- `WHISPER_CLI=C:\tools\whisper.cpp\build\bin\Release\whisper-cli.exe`
-- `WHISPER_MODEL_DIR=C:\tools\whisper.cpp\models`
-- `WHISPER_MODEL_DEFAULT=large-v3-turbo`, `WHISPER_MODEL_FALLBACK=large-v3`
-  (the defaults) match the models downloaded in step 2.
-- Leave `OLLAMA_URL`, `OLLAMA_MODEL`, and `NUM_CTX=32768` as-is unless you
-  know why you're changing them (see
-  [TROUBLESHOOTING.md](TROUBLESHOOTING.md#summary-covers-only-the-end-of-the-meeting)).
-- The `SMTP_*` values come from step 5.
-
-Edit `config\recipients.json` (the preset recipient list) and
-`config\email_template.txt` (first line `Subject: …`, then the body;
-`{{title}}`, `{{date}}`, `{{time}}`, `{{attendees}}` are substituted).
-
-## 5. Gmail App Password
-
-Gmail requires an **App Password** for SMTP — your normal account password
-will not work and must never go in a config file.
-
-1. Enable **2-Step Verification** on the Google account
-   (<https://myaccount.google.com/security>) — App Passwords are only
-   available with 2FA on.
-2. Go to <https://myaccount.google.com/apppasswords>.
-3. Create an app password named e.g. `Meeting Master`. Google shows a
-   16-character password **once** — copy it (spaces don't matter; the server
-   accepts it either way, but pasting it without spaces is tidiest).
-4. In `server\server.env` set:
-
-   ```ini
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=465
-   SMTP_USE_SSL=true
-   SMTP_USER=you@gmail.com
-   SMTP_APP_PASSWORD=abcdabcdabcdabcd
-   SMTP_FROM=you@gmail.com
-   ```
-
-## 6. Run the server and smoke-test it
-
-Start the server (creates/updates the venv automatically):
-
-```powershell
-C:\path\to\Meeting-Master\scripts\homepc\run_server.ps1
-```
-
-In a second terminal, hit the unauthenticated health endpoint:
-
-```powershell
-curl.exe http://localhost:8080/health
-```
-
-Expected: `{"status":"ok"}`.
-
-Now an authenticated end-to-end job with a short WAV (whisper.cpp's
-`samples\jfk.wav` works well). Write the meeting JSON to a file first — it
-sidesteps PowerShell/cmd quote-escaping entirely:
-
-```powershell
-cd C:\path\to\Meeting-Master
-Copy-Item C:\tools\whisper.cpp\samples\jfk.wav test.wav
-'{"schemaVersion":1,"details":{"title":"Smoke test","date":"2026-07-16","time":"10:00","attendees":["Kai"]},"cards":[],"recipients":[],"options":{"whisperModel":"large-v3-turbo","emailMode":"home"}}' | Set-Content meeting.json
-```
-
-Upload it (`-F "meeting=<meeting.json"` tells curl to read the form-field
-value from the file; replace `YOUR_TOKEN` with your `BEARER_TOKEN`):
-
-```powershell
-curl.exe -X POST http://localhost:8080/jobs -H "Authorization: Bearer YOUR_TOKEN" -F "meeting=<meeting.json" -F "file=@test.wav"
-```
-
-Expected: `{"id":"20260716-101502-a1b2c3"}` (HTTP 202). Poll it with the id
-you got back:
-
-```powershell
-curl.exe -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/jobs/20260716-101502-a1b2c3
-```
-
-The `state` field should advance `queued → normalizing → transcribing →
-summarizing → ready` within a minute or so for an 11-second WAV, and the final
-record contains the transcript and summary. A `401` here means the token
-doesn't match; a `failed` state carries the pipeline error in `error`.
-
-## 7. Tailscale
-
-```powershell
-winget install Tailscale.Tailscale
-```
-
-Sign in (this machine and the laptop must join the **same** tailnet), then
-publish the service over HTTPS on the tailnet:
-
-```powershell
-tailscale serve --bg 8080
-tailscale serve status
-```
-
-`tailscale serve status` prints the URL, e.g.
-`https://homepc.tail-xxxx.ts.net`. That URL is the laptop's
-`HOME_SERVER_URL`. Verify from another device on the tailnet:
-
-```powershell
-curl.exe https://homepc.tail-xxxx.ts.net/health
-```
-
-The serve configuration is persistent — it survives reboots and only needs
-re-running after a `tailscale serve reset`
-(see [`scripts/homepc/tailscale_serve.ps1`](../scripts/homepc/tailscale_serve.ps1)).
-
-## 8. Auto-start on boot
-
-Two things must come up after a reboot:
-
-1. **Tailscale** — nothing to do. It runs as a Windows service, and the
-   `serve` config from step 7 persists across reboots.
-2. **The job server** — create a Task Scheduler entry that runs
-   `run_server.ps1` at logon:
-
-   ```powershell
-   schtasks /Create /TN "MeetingMaster Server" /SC ONLOGON /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\path\to\Meeting-Master\scripts\homepc\run_server.ps1"
-   ```
-
-   (Or via the Task Scheduler GUI: *Create Task…* → trigger **At log on** →
-   action *Start a program* → `powershell.exe` with the arguments above. Tick
-   "Run whether user is logged on or not" if the PC sits at the lock screen.)
-
-   Alternative: [NSSM](https://nssm.cc) can wrap the same script as a real
-   Windows service if you prefer service semantics (auto-restart on crash).
-
-Since Ollama also starts at login (step 3), a reboot brings the whole stack
-back without manual steps.
-
-## 9. What to expect (performance)
+## 4. What to expect (performance)
 
 On the RX 7900 XTX, a **1-hour meeting** takes roughly:
 
-- **~2–3 minutes** to transcribe with `large-v3-turbo` (the `large-v3`
-  fallback is noticeably slower but slightly more accurate),
+- **~2–3 minutes** to transcribe with `large-v3-turbo`,
 - **under 1 minute** to summarize with `qwen2.5:14b-instruct-q6_K`,
 - plus the WAV upload time, which depends on the laptop→home link (a ~600 MB
-  WAV transfers in a few minutes over a direct Tailscale connection; much
-  slower if traffic is relayed — see
+  WAV transfers in a few minutes over a direct Tailscale connection; slower if
+  traffic is relayed — see
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md#upload-fails-or-is-very-slow)).
+
+The first meeting after setup is the only slow one for models — after the
+one-time downloads above, nothing else is fetched.
+
+---
+
+**Developers** running the server from a source checkout instead of the
+installer: see the Development section of the [README](../README.md#development).
+The Vulkan whisper.cpp build the installer ships is produced by CI; the manual
+build steps are kept as a reference in
+[`scripts/homepc/build_whisper_vulkan.md`](../scripts/homepc/build_whisper_vulkan.md).

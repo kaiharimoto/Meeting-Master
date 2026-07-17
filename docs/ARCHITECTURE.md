@@ -37,6 +37,46 @@ flowchart LR
     SM --> G["Gmail → preset recipients"]
 ```
 
+## Packaging & distribution
+
+The project ships as **two unsigned Windows installers**, built by CI
+(`.github/workflows/build-installers.yml`) on `windows-latest` runners and
+attached to a GitHub Release on each `v*` tag:
+
+- **Laptop** — `MeetingMaster-Setup-<version>.exe`, the Electron app packaged
+  with electron-builder (NSIS target). Artifact `laptop-installer`.
+- **Home server** — `MeetingMaster-HomeServer-Setup.exe`, the FastAPI server
+  frozen with **PyInstaller** (onedir) and wrapped with **Inno Setup**. The
+  installer bundles the native tools the pipeline shells out to: `ffmpeg.exe`
+  and the **Vulkan** whisper.cpp CLI (`whisper-cli.exe` + its ggml/whisper
+  DLLs), staged into `installer/server/bin/` by CI — the whisper.cpp Vulkan
+  build is compiled from source in the workflow. The **AI models are not
+  bundled** (they are large and change); they're downloaded on first run.
+  Artifact `homeserver-installer`.
+
+Both installers are per-user (no admin) and unsigned (SmartScreen "More info →
+Run anyway"; optional Authenticode signing is noted in the docs).
+
+**First-run setup page.** Instead of hand-edited env files, the home server
+serves a setup page at `http://127.0.0.1:8080/setup`. Until a `BEARER_TOKEN` is
+saved the server is in **setup mode** (`Settings.is_configured` is false and
+`/jobs` is refused). The page collects email settings + recipients, drives
+**guided dependency installs** (Ollama, Tailscale, and the whisper/Ollama
+models) behind Install buttons, and, once Tailscale is signed in and the token
+is generated, emits a **Connection Code**.
+
+**Connection-code pairing.** The Connection Code bundles the home server's
+tailnet URL and the shared bearer token into one string. Pairing the laptop is
+"paste the code into Settings" — no manually matched tokens, no typed URLs. The
+laptop derives its `HOME_SERVER_URL` + `BEARER_TOKEN` from the code.
+
+**Config home + auto-start.** The server reads/writes its settings, models, and
+job data under a writable per-user directory — `%APPDATA%\MeetingMaster` on
+Windows (see `server/app/config.py` → `config_home()`), never the read-only
+install folder. The installer registers the server to **auto-start at login**
+with a **tray icon**; Tailscale and Ollama likewise start at login, so a reboot
+brings the whole stack back with no manual steps.
+
 ## Job state machine
 
 States are defined once in `app/src/shared/schema.js` (`JOB_STATES`) and must
@@ -74,7 +114,9 @@ Notes:
 
 Auth: every endpoint except `/health` requires
 `Authorization: Bearer <token>`, checked with a constant-time compare against
-`BEARER_TOKEN` in `server/server.env`. Missing/mismatched token → `401`.
+the `BEARER_TOKEN` saved by the setup page (in the config home's `server.env` —
+`%APPDATA%\MeetingMaster\server.env` on Windows). Missing/mismatched token →
+`401`; an empty token means the server is still in setup mode and refuses jobs.
 
 ### `GET /health`
 

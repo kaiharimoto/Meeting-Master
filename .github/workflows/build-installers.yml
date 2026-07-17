@@ -1,0 +1,280 @@
+# Build both Windows installers and (on a tag) publish them to a GitHub Release.
+#
+#   * laptop    -> app/dist/MeetingMaster-Setup-<version>.exe   (electron-builder nsis)
+#   * server    -> MeetingMaster-HomeServer-Setup.exe           (PyInstaller + Inno Setup)
+#
+# This is Windows-only CI that CANNOT be run from the dev checkout used to
+# author it, so every step is written to be explicit and to FAIL FAST with a
+# clear message rather than produce a silently-broken installer. The whisper.cpp
+# Vulkan compile is the riskiest step (it builds native GPU code from upstream
+# source) — see the comments on the `server` job.
+name: build-installers
+
+on:
+  push:
+    # The working branch this repo is developed on, plus main/master once
+    # merged. Add/remove branches as the default branch changes.
+    branches:
+      - claude/meeting-notes-generator-o80jz1
+      - main
+      - master
+    tags:
+      - "v*" # a v-prefixed tag (e.g. v0.1.0) triggers a published Release
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Only one build per ref at a time; a newer push cancels an in-flight run.
+concurrency:
+  group: build-installers-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default; the release job re-grants contents: write.
+permissions:
+  contents: read
+
+env:
+  # whisper.cpp source ref to build. 'master' tracks upstream; pin to a tag
+  # (e.g. v1.7.5) for byte-reproducible builds. The commit it resolves to keys
+  # the build cache below, so bug-fix commits are picked up automatically.
+  WHISPER_CPP_REF: master
+  # LunarG Vulkan SDK version. This SDK provides glslc, which ggml's Vulkan
+  # backend uses to compile its compute shaders AT BUILD TIME — the source-only
+  # Vulkan loader is not enough. Bump this if the download 404s (LunarG prunes
+  # very old point releases).
+  VULKAN_VERSION: "1.3.296.0"
+  # Static ffmpeg (BtbN). The 'latest' release tag always resolves to the
+  # newest build, so this URL does not need bumping.
+  FFMPEG_ZIP_URL: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # LAPTOP installer — the Electron app packaged as an NSIS setup .exe.
+  # ---------------------------------------------------------------------------
+  laptop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # `npm run dist` is `electron-builder --win nsis`, which reads the version
+      # from app/package.json and emits app/dist/MeetingMaster-Setup-<version>.exe.
+      # NOTE: the licensed Neue Haas Grotesk fonts are git-ignored, so a CI build
+      # ships without them and PDFs fall back to Arial until fonts are supplied
+      # (see docs/FONTS.md). This is expected for the public installer.
+      - name: Build laptop installer
+        working-directory: app
+        run: |
+          npm ci
+          npm run dist
+
+      # Fail loudly if electron-builder produced no .exe.
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem app/dist -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) { throw "No .exe found in app/dist — electron-builder did not produce an installer." }
+          $exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: laptop-installer
+          path: app/dist/*.exe
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # HOME SERVER installer — bundle native tools, freeze the FastAPI server with
+  # PyInstaller, then wrap it in an Inno Setup installer.
+  # ---------------------------------------------------------------------------
+  server:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # Version for the Inno Setup /DMyAppVersion define: the tag (minus the
+      # leading v) on a tag build, else app/package.json's version.
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF -replace '^refs/tags/v',''
+          } else {
+            $v = (Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          }
+          if (-not $v) { throw "Could not determine version." }
+          Write-Host "Version: $v"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # Resolve WHISPER_CPP_REF to a concrete commit SHA so the build cache is
+      # both correct (busts when upstream changes) and reproducible per run.
+      - name: Resolve whisper.cpp commit
+        id: whisper
+        shell: pwsh
+        run: |
+          $line = (git ls-remote https://github.com/ggml-org/whisper.cpp $env:WHISPER_CPP_REF | Select-Object -First 1)
+          if (-not $line) { throw "whisper.cpp ref '$env:WHISPER_CPP_REF' not found." }
+          $sha = ($line -split "\s+")[0]
+          Write-Host "whisper.cpp $env:WHISPER_CPP_REF -> $sha"
+          "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # Cache the whole whisper.cpp checkout + build tree. On a hit we skip the
+      # (slow) Vulkan SDK install and native compile entirely; the copy step
+      # below still runs against the restored tree.
+      - name: Cache whisper.cpp build
+        id: cache-whisper
+        uses: actions/cache@v4
+        with:
+          path: whisper.cpp
+          key: whisper-${{ runner.os }}-vk${{ env.VULKAN_VERSION }}-${{ steps.whisper.outputs.sha }}
+
+      # The Vulkan SDK is only needed to COMPILE whisper.cpp, so skip it on a
+      # cache hit. Uses the official LunarG installer (silent), which is what
+      # ggml's own Windows Vulkan CI uses because it ships glslc.
+      - name: Install Vulkan SDK
+        if: steps.cache-whisper.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ver = "${{ env.VULKAN_VERSION }}"
+          $url = "https://sdk.lunarg.com/sdk/download/$ver/windows/VulkanSDK-$ver-Installer.exe"
+          Write-Host "Downloading Vulkan SDK $ver ..."
+          curl.exe -L --fail -o "$env:RUNNER_TEMP\vulkan-sdk.exe" $url
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK download failed ($url). Bump VULKAN_VERSION to a current release." }
+          Write-Host "Installing Vulkan SDK (silent) ..."
+          & "$env:RUNNER_TEMP\vulkan-sdk.exe" --accept-licenses --default-answer --confirm-command install
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK installer exited with $LASTEXITCODE." }
+          # Expose the SDK to later steps (this and the build step run in
+          # separate shells, so persist via GITHUB_ENV / GITHUB_PATH).
+          "VULKAN_SDK=C:\VulkanSDK\$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "C:\VulkanSDK\$ver\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      # Clone at the resolved commit and build the Vulkan CLI. windows-latest
+      # already has MSVC + CMake. WHISPER_BUILD_EXAMPLES=ON yields whisper-cli.exe.
+      - name: Build whisper.cpp (Vulkan)
+        if: steps.cache-whisper.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone https://github.com/ggml-org/whisper.cpp whisper.cpp
+          cd whisper.cpp
+          git checkout ${{ steps.whisper.outputs.sha }}
+          cmake -B build -DGGML_VULKAN=ON -DWHISPER_BUILD_EXAMPLES=ON
+          if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
+          cmake --build build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw "whisper.cpp build failed." }
+
+      # Copy the CLI + every DLL beside it into the installer's bin/. We grab
+      # all *.dll (ggml*.dll, whisper.dll, etc.) rather than name them, so the
+      # set tracks whatever the current whisper.cpp build emits. vulkan-1.dll is
+      # deliberately NOT bundled — it ships with the target PC's GPU driver.
+      - name: Stage whisper binaries
+        shell: pwsh
+        run: |
+          $rel = "whisper.cpp/build/bin/Release"
+          if (-not (Test-Path "$rel/whisper-cli.exe")) {
+            throw "whisper-cli.exe not found in $rel — the Vulkan build did not produce it."
+          }
+          New-Item -ItemType Directory -Force -Path installer/server/bin | Out-Null
+          Copy-Item "$rel/whisper-cli.exe" installer/server/bin/ -Force
+          Get-ChildItem "$rel" -Filter *.dll | Copy-Item -Destination installer/server/bin/ -Force
+          Write-Host "Staged into installer/server/bin:"
+          Get-ChildItem installer/server/bin | ForEach-Object { Write-Host "  $($_.Name)" }
+
+      # Static ffmpeg — extract only ffmpeg.exe into the installer's bin/.
+      - name: Download and stage ffmpeg
+        shell: pwsh
+        run: |
+          Write-Host "Downloading ffmpeg ..."
+          curl.exe -L --fail -o "$env:RUNNER_TEMP\ffmpeg.zip" "${{ env.FFMPEG_ZIP_URL }}"
+          if ($LASTEXITCODE -ne 0) { throw "ffmpeg download failed ($env:FFMPEG_ZIP_URL)." }
+          Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP\ffmpeg" -Force
+          $ff = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ff) { throw "ffmpeg.exe not found inside the downloaded archive." }
+          New-Item -ItemType Directory -Force -Path installer/server/bin | Out-Null
+          Copy-Item $ff.FullName installer/server/bin/ -Force
+          Write-Host "Staged ffmpeg.exe from $($ff.FullName)"
+
+      # Guard: both native tools must be present before we build the installer.
+      - name: Verify bundled tools
+        shell: pwsh
+        run: |
+          foreach ($f in @("installer/server/bin/whisper-cli.exe","installer/server/bin/ffmpeg.exe")) {
+            if (-not (Test-Path $f)) { throw "Missing required bundled tool: $f" }
+          }
+          Write-Host "Bundled tools OK."
+
+      # Runtime + build + desktop dependencies for the frozen server.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt -r server/requirements-build.txt -r server/requirements-desktop.txt
+
+      # Freeze the FastAPI server into dist/MeetingMasterServer/ (onedir). The
+      # spec is owned by the server-installer work; it pulls in installer/server/bin.
+      - name: Build server with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller installer/server/meeting-master-server.spec
+          if (-not (Test-Path "dist/MeetingMasterServer")) {
+            throw "PyInstaller did not produce dist/MeetingMasterServer/."
+          }
+
+      # Inno Setup is preinstalled on windows-latest, but install it explicitly
+      # so the workflow is self-sufficient (choco is a no-op if already present).
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      # Compile the installer. /O forces a deterministic output directory so the
+      # upload step below always knows where to look, regardless of the .iss.
+      - name: Compile Inno Setup installer
+        shell: pwsh
+        run: |
+          $out = "$PWD\installer\server\Output"
+          iscc /DMyAppVersion=${{ steps.version.outputs.version }} /O"$out" installer\server\meeting-master-server.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed." }
+          $exe = Get-ChildItem $out -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) { throw "No installer .exe produced in $out." }
+          $exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homeserver-installer
+          path: installer/server/Output/*.exe
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # RELEASE — on a v* tag, attach both installers to the GitHub Release.
+  # ---------------------------------------------------------------------------
+  release:
+    needs: [laptop, server]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to create/update the Release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: laptop-installer
+          path: artifacts/laptop
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: homeserver-installer
+          path: artifacts/server
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/laptop/*.exe
+            artifacts/server/*.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true
