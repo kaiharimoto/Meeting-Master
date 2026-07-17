@@ -13,6 +13,9 @@ Exactly two font bases, in any of three formats (`.woff2` preferred, then
 | --- | --- |
 | Roman (400) | `NeueHaasGrotesk-Roman.woff2` / `.otf` / `.ttf` |
 | Bold (700) | `NeueHaasGrotesk-Bold.woff2` / `.otf` / `.ttf` |
+- `NeueHaasGrotesk-Medium.woff2` / `.otf` / `.ttf` — **optional** third weight;
+  gives the PDF's small uppercase labels a true 500 weight instead of a
+  synthesized one. Everything works without it.
 
 Any other filename is not picked up. (Lookup logic:
 `app/src/main/paths.js` → `findFont()`.)

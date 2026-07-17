@@ -4,6 +4,8 @@ Drop your licensed **Neue Haas Grotesk** files here with these exact names:
 
 - `NeueHaasGrotesk-Roman.woff2` (or `.otf` / `.ttf`)
 - `NeueHaasGrotesk-Bold.woff2` (or `.otf` / `.ttf`)
+- `NeueHaasGrotesk-Medium.woff2` — optional; sharpens the PDF's small uppercase
+  labels (weight 500). Without it those labels synthesize from Roman/Bold.
 
 The app picks up whichever extension it finds (`.woff2` preferred). If the
 files are missing, PDFs are generated with an Arial fallback and the app shows

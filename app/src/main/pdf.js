@@ -32,6 +32,15 @@ function fontFaceRule(filePath, weight) {
   );
 }
 
+// Minimal HTML escape for text interpolated into the footer template.
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // Strip characters Windows forbids in filenames, collapse whitespace.
 function sanitizeFileBase(name) {
   const cleaned = String(name || '')
@@ -82,11 +91,15 @@ async function renderMeetingPdf({ meeting, transcript, summary, pageSize }) {
     let warning = null;
     const roman = paths.findFont('NeueHaasGrotesk-Roman');
     const bold = paths.findFont('NeueHaasGrotesk-Bold');
+    // Optional: the template's uppercase micro-labels ask for weight 500 and
+    // fall back to Roman/Bold synthesis when no Medium file is present.
+    const medium = paths.findFont('NeueHaasGrotesk-Medium');
 
     if (roman || bold) {
       const rules = [];
       if (roman) rules.push(fontFaceRule(roman, 400));
       if (bold) rules.push(fontFaceRule(bold, 700));
+      if (medium) rules.push(fontFaceRule(medium, 500));
       await win.webContents.insertCSS(rules.join('\n'));
       fontUsed = true;
       if (!roman || !bold) {
@@ -124,18 +137,31 @@ async function renderMeetingPdf({ meeting, transcript, summary, pageSize }) {
     await win.webContents.executeJavaScript(
       `Promise.all([
          document.fonts.load("400 24pt '${FONT_FAMILY}'"),
+         document.fonts.load("500 9pt '${FONT_FAMILY}'"),
          document.fonts.load("700 24pt '${FONT_FAMILY}'"),
        ]).catch(() => {}).then(() => document.fonts.ready).then(() => true)`
     );
 
     // ---- Print (gotcha #2) -------------------------------------------------
-    // printBackground:true or the color fills silently drop;
-    // preferCSSPageSize:true keeps the @page margins from print.css while the
-    // pageSize option controls the paper size (print.css sets no @page size).
+    // printBackground:true or the color fills silently drop. Margins are set
+    // here (not via @page) because the running footer renders inside the
+    // bottom margin; the footer uses Chromium's pageNumber/totalPages spans.
+    const details0 = (meeting && meeting.details) || {};
+    const footerTitle = escapeHtml(details0.title || 'Meeting notes');
     const pdfBuffer = await win.webContents.printToPDF({
       printBackground: true,
-      preferCSSPageSize: true,
       pageSize: pageSize === 'A4' ? 'A4' : 'Letter',
+      margins: { top: 0.6, bottom: 0.8, left: 0.6, right: 0.6 }, // inches
+      displayHeaderFooter: true,
+      headerTemplate: '<span></span>',
+      footerTemplate:
+        '<div style="width:100%; padding:0 0.6in; display:flex; ' +
+        'justify-content:space-between; align-items:baseline; ' +
+        "font-family:'Helvetica Neue',Arial,sans-serif; font-size:7.5px; " +
+        'color:#8a93a3;">' +
+        `<span style="letter-spacing:0.14em; text-transform:uppercase;">${footerTitle}</span>` +
+        '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>' +
+        '</div>',
     });
 
     // ---- Save --------------------------------------------------------------

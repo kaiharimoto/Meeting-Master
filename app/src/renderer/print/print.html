@@ -7,13 +7,14 @@
 </head>
 <body>
   <section id="details">
+    <p class="eyebrow">Meeting Notes</p>
     <h1 id="detail-title"></h1>
-    <p id="detail-when"></p>
-    <p id="detail-attendees"></p>
+    <div class="masthead-rule"></div>
+    <div class="detail-grid" id="detail-grid"></div>
   </section>
 
   <section id="qa">
-    <h2 class="section-header">Questions &amp; Answers</h2>
+    <h2 class="section-header">Questions &amp; Answers<span id="qa-count" class="section-count"></span></h2>
     <div id="qa-cards"></div>
   </section>
 
@@ -26,29 +27,70 @@
     // Called by src/main/pdf.js via executeJavaScript (and by the Playwright
     // print test). Everything goes through textContent / createElement so the
     // meeting data is never interpreted as HTML.
+    // "2026-07-16" -> "July 16, 2026". Parsed by hand (never via new Date on
+    // the string) so the rendered date can't shift a day across timezones.
+    function formatDate(iso) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+      if (!m) return iso || '';
+      var months = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+      var month = months[parseInt(m[2], 10) - 1];
+      if (!month) return iso;
+      return month + ' ' + parseInt(m[3], 10) + ', ' + m[1];
+    }
+
+    // "14:30" -> "2:30 PM"; anything unparseable passes through untouched.
+    function formatTime(hhmm) {
+      var m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+      if (!m) return hhmm || '';
+      var hours = parseInt(m[1], 10);
+      if (hours > 23) return hhmm;
+      var suffix = hours >= 12 ? 'PM' : 'AM';
+      var twelve = hours % 12 === 0 ? 12 : hours % 12;
+      return twelve + ':' + m[2] + ' ' + suffix;
+    }
+
     window.renderMeeting = function renderMeeting(data) {
       data = data || {};
       var details = data.details || {};
 
-      // ---- Details header ----
+      // ---- Masthead + details ----
       var title = details.title || 'Untitled meeting';
       document.title = 'Meeting Notes — ' + title;
       document.getElementById('detail-title').textContent = title;
 
-      var when = [details.date, details.time].filter(Boolean).join(' at ');
-      document.getElementById('detail-when').textContent = when;
+      function detailPair(label, value, wide) {
+        var cell = document.createElement('div');
+        cell.className = 'detail' + (wide ? ' detail-wide' : '');
+        var lab = document.createElement('div');
+        lab.className = 'detail-label';
+        lab.textContent = label;
+        var val = document.createElement('div');
+        val.className = 'detail-value';
+        val.textContent = value;
+        cell.appendChild(lab);
+        cell.appendChild(val);
+        return cell;
+      }
 
+      var grid = document.getElementById('detail-grid');
+      grid.textContent = '';
+      if (details.date) grid.appendChild(detailPair('Date', formatDate(details.date)));
+      if (details.time) grid.appendChild(detailPair('Time', formatTime(details.time)));
       var attendees = Array.isArray(details.attendees)
         ? details.attendees.filter(Boolean)
         : [];
-      document.getElementById('detail-attendees').textContent = attendees.length
-        ? 'Attendees: ' + attendees.join(', ')
-        : '';
+      if (attendees.length) {
+        grid.appendChild(detailPair('In attendance', attendees.join(', '), true));
+      }
 
-      // ---- Q&A cards ----
+      // ---- Q&A cards (hanging Q-index column) ----
       var cardsHost = document.getElementById('qa-cards');
       cardsHost.textContent = '';
       var cards = Array.isArray(data.cards) ? data.cards : [];
+      document.getElementById('qa-count').textContent = cards.length
+        ? '· ' + cards.length // flex gap already separates label and count
+        : '';
 
       if (cards.length === 0) {
         var noCards = document.createElement('p');
@@ -57,19 +99,27 @@
         cardsHost.appendChild(noCards);
       }
 
-      cards.forEach(function (card) {
+      cards.forEach(function (card, index) {
         var el = document.createElement('article');
         el.className = 'qa-card';
+
+        var marker = document.createElement('div');
+        marker.className = 'q-index';
+        marker.textContent = 'Q' + (index + 1);
+        el.appendChild(marker);
+
+        var body = document.createElement('div');
+        body.className = 'q-body';
 
         var q = document.createElement('div');
         q.className = 'question';
         q.textContent = card.question || '';
-        el.appendChild(q);
+        body.appendChild(q);
 
         var a = document.createElement('div');
         a.className = 'answer';
         a.textContent = card.answer || '';
-        el.appendChild(a);
+        body.appendChild(a);
 
         if (card.participant) {
           var row = document.createElement('div');
@@ -78,9 +128,10 @@
           chip.className = 'participant-chip';
           chip.textContent = 'Answered by ' + card.participant;
           row.appendChild(chip);
-          el.appendChild(row);
+          body.appendChild(row);
         }
 
+        el.appendChild(body);
         cardsHost.appendChild(el);
       });
 
