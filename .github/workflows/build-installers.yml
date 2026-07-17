@@ -283,15 +283,33 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # RELEASE — on a v* tag, attach both installers to the GitHub Release.
+  # RELEASE — attach both installers to a GitHub Release. Runs on a v* tag, or
+  # on a manual dispatch (in which case the version comes from app/package.json
+  # and action-gh-release creates the tag at this commit for us).
   # ---------------------------------------------------------------------------
   release:
     needs: [laptop, server]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # required to create/update the Release
+      contents: write # required to create/update the Release (and its tag)
     steps:
+      - uses: actions/checkout@v4
+
+      # On a tag build the tag is the ref; on a manual dispatch derive it from
+      # the app version so we still publish a v<version> release + tag.
+      - name: Resolve release tag
+        id: rel
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="v$(jq -r .version app/package.json)"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $tag"
+
       - uses: actions/download-artifact@v4
         with:
           name: laptop-installer
@@ -305,6 +323,10 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: Meeting Master ${{ steps.rel.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true # first test builds; unsigned, fonts not bundled
           files: |
             artifacts/laptop/*.exe
             artifacts/server/*.exe
