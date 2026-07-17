@@ -18,6 +18,7 @@ import json
 import logging
 import secrets
 import socket
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -29,7 +30,26 @@ from . import bootstrap
 
 log = logging.getLogger(__name__)
 
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+def _resolve_static_dir() -> Path:
+    """Locate the setup page's static files, frozen or from source.
+
+    Normally the files sit beside this module; in a PyInstaller bundle the
+    onedir layout usually keeps that working, but fall back to the _MEIPASS
+    root just in case the data files are laid out there instead.
+    """
+    here = Path(__file__).resolve().parent / "static"
+    if here.exists():
+        return here
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        candidate = Path(base) / "app" / "setup" / "static"
+        if candidate.exists():
+            return candidate
+    return here  # best effort — FileResponse will 404 clearly if truly absent
+
+
+_STATIC_DIR = _resolve_static_dir()
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 DEFAULT_EMAIL_TEMPLATE = (
