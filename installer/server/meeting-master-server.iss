@@ -13,6 +13,13 @@
   #define MyAppVersion "0.0.0"
 #endif
 
+; PyInstaller's onedir output. CI passes an absolute path via /DMyDistDir=...
+; because it runs PyInstaller from the repo root (so dist\ lands there, not
+; beside this .iss). The default lets a manual `iscc` run from this folder work.
+#ifndef MyDistDir
+  #define MyDistDir "dist\MeetingMasterServer"
+#endif
+
 #define MyAppName "Meeting Master Home Server"
 #define MyAppExeName "MeetingMasterServer.exe"
 #define MyAppPublisher "Meeting Master"
@@ -49,7 +56,7 @@ Name: "startup"; Description: "Start Meeting Master Home Server automatically at
 
 [Files]
 ; The entire PyInstaller onedir bundle.
-Source: "dist\MeetingMasterServer\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 ; Start Menu shortcut.

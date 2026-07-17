@@ -266,7 +266,11 @@ jobs:
         shell: pwsh
         run: |
           $out = "$PWD\installer\server\Output"
-          iscc /DMyAppVersion=${{ steps.version.outputs.version }} /O"$out" installer\server\meeting-master-server.iss
+          # PyInstaller ran from the repo root, so its onedir output is at
+          # $PWD\dist\MeetingMasterServer — pass that to the .iss explicitly.
+          $dist = "$PWD\dist\MeetingMasterServer"
+          if (-not (Test-Path $dist)) { throw "PyInstaller output not found at $dist" }
+          iscc /DMyAppVersion=${{ steps.version.outputs.version }} /DMyDistDir="$dist" /O"$out" installer\server\meeting-master-server.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed." }
           $exe = Get-ChildItem $out -Filter *.exe -ErrorAction SilentlyContinue
           if (-not $exe) { throw "No installer .exe produced in $out." }
