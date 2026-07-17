@@ -41,6 +41,19 @@ def config_home() -> Path:
     return Path(base) / "MeetingMaster"
 
 
+def subprocess_flags() -> dict:
+    """Keyword args for subprocess spawns that suppress a console window.
+
+    The server runs as a windowed (no-console) app, so every child process it
+    launches (ollama, tailscale, ffmpeg, whisper-cli) would otherwise briefly
+    flash a console window — many per second while the setup page polls for
+    dependency status. CREATE_NO_WINDOW prevents that on Windows; no-op elsewhere.
+    """
+    if sys.platform == "win32":
+        return {"creationflags": 0x08000000}  # subprocess.CREATE_NO_WINDOW
+    return {}
+
+
 def bundle_dir() -> Path | None:
     """The PyInstaller bundle root when frozen, else None (dev checkout)."""
     if getattr(sys, "frozen", False):

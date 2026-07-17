@@ -9,6 +9,7 @@ import asyncio
 import logging
 from pathlib import Path
 
+from .. import config
 from ..config import Settings
 from . import resolve_tool, stderr_tail
 
@@ -30,6 +31,7 @@ async def run(settings: Settings, raw_path: Path, norm_path: Path) -> None:
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        **config.subprocess_flags(),  # no flashing console window (windowed app)
     )
     try:
         _, stderr = await proc.communicate()

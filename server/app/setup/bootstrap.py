@@ -158,6 +158,7 @@ async def _run(
                 asyncio.subprocess.STDOUT if on_line else asyncio.subprocess.PIPE
             ),
             cwd=cwd,
+            **config.subprocess_flags(),  # no flashing console window (windowed app)
         )
     except (FileNotFoundError, NotADirectoryError, OSError, NotImplementedError) as exc:
         return RunResult(returncode=127, stdout="", stderr=str(exc), launched=False)

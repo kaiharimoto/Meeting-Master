@@ -14,6 +14,7 @@ import logging
 import re
 from pathlib import Path
 
+from .. import config
 from ..config import Settings
 from ..models import MeetingMeta, Transcript, TranscriptSegment
 from . import resolve_tool, stderr_tail
@@ -74,6 +75,7 @@ async def run(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        **config.subprocess_flags(),  # no flashing console window (windowed app)
     )
     try:
         _, stderr = await asyncio.wait_for(
