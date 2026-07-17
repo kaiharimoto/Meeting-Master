@@ -156,8 +156,36 @@ jobs:
           "VULKAN_SDK=C:\VulkanSDK\$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
           "C:\VulkanSDK\$ver\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+      # ggml's Vulkan backend does `find_package(SPIRV-Headers CONFIG REQUIRED)`,
+      # but the LunarG SDK's silent install does NOT register that CMake package,
+      # so the configure fails with "Could not find SPIRV-Headers". Install the
+      # header-only SPIRV-Headers ourselves (a few seconds) and point the whisper
+      # build at it via CMAKE_PREFIX_PATH. Version-matched to the SDK, with a
+      # fallback to the default branch if that tag is ever missing.
+      - name: Install SPIRV-Headers
+        if: steps.cache-whisper.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ver = "${{ env.VULKAN_VERSION }}"
+          $src = "$env:RUNNER_TEMP\SPIRV-Headers"
+          $prefix = "$env:RUNNER_TEMP\spirv-headers-install"
+          git clone --depth 1 --branch "vulkan-sdk-$ver" https://github.com/KhronosGroup/SPIRV-Headers $src 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Tag vulkan-sdk-$ver not found; falling back to the default branch."
+            git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers $src
+            if ($LASTEXITCODE -ne 0) { throw "Failed to clone SPIRV-Headers." }
+          }
+          cmake -S $src -B "$src\build" -DCMAKE_INSTALL_PREFIX="$prefix"
+          if ($LASTEXITCODE -ne 0) { throw "SPIRV-Headers configure failed." }
+          cmake --build "$src\build" --config Release --target install
+          if ($LASTEXITCODE -ne 0) { throw "SPIRV-Headers install failed." }
+          "SPIRV_HEADERS_PREFIX=$prefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "SPIRV-Headers installed to $prefix"
+
       # Clone at the resolved commit and build the Vulkan CLI. windows-latest
       # already has MSVC + CMake. WHISPER_BUILD_EXAMPLES=ON yields whisper-cli.exe.
+      # CMAKE_PREFIX_PATH points at our SPIRV-Headers install; ggml additionally
+      # appends $VULKAN_SDK to the search path itself, so both are found.
       - name: Build whisper.cpp (Vulkan)
         if: steps.cache-whisper.outputs.cache-hit != 'true'
         shell: pwsh
@@ -165,7 +193,7 @@ jobs:
           git clone https://github.com/ggml-org/whisper.cpp whisper.cpp
           cd whisper.cpp
           git checkout ${{ steps.whisper.outputs.sha }}
-          cmake -B build -DGGML_VULKAN=ON -DWHISPER_BUILD_EXAMPLES=ON
+          cmake -B build -DGGML_VULKAN=ON -DWHISPER_BUILD_EXAMPLES=ON -DCMAKE_PREFIX_PATH="$env:SPIRV_HEADERS_PREFIX"
           if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
           cmake --build build --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw "whisper.cpp build failed." }
