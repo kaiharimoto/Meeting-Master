@@ -20,7 +20,9 @@ SECURITY: nothing here logs BEARER_TOKEN or SMTP_APP_PASSWORD.
 import asyncio
 import json
 import logging
+import os
 import re
+import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -31,6 +33,38 @@ import httpx
 from .. import config
 
 log = logging.getLogger(__name__)
+
+# Well-known Windows install locations for tools that are NOT reliably on PATH
+# for an already-running process: Tailscale's installer doesn't add itself to
+# PATH at all, and Ollama's PATH entry isn't visible to a process that started
+# before Ollama was installed. Checked as a fallback after shutil.which.
+_WINDOWS_LOCATIONS = {
+    "ollama": [
+        r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe",
+        r"%PROGRAMFILES%\Ollama\ollama.exe",
+    ],
+    "tailscale": [
+        r"%PROGRAMFILES%\Tailscale\tailscale.exe",
+        r"%PROGRAMFILES(X86)%\Tailscale\tailscale.exe",
+    ],
+}
+
+
+def _which(name: str) -> str:
+    """Resolve an executable to a full path via PATH, then known locations.
+
+    Returns the bare name as a last resort so the caller still gets a clean
+    "not launched" RunResult if the tool truly is not installed.
+    """
+    found = shutil.which(name)
+    if found:
+        return found
+    if sys.platform == "win32":
+        for template in _WINDOWS_LOCATIONS.get(name, []):
+            candidate = os.path.expandvars(template)
+            if "%" not in candidate and os.path.exists(candidate):
+                return candidate
+    return name
 
 # --- Download URLs (kept here so they are easy to audit / update) -----------
 OLLAMA_INSTALLER_URL = "https://ollama.com/download/OllamaSetup.exe"
@@ -125,7 +159,7 @@ async def _run(
             ),
             cwd=cwd,
         )
-    except (FileNotFoundError, NotADirectoryError, OSError) as exc:
+    except (FileNotFoundError, NotADirectoryError, OSError, NotImplementedError) as exc:
         return RunResult(returncode=127, stdout="", stderr=str(exc), launched=False)
 
     try:
@@ -197,7 +231,7 @@ async def detect() -> dict:
 async def _detect_ollama(settings) -> dict:
     model = settings.OLLAMA_MODEL
     try:
-        res = await _run(["ollama", "list"], timeout=15)
+        res = await _run([_which("ollama"), "list"], timeout=15)
     except Exception:
         log.debug("ollama detection failed", exc_info=True)
         return {"installed": False, "modelPresent": False, "model": model}
@@ -209,7 +243,7 @@ async def _detect_ollama(settings) -> dict:
 async def _detect_tailscale(settings) -> dict:
     result = {"installed": False, "loggedIn": False, "serveUrl": _SERVE_URL}
     try:
-        status = await _run(["tailscale", "status", "--json"], timeout=15)
+        status = await _run([_which("tailscale"), "status", "--json"], timeout=15)
     except Exception:
         log.debug("tailscale detection failed", exc_info=True)
         return result
@@ -235,7 +269,7 @@ def _detect_whisper_model(settings) -> dict:
 async def _resolve_serve_url(settings, *, status_data: dict | None = None) -> str | None:
     """Best-effort https://<host>.<tailnet>.ts.net URL for the served port."""
     try:
-        serve = await _run(["tailscale", "serve", "status"], timeout=15)
+        serve = await _run([_which("tailscale"), "serve", "status"], timeout=15)
     except Exception:
         serve = RunResult(127, "", "", launched=False)
     if serve.launched and serve.stdout:
@@ -244,7 +278,7 @@ async def _resolve_serve_url(settings, *, status_data: dict | None = None) -> st
             return match.group(0).rstrip("/")
     if status_data is None:
         try:
-            status = await _run(["tailscale", "status", "--json"], timeout=15)
+            status = await _run([_which("tailscale"), "status", "--json"], timeout=15)
             status_data = json.loads(status.stdout or "{}") if status.launched else {}
         except Exception:
             status_data = {}
@@ -302,7 +336,7 @@ async def pull_model() -> None:
                 pass
 
     try:
-        res = await _run(["ollama", "pull", model], timeout=7200, on_line=on_line)
+        res = await _run([_which("ollama"), "pull", model], timeout=7200, on_line=on_line)
     except Exception as exc:
         _set(name, state="failed", message=str(exc))
         return
@@ -366,7 +400,7 @@ async def tailscale_up() -> None:
             _set(name, message=f"Open this link in a browser to sign in: {match.group(0)}")
 
     try:
-        res = await _run(["tailscale", "up"], timeout=600, on_line=on_line)
+        res = await _run([_which("tailscale"), "up"], timeout=600, on_line=on_line)
     except Exception as exc:
         _set(name, state="failed", message=str(exc))
         return
@@ -391,7 +425,7 @@ async def tailscale_serve() -> None:
     port = settings.SERVER_PORT
     _set(name, state="running", progress=None, message="Enabling secure remote access…")
     try:
-        res = await _run(["tailscale", "serve", "--bg", str(port)], timeout=120)
+        res = await _run([_which("tailscale"), "serve", "--bg", str(port)], timeout=120)
     except Exception as exc:
         _set(name, state="failed", message=str(exc))
         return

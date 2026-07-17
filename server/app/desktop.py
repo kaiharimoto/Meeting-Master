@@ -65,7 +65,15 @@ def _serve() -> None:
     # than vanishing with the daemon thread — otherwise the browser opens onto a
     # dead port and the operator sees only ERR_CONNECTION_REFUSED.
     try:
+        import asyncio
+
         import uvicorn
+
+        # The setup page shells out (ollama/tailscale detection + installs) via
+        # asyncio subprocesses. On Windows only the Proactor loop supports that,
+        # so pin the policy before uvicorn creates its loop.
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
         # Pass the app OBJECT, not the "app.main:app" import string: uvicorn's
         # string-import path is fragile in a frozen bundle.
