@@ -6,7 +6,8 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable",
+    "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable",
     "test:e2e": "playwright test"
   },
   "dependencies": {

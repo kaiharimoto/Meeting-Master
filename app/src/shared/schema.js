@@ -17,6 +17,8 @@ const CHANNELS = Object.freeze({
   FILE_PICK_WAV: 'file:pickWav',
   FILE_PICK_SAVE: 'file:pickSave',
   CONFIG_GET: 'config:get',
+  CONFIG_SAVE: 'config:save',
+  CONFIG_GET_FULL: 'config:getFull',
 });
 
 const JOB_STATES = Object.freeze([

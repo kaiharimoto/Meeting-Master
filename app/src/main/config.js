@@ -46,6 +46,24 @@ function candidatePaths() {
   ];
 }
 
+// The canonical location the Settings screen writes to. get() also reads a
+// dev laptop.env next to package.json, but the app only ever WRITES here.
+function writePath() {
+  return path.join(app.getPath('userData'), 'laptop.env');
+}
+
+// Maps the renderer-facing field names to laptop.env keys. Fields that are
+// `undefined` in a save() call are left untouched (their existing value is
+// preserved); an explicit empty string clears the key.
+const FIELD_TO_KEY = Object.freeze({
+  serverUrl: 'HOME_SERVER_URL',
+  token: 'BEARER_TOKEN',
+  emailMode: 'EMAIL_MODE',
+  pageSize: 'PAGE_SIZE',
+  smtpUser: 'SMTP_USER',
+  smtpPassword: 'SMTP_APP_PASSWORD',
+});
+
 /**
  * Returns the effective configuration. Re-reads the file on every call so a
  * config edit + window reload picks up new values without restarting.
@@ -93,4 +111,90 @@ function get() {
   };
 }
 
-module.exports = { get, parseEnvFile, KEYS };
+/**
+ * Persist configuration to laptop.env in userData as KEY=VALUE lines.
+ *
+ * `values` uses the renderer-facing field names (see FIELD_TO_KEY): serverUrl,
+ * token, emailMode, pageSize, smtpUser, smtpPassword. A field left `undefined`
+ * keeps its previous value; a field set to '' clears it. Unknown keys already
+ * present in the file are preserved.
+ *
+ * get() re-reads the file on every call, so there is no in-memory cache to
+ * invalidate — the very next get() reflects what was just written.
+ */
+function save(values) {
+  const input = values || {};
+  const target = writePath();
+
+  // Start from whatever is already on disk so unknown keys survive.
+  let existing = {};
+  try {
+    if (fs.existsSync(target)) existing = parseEnvFile(fs.readFileSync(target, 'utf8'));
+  } catch {
+    existing = {};
+  }
+
+  const merged = { ...existing };
+  for (const [field, key] of Object.entries(FIELD_TO_KEY)) {
+    if (input[field] === undefined) continue;
+    let value = String(input[field]).trim();
+    if (field === 'serverUrl') value = value.replace(/\/+$/, '');
+    merged[key] = value;
+  }
+
+  // Documented keys first (stable order), then any preserved unknown keys.
+  const extraKeys = Object.keys(merged).filter((k) => !KEYS.includes(k));
+  const lines = [...KEYS, ...extraKeys]
+    .filter((k) => merged[k] !== undefined)
+    .map((k) => `${k}=${merged[k]}`);
+
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${lines.join('\n')}\n`, 'utf8');
+
+  return { configPath: target };
+}
+
+/**
+ * Decode a connection code produced by the home server's setup page.
+ *
+ * Contract: base64url (no padding) of the UTF-8 JSON
+ *   {"url": <serverUrl>, "token": <bearerToken>}
+ *
+ * Returns {serverUrl, token}; throws a friendly Error on malformed input.
+ */
+function applyConnectionCode(code) {
+  const raw = String(code || '').trim();
+  if (!raw) throw new Error('Paste a connection code first.');
+
+  const malformed = new Error(
+    'That connection code could not be read. Copy it again from the home server setup page.'
+  );
+
+  // base64url -> base64, restore padding.
+  let b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4 !== 0) b64 += '=';
+
+  let json;
+  try {
+    json = Buffer.from(b64, 'base64').toString('utf8');
+  } catch {
+    throw malformed;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw malformed;
+  }
+
+  const serverUrl =
+    parsed && typeof parsed.url === 'string' ? parsed.url.trim().replace(/\/+$/, '') : '';
+  const token = parsed && typeof parsed.token === 'string' ? parsed.token.trim() : '';
+  if (!serverUrl || !token) {
+    throw new Error('That connection code is missing the server URL or token.');
+  }
+  return { serverUrl, token };
+}
+
+module.exports = { get, save, applyConnectionCode, parseEnvFile, KEYS };

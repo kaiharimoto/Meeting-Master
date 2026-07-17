@@ -53,6 +53,9 @@ function onGlobalKeydown(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return; // leave shortcuts alone
   if (isTypingTarget(e.target)) return; // typing "q" into a field is just text
   if (!backdrop.hidden) return; // already open
+  // Don't hijack "q" while another modal (e.g. Settings) is open.
+  const otherModal = document.querySelector('.modal-backdrop:not([hidden])');
+  if (otherModal && otherModal !== backdrop) return;
   e.preventDefault();
   openCardModal(null);
 }

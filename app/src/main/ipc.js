@@ -146,6 +146,53 @@ function registerIpcHandlers(getMainWindow) {
       configPath: cfg.configPath,
     };
   });
+
+  // Pre-fill subset for the Settings form. Reports whether the secrets are set
+  // (hasToken / hasSmtpPassword) but never returns the secrets themselves.
+  function safeFull(cfg) {
+    return {
+      serverUrl: cfg.serverUrl,
+      emailMode: cfg.emailMode,
+      pageSize: cfg.pageSize,
+      smtpUser: cfg.smtpUser,
+      hasToken: Boolean(cfg.bearerToken),
+      hasSmtpPassword: Boolean(cfg.smtpAppPassword),
+      configPath: cfg.configPath,
+    };
+  }
+
+  handle(CHANNELS.CONFIG_GET_FULL, () => safeFull(config.get()));
+
+  handle(CHANNELS.CONFIG_SAVE, (values) => {
+    const input = values || {};
+
+    const toSave = {
+      serverUrl: input.serverUrl,
+      token: input.token,
+      emailMode: input.emailMode,
+      pageSize: input.pageSize,
+      smtpUser: input.smtpUser,
+      smtpPassword: input.smtpPassword,
+    };
+
+    // A pasted connection code wins over any typed URL/token fields.
+    if (input.connectionCode !== undefined && String(input.connectionCode).trim() !== '') {
+      const decoded = config.applyConnectionCode(input.connectionCode);
+      toSave.serverUrl = decoded.serverUrl;
+      toSave.token = decoded.token;
+    }
+
+    // Normalize the enum-ish fields so the written file stays clean.
+    if (toSave.emailMode !== undefined) {
+      toSave.emailMode = String(toSave.emailMode).toLowerCase() === 'laptop' ? 'laptop' : 'home';
+    }
+    if (toSave.pageSize !== undefined) {
+      toSave.pageSize = String(toSave.pageSize).toLowerCase() === 'a4' ? 'A4' : 'Letter';
+    }
+
+    config.save(toSave);
+    return safeFull(config.get());
+  });
 }
 
 module.exports = { registerIpcHandlers };

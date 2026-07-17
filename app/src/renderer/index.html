@@ -14,6 +14,7 @@
     <h1 class="app-title">Meeting Master</h1>
     <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
     <div id="connection-info" class="connection-info" title="Home server connection"></div>
+    <button id="settings-btn" type="button" class="btn btn-secondary">Settings</button>
   </header>
 
   <main class="app-main">
@@ -112,6 +113,85 @@
         </span>
         <button id="card-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
         <button id="card-save-btn" type="button" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Settings modal (hidden by default) ============ -->
+  <div id="settings-modal" class="modal-backdrop" hidden>
+    <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+      <h3 id="settings-modal-title">Settings</h3>
+      <p id="settings-welcome" class="settings-welcome" hidden>
+        Welcome — paste your connection code to get started.
+      </p>
+
+      <div class="field">
+        <label for="settings-code-input">Paste connection code</label>
+        <div class="settings-code-row">
+          <input id="settings-code-input" type="text" autocomplete="off"
+                 placeholder="Paste the code from the home server setup page" />
+          <button id="settings-apply-code-btn" type="button" class="btn btn-primary">Apply</button>
+        </div>
+        <p class="settings-help">Get your connection code from the home server's setup page.</p>
+        <p id="settings-code-error" class="settings-error" hidden></p>
+      </div>
+
+      <hr class="settings-divider" />
+
+      <div class="field">
+        <label for="settings-url-input">Home server URL</label>
+        <input id="settings-url-input" type="text" autocomplete="off"
+               placeholder="https://homepc.tail-abc.ts.net" />
+      </div>
+
+      <div class="field">
+        <label for="settings-token-input">Bearer token</label>
+        <input id="settings-token-input" type="password" autocomplete="off"
+               placeholder="Paste or apply a connection code" />
+        <p id="settings-token-note" class="settings-help" hidden>
+          A token is already saved — leave this blank to keep it.
+        </p>
+      </div>
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="settings-email-mode">Email mode</label>
+          <select id="settings-email-mode">
+            <option value="home">Home server sends email</option>
+            <option value="laptop">This laptop sends email</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="settings-page-size">Page size</label>
+          <select id="settings-page-size">
+            <option value="Letter">Letter</option>
+            <option value="A4">A4</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="settings-smtp-fields" class="field-grid" hidden>
+        <div class="field">
+          <label for="settings-smtp-user">SMTP user</label>
+          <input id="settings-smtp-user" type="text" autocomplete="off"
+                 placeholder="you@gmail.com" />
+        </div>
+        <div class="field">
+          <label for="settings-smtp-password">SMTP app password</label>
+          <input id="settings-smtp-password" type="password" autocomplete="off"
+                 placeholder="Gmail App Password" />
+          <p id="settings-smtp-note" class="settings-help" hidden>
+            A password is already saved — leave this blank to keep it.
+          </p>
+        </div>
+      </div>
+
+      <p id="settings-error" class="settings-error" hidden></p>
+
+      <div class="modal-actions">
+        <span class="keyboard-hint">Stored locally in laptop.env — the token stays on this laptop.</span>
+        <button id="settings-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="settings-save-btn" type="button" class="btn btn-primary">Save</button>
       </div>
     </div>
   </div>

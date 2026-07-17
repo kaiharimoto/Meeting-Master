@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('api', {
   pickWavFile: () => call(CHANNELS.FILE_PICK_WAV),
   pickSavePath: (defaultName) => call(CHANNELS.FILE_PICK_SAVE, defaultName),
   getConfig: () => call(CHANNELS.CONFIG_GET),
+  getFullConfig: () => call(CHANNELS.CONFIG_GET_FULL),
+  saveConfig: (values) => call(CHANNELS.CONFIG_SAVE, values),
 
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
   onJobProgress: (cb) => {

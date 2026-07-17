@@ -392,3 +392,70 @@ kbd {
   font-size: 12.5px;
   color: var(--ink-soft);
 }
+
+/* ---------- Settings modal ---------- */
+
+.settings-modal {
+  gap: 12px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.settings-welcome {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  background: var(--accent-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.settings-code-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.settings-code-row input {
+  flex: 1 1 auto;
+}
+
+.settings-code-row .btn {
+  flex: none;
+}
+
+.settings-help {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.settings-error {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 6px 0 2px;
+  width: 100%;
+}
+
+.settings-modal select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+
+.settings-modal select:focus {
+  border-color: var(--accent);
+}

@@ -1,4 +1,4 @@
-# electron-builder configuration for the portable Windows build.
+# electron-builder configuration for the Windows installer build.
 # Fonts and the print template are shipped as extraResources (NOT inside the
 # asar) so src/main/paths.js can resolve them via process.resourcesPath.
 appId: com.kaiharimoto.meeting-master
@@ -14,6 +14,16 @@ extraResources:
   - from: src/renderer/print
     to: print
 win:
-  target: portable
+  target: nsis
+# A normal double-click installer (no admin, per-user) — not a portable exe.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Meeting Master"
+  artifactName: "MeetingMaster-Setup-${version}.exe"
+# Retained so `electron-builder --win portable` (npm run dist:portable) works.
 portable:
   artifactName: "MeetingMaster-portable-${version}.exe"

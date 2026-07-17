@@ -6,6 +6,7 @@ import { initCapture, openCardModal } from './capture.js';
 import { initCardList, renderCards } from './cardList.js';
 import { initGenerate, updateButtons } from './generate.js';
 import { initStatus, setStatus, showError } from './status.js';
+import { initSettings, openSettings } from './settings.js';
 
 const STORAGE_KEY = 'meetingmaster.meeting.v1';
 
@@ -67,6 +68,9 @@ function boot() {
   initCardList(ctx, { onEditCard: (card) => openCardModal(card) });
   initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
   initGenerate(ctx);
+  // After a successful save, refresh the header connection info (but don't
+  // re-trigger the launch-time auto-open of the Settings modal).
+  initSettings(ctx, { onSaved: () => refreshConfig(ctx) });
 
   document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
 
@@ -81,10 +85,11 @@ function boot() {
   });
 
   ctx.renderAll();
-  refreshConfig(ctx);
+  // Only the launch-time refresh auto-opens Settings when unconfigured.
+  refreshConfig(ctx, { autoOpen: true });
 }
 
-async function refreshConfig(ctx) {
+async function refreshConfig(ctx, { autoOpen = false } = {}) {
   const infoEl = document.getElementById('connection-info');
   const noteEl = document.getElementById('config-note');
 
@@ -102,9 +107,11 @@ async function refreshConfig(ctx) {
     } else {
       infoEl.textContent = 'Home server not configured';
       noteEl.textContent =
-        `Missing configuration — create ${cfg.configPath} from ` +
-        'config/laptop.env.example and set HOME_SERVER_URL and BEARER_TOKEN.';
+        'Not configured yet — open Settings and paste your connection code from the ' +
+        'home server setup page.';
       noteEl.hidden = false;
+      // Welcome the operator into the Settings screen on first launch.
+      if (autoOpen) openSettings({ welcome: true });
     }
   } catch (err) {
     showError(`Could not read the configuration: ${err.message}`);
