@@ -85,5 +85,8 @@ class JobRecord(BaseModel):
     meeting: MeetingMeta
     transcript: Transcript | None = None
     summary: str | None = None
+    # 0-100 progress for the current long stage (transcription); None otherwise.
+    # Lets the laptop show "Transcribing… 42%" instead of a mystery spinner.
+    progress: int | None = None
     pdf: PdfInfo = Field(default_factory=PdfInfo)
     error: str | None = None

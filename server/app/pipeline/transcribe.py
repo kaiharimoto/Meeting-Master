@@ -17,13 +17,17 @@ from pathlib import Path
 from .. import config
 from ..config import Settings
 from ..models import MeetingMeta, Transcript, TranscriptSegment
-from . import resolve_tool, stderr_tail
+from . import resolve_tool
 
 log = logging.getLogger(__name__)
 
 # Model names become file names (ggml-<model>.bin) — restrict to safe chars so
 # a hostile meeting JSON can't turn into a path traversal.
 _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+# whisper.cpp with --print-progress emits lines like
+#   "whisper_print_progress_callback: progress =  40%"
+_PROGRESS_RE = re.compile(r"progress\s*=\s*(\d{1,3})\s*%")
 
 
 def _pick_model_file(settings: Settings, meeting: MeetingMeta) -> Path:
@@ -59,6 +63,7 @@ async def run(
     meeting: MeetingMeta,
     norm_path: Path,
     job_dir: Path,
+    on_progress=None,
 ) -> Transcript:
     model_file = _pick_model_file(settings, meeting)
     out_base = job_dir / "transcript"  # whisper writes <out_base>.json
@@ -69,18 +74,38 @@ async def run(
         "-oj",
         "-of", str(out_base),
         "-l", settings.WHISPER_LANGUAGE,
+        "--print-progress",  # emit "progress = N%" to stderr for the UI
     ]
     log.info("Transcribing %s with %s", norm_path.name, model_file.name)
+    # stdout goes to the JSON file (-oj -of); read stderr line-by-line so we can
+    # surface live progress instead of blocking silently in communicate().
     proc = await asyncio.create_subprocess_exec(
         *cmd,
-        stdout=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
         **config.subprocess_flags(),  # no flashing console window (windowed app)
     )
+
+    stderr_chunks: list[str] = []
+
+    async def _pump() -> None:
+        assert proc.stderr is not None
+        while True:
+            raw = await proc.stderr.readline()
+            if not raw:
+                break
+            line = raw.decode("utf-8", "replace")
+            stderr_chunks.append(line)
+            match = _PROGRESS_RE.search(line)
+            if match and on_progress is not None:
+                try:
+                    on_progress(int(match.group(1)))
+                except Exception:  # a bad callback must not stop transcription
+                    log.debug("on_progress callback raised", exc_info=True)
+
     try:
-        _, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=float(settings.WHISPER_TIMEOUT_SEC)
-        )
+        await asyncio.wait_for(_pump(), timeout=float(settings.WHISPER_TIMEOUT_SEC))
+        await proc.wait()
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
@@ -92,9 +117,8 @@ async def run(
         proc.kill()
         raise
     if proc.returncode != 0:
-        raise RuntimeError(
-            f"whisper.cpp failed (exit {proc.returncode}): {stderr_tail(stderr)}"
-        )
+        tail = "".join(stderr_chunks)[-2000:].strip()
+        raise RuntimeError(f"whisper.cpp failed (exit {proc.returncode}): {tail}")
 
     json_path = Path(f"{out_base}.json")
     data = json.loads(json_path.read_text(encoding="utf-8"))

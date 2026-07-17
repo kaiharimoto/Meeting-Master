@@ -41,17 +41,34 @@ async def process(store: JobStore, job) -> None:
     raw_path = job_dir / "raw.wav"
     norm_path = job_dir / "norm.wav"
     try:
-        store.update(job, state=JobState.normalizing)
+        store.update(job, state=JobState.normalizing, progress=None)
         await normalize.run(settings, raw_path, norm_path)
 
-        store.update(job, state=JobState.transcribing)
-        transcript = await transcribe.run(settings, job.meeting, norm_path, job_dir)
-        store.update(job, transcript=transcript)
+        store.update(job, state=JobState.transcribing, progress=0)
+        # Persist each new whole-percent from whisper so the laptop can show a
+        # live "Transcribing… N%", and log every 10% to server.log so the home
+        # PC operator can see it is moving (and how fast).
+        progress_state = {"pct": -1, "logged": -10}
 
-        store.update(job, state=JobState.summarizing)
+        def on_progress(pct: int) -> None:
+            pct = max(0, min(100, int(pct)))
+            if pct == progress_state["pct"]:
+                return
+            progress_state["pct"] = pct
+            store.update(job, progress=pct)
+            if pct - progress_state["logged"] >= 10 or pct == 100:
+                progress_state["logged"] = pct
+                log.info("Job %s transcription %d%%", job.id, pct)
+
+        transcript = await transcribe.run(
+            settings, job.meeting, norm_path, job_dir, on_progress=on_progress
+        )
+        store.update(job, transcript=transcript, progress=None)
+
+        store.update(job, state=JobState.summarizing, progress=None)
         summary = await summarize.run(transcript.text, job.meeting, settings)
 
-        store.update(job, summary=summary, state=JobState.ready)
+        store.update(job, summary=summary, state=JobState.ready, progress=None)
         log.info("Job %s ready", job.id)
     except Exception as exc:
         log.exception("Job %s failed", job.id)

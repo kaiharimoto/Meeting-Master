@@ -196,7 +196,12 @@ async function pollOnce() {
     stopPolling();
     setStatus(friendlyState(job.state));
   } else {
-    setStatus(friendlyState(job.state), { busy: isBusyState(job.state) });
+    // Append a live percentage when the server reports one (transcription).
+    let text = friendlyState(job.state);
+    if (typeof job.progress === 'number' && job.progress > 0) {
+      text += ` — ${job.progress}%`;
+    }
+    setStatus(text, { busy: isBusyState(job.state) });
   }
 }
 
