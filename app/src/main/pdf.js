@@ -32,15 +32,6 @@ function fontFaceRule(filePath, weight) {
   );
 }
 
-// Minimal HTML escape for text interpolated into the footer template.
-function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 // Strip characters Windows forbids in filenames, collapse whitespace.
 function sanitizeFileBase(name) {
   const cleaned = String(name || '')
@@ -143,25 +134,13 @@ async function renderMeetingPdf({ meeting, transcript, summary, pageSize }) {
     );
 
     // ---- Print (gotcha #2) -------------------------------------------------
-    // printBackground:true or the color fills silently drop. Margins are set
-    // here (not via @page) because the running footer renders inside the
-    // bottom margin; the footer uses Chromium's pageNumber/totalPages spans.
-    const details0 = (meeting && meeting.details) || {};
-    const footerTitle = escapeHtml(details0.title || 'Meeting notes');
+    // printBackground:true or the accent rules (background-color divs) drop.
+    // The design's footer is an in-document colophon, so no running
+    // header/footer templates here; margins are set explicitly (not via @page).
     const pdfBuffer = await win.webContents.printToPDF({
       printBackground: true,
       pageSize: pageSize === 'A4' ? 'A4' : 'Letter',
-      margins: { top: 0.6, bottom: 0.8, left: 0.6, right: 0.6 }, // inches
-      displayHeaderFooter: true,
-      headerTemplate: '<span></span>',
-      footerTemplate:
-        '<div style="width:100%; padding:0 0.6in; display:flex; ' +
-        'justify-content:space-between; align-items:baseline; ' +
-        "font-family:'Helvetica Neue',Arial,sans-serif; font-size:7.5px; " +
-        'color:#8a93a3;">' +
-        `<span style="letter-spacing:0.14em; text-transform:uppercase;">${footerTitle}</span>` +
-        '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>' +
-        '</div>',
+      margins: { top: 0.6, bottom: 0.7, left: 0.6, right: 0.6 }, // inches
     });
 
     // ---- Save --------------------------------------------------------------

@@ -7,36 +7,55 @@
 </head>
 <body>
   <section id="details">
-    <p class="eyebrow">Meeting Notes</p>
+    <div class="topbar">
+      <span class="topbar-label">Meeting Notes</span>
+      <span class="topbar-tag">Internal</span>
+    </div>
+    <div class="heavy-rule"></div>
     <h1 id="detail-title"></h1>
-    <div class="masthead-rule"></div>
-    <div class="detail-grid" id="detail-grid"></div>
+    <div class="detail-band" id="detail-band"></div>
   </section>
 
   <section id="qa">
-    <h2 class="section-header">Questions &amp; Answers<span id="qa-count" class="section-count"></span></h2>
+    <h2 class="section-header">Q&amp;A<span id="qa-count" class="section-count"></span></h2>
+    <div class="section-rule"></div>
     <div id="qa-cards"></div>
   </section>
 
   <section id="summary">
-    <h2 class="section-header">General Summary</h2>
+    <h2 class="summary-header">General Summary</h2>
+    <div class="summary-rule"></div>
     <div id="summary-body"></div>
+    <div class="colophon">
+      <span class="colophon-title" id="colophon-title"></span>
+      <span class="colophon-date" id="colophon-date"></span>
+    </div>
   </section>
 
   <script>
     // Called by src/main/pdf.js via executeJavaScript (and by the Playwright
     // print test). Everything goes through textContent / createElement so the
     // meeting data is never interpreted as HTML.
+
+    var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
     // "2026-07-16" -> "July 16, 2026". Parsed by hand (never via new Date on
     // the string) so the rendered date can't shift a day across timezones.
     function formatDate(iso) {
       var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
       if (!m) return iso || '';
-      var months = ['January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'];
-      var month = months[parseInt(m[2], 10) - 1];
+      var month = MONTHS[parseInt(m[2], 10) - 1];
       if (!month) return iso;
       return month + ' ' + parseInt(m[3], 10) + ', ' + m[1];
+    }
+
+    // "2026-07-16" -> "July 2026" (for the colophon).
+    function formatMonthYear(iso) {
+      var m = /^(\d{4})-(\d{2})-\d{2}$/.exec(iso || '');
+      if (!m) return '';
+      var month = MONTHS[parseInt(m[2], 10) - 1];
+      return month ? month + ' ' + m[1] : '';
     }
 
     // "14:30" -> "2:30 PM"; anything unparseable passes through untouched.
@@ -54,42 +73,40 @@
       data = data || {};
       var details = data.details || {};
 
-      // ---- Masthead + details ----
+      // ---- Masthead + details band ----
       var title = details.title || 'Untitled meeting';
       document.title = 'Meeting Notes — ' + title;
       document.getElementById('detail-title').textContent = title;
 
-      function detailPair(label, value, wide) {
-        var cell = document.createElement('div');
-        cell.className = 'detail' + (wide ? ' detail-wide' : '');
-        var lab = document.createElement('div');
-        lab.className = 'detail-label';
-        lab.textContent = label;
-        var val = document.createElement('div');
-        val.className = 'detail-value';
-        val.textContent = value;
-        cell.appendChild(lab);
-        cell.appendChild(val);
-        return cell;
-      }
-
-      var grid = document.getElementById('detail-grid');
-      grid.textContent = '';
-      if (details.date) grid.appendChild(detailPair('Date', formatDate(details.date)));
-      if (details.time) grid.appendChild(detailPair('Time', formatTime(details.time)));
+      var band = document.getElementById('detail-band');
+      band.textContent = '';
       var attendees = Array.isArray(details.attendees)
         ? details.attendees.filter(Boolean)
         : [];
-      if (attendees.length) {
-        grid.appendChild(detailPair('In attendance', attendees.join(', '), true));
-      }
+      [
+        ['Date', formatDate(details.date) || '—'],
+        ['Time', formatTime(details.time) || '—'],
+        ['In attendance', attendees.length ? attendees.join(', ') : '—'],
+      ].forEach(function (pair) {
+        var cell = document.createElement('div');
+        cell.className = 'detail-cell';
+        var lab = document.createElement('div');
+        lab.className = 'detail-label';
+        lab.textContent = pair[0];
+        var val = document.createElement('div');
+        val.className = 'detail-value';
+        val.textContent = pair[1];
+        cell.appendChild(lab);
+        cell.appendChild(val);
+        band.appendChild(cell);
+      });
 
-      // ---- Q&A cards (hanging Q-index column) ----
+      // ---- Q&A table (Q index | question | answer + attribution) ----
       var cardsHost = document.getElementById('qa-cards');
       cardsHost.textContent = '';
       var cards = Array.isArray(data.cards) ? data.cards : [];
       document.getElementById('qa-count').textContent = cards.length
-        ? '· ' + cards.length // flex gap already separates label and count
+        ? String(cards.length)
         : '';
 
       if (cards.length === 0) {
@@ -108,53 +125,55 @@
         marker.textContent = 'Q' + (index + 1);
         el.appendChild(marker);
 
-        var body = document.createElement('div');
-        body.className = 'q-body';
-
         var q = document.createElement('div');
         q.className = 'question';
         q.textContent = card.question || '';
-        body.appendChild(q);
+        el.appendChild(q);
 
+        var right = document.createElement('div');
+        right.className = 'q-right';
         var a = document.createElement('div');
         a.className = 'answer';
         a.textContent = card.answer || '';
-        body.appendChild(a);
-
+        right.appendChild(a);
         if (card.participant) {
-          var row = document.createElement('div');
-          row.className = 'participant-row';
-          var chip = document.createElement('span');
-          chip.className = 'participant-chip';
-          chip.textContent = 'Answered by ' + card.participant;
-          row.appendChild(chip);
-          body.appendChild(row);
+          var who = document.createElement('div');
+          who.className = 'participant-chip';
+          who.textContent = card.participant;
+          right.appendChild(who);
         }
+        el.appendChild(right);
 
-        el.appendChild(body);
         cardsHost.appendChild(el);
       });
 
-      // ---- Summary (paragraphs split on blank lines) ----
+      // ---- Summary (two-column paragraphs; an odd last one spans both) ----
       var summaryHost = document.getElementById('summary-body');
       summaryHost.textContent = '';
       var summary = typeof data.summary === 'string' ? data.summary.trim() : '';
 
-      if (!summary) {
+      if (summary) {
+        var paras = summary.split(/\n\s*\n/).map(function (p) { return p.trim(); })
+          .filter(Boolean);
+        paras.forEach(function (text, i) {
+          var p = document.createElement('p');
+          p.textContent = text;
+          if (paras.length % 2 === 1 && i === paras.length - 1) {
+            p.className = 'span-all';
+          }
+          summaryHost.appendChild(p);
+        });
+      } else {
         var placeholder = document.createElement('p');
-        placeholder.className = 'placeholder';
+        placeholder.className = 'placeholder span-all';
         placeholder.textContent = '(No AI summary was generated for this meeting)';
         summaryHost.appendChild(placeholder);
-        return;
       }
 
-      summary.split(/\n\s*\n/).forEach(function (para) {
-        var trimmed = para.trim();
-        if (!trimmed) return;
-        var p = document.createElement('p');
-        p.textContent = trimmed;
-        summaryHost.appendChild(p);
-      });
+      // ---- Colophon ----
+      document.getElementById('colophon-title').textContent = title;
+      document.getElementById('colophon-date').textContent =
+        formatMonthYear(details.date);
     };
   </script>
 </body>
