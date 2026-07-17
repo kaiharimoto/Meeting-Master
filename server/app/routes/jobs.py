@@ -26,8 +26,27 @@ from ..store import JobStore
 
 log = logging.getLogger(__name__)
 
-# Every route in this router requires the bearer token.
-router = APIRouter(dependencies=[Depends(verify_token)])
+
+def require_configured() -> None:
+    """Friendly 503 while the home server is still in first-run setup mode.
+
+    Ordered BEFORE verify_token so an unconfigured server answers with a helpful
+    'open the setup page' message instead of a bare 401 (there is no token to
+    check yet). Once configured, this is a no-op and the token check applies.
+    """
+    settings = get_settings()
+    if not settings.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Home server is not set up yet — open "
+                f"http://127.0.0.1:{settings.SERVER_PORT}/setup on the home PC."
+            ),
+        )
+
+
+# Every route in this router requires setup to be complete, then the token.
+router = APIRouter(dependencies=[Depends(require_configured), Depends(verify_token)])
 
 _COPY_CHUNK = 1024 * 1024  # 1 MiB
 

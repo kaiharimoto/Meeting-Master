@@ -1,0 +1,5 @@
+# Build-time only: freezing the server into a Windows .exe.
+# Used by CI together with requirements.txt + requirements-desktop.txt, e.g.:
+#   pip install -r requirements.txt -r requirements-desktop.txt -r requirements-build.txt
+#   pyinstaller --noconfirm --clean ../installer/server/meeting-master-server.spec
+pyinstaller>=6.6

@@ -1,0 +1,6 @@
+# Optional, Windows-runtime-only extras for the packaged desktop build.
+# The system-tray icon in app/desktop.py degrades gracefully when these are
+# absent, so they are kept OUT of the lean core requirements.txt. CI installs
+# them before running PyInstaller.
+pystray>=0.19
+Pillow>=10

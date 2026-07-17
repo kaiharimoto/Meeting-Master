@@ -1,53 +1,97 @@
 """Server configuration.
 
-Reads environment variables and (optionally) ``server/server.env`` — the
-git-ignored copy of ``config/server.env.example``. Environment variables take
-precedence over the env file, which is what the tests rely on.
+Settings come from (in order of precedence): environment variables, then a
+``server.env`` file in the config home, then built-in defaults. The config home
+is a writable per-user directory — NOT the (read-only when installed) program
+folder — so the first-run setup page can save settings there:
 
-SECURITY: never log a Settings instance — it contains BEARER_TOKEN and
+  * Windows:  %APPDATA%\\MeetingMaster
+  * other:    $XDG_CONFIG_HOME/MeetingMaster (or ~/.config/MeetingMaster)
+  * override: the MEETING_MASTER_HOME environment variable
+
+When the server runs as a PyInstaller-bundled .exe, ffmpeg and whisper-cli are
+shipped inside the bundle (``<bundle>/bin``) and used automatically; in a dev
+checkout they fall back to whatever is on PATH.
+
+SECURITY: never log a Settings instance — it holds BEARER_TOKEN and
 SMTP_APP_PASSWORD in plain text.
 """
 
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# server/ — the directory that contains app/, server.env, and (by default) data/.
+# server/ — the dev checkout root (contains app/). Only used as a path anchor
+# for relative overrides in a source checkout.
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 
-def _resolve(path_str: str) -> Path:
-    """Resolve a possibly-relative path against the server/ directory.
+def config_home() -> Path:
+    """The writable directory holding server.env, models/, data/, etc."""
+    override = os.environ.get("MEETING_MASTER_HOME")
+    if override:
+        return Path(override)
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        return Path(base) / "MeetingMaster"
+    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base) / "MeetingMaster"
 
-    Relative paths in server.env (e.g. ``./data``, ``../config/recipients.json``)
-    must not depend on the process working directory.
-    """
+
+def bundle_dir() -> Path | None:
+    """The PyInstaller bundle root when frozen, else None (dev checkout)."""
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", str(Path(sys.executable).parent)))
+    return None
+
+
+def _bundled_tool(command: str, exe: str) -> str:
+    """Absolute path to a bundled tool when frozen, else the bare command."""
+    root = bundle_dir()
+    if root is not None:
+        candidate = root / "bin" / exe
+        if candidate.exists():
+            return str(candidate)
+    return command
+
+
+_HOME = config_home()
+ENV_FILE = _HOME / "server.env"
+
+
+def _resolve(path_str: str) -> Path:
+    """Resolve a possibly-relative path. Relative paths anchor to the config
+    home (or, in a dev checkout, still work against server/ for the old
+    ``../config`` style)."""
     path = Path(path_str)
     if path.is_absolute():
         return path
-    return (SERVER_DIR / path).resolve()
+    return (_HOME / path).resolve()
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=str(SERVER_DIR / "server.env"),
+        env_file=str(ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    # Shared secret checked by auth.verify_token (must match the laptop's token).
-    BEARER_TOKEN: str
+    # Shared secret checked by auth.verify_token (must match the laptop's
+    # token). EMPTY means "not configured yet" — the server runs in setup mode.
+    BEARER_TOKEN: str = ""
 
     # Where job data (audio, transcripts, PDFs, job.json records) is stored.
-    DATA_DIR: str = "./data"
+    DATA_DIR: str = str(_HOME / "data")
 
-    # --- Audio normalization ---
-    FFMPEG_PATH: str = "ffmpeg"
+    # --- Audio normalization (bundled ffmpeg when frozen) ---
+    FFMPEG_PATH: str = _bundled_tool("ffmpeg", "ffmpeg.exe")
 
     # --- Transcription (whisper.cpp, Vulkan build, shelled out) ---
-    WHISPER_CLI: str
-    WHISPER_MODEL_DIR: str
+    WHISPER_CLI: str = _bundled_tool("whisper-cli", "whisper-cli.exe")
+    WHISPER_MODEL_DIR: str = str(_HOME / "models")
     WHISPER_MODEL_DEFAULT: str = "large-v3-turbo"
     WHISPER_MODEL_FALLBACK: str = "large-v3"
     WHISPER_LANGUAGE: str = "auto"
@@ -68,14 +112,21 @@ class Settings(BaseSettings):
     SMTP_APP_PASSWORD: str = ""
     SMTP_FROM: str = ""
 
-    # Preset recipients + email template (relative paths resolve against server/).
-    RECIPIENTS_PATH: str = "../config/recipients.json"
-    EMAIL_TEMPLATE_PATH: str = "../config/email_template.txt"
+    # Preset recipients + email template (default to the config home).
+    RECIPIENTS_PATH: str = str(_HOME / "recipients.json")
+    EMAIL_TEMPLATE_PATH: str = str(_HOME / "email_template.txt")
+
+    # --- Networking (surfaced on the setup page) ---
+    SERVER_PORT: int = 8080
 
     # Resolved-path accessors — always use these instead of the raw strings.
     @property
     def data_dir(self) -> Path:
         return _resolve(self.DATA_DIR)
+
+    @property
+    def models_dir(self) -> Path:
+        return _resolve(self.WHISPER_MODEL_DIR)
 
     @property
     def recipients_path(self) -> Path:
@@ -84,6 +135,49 @@ class Settings(BaseSettings):
     @property
     def email_template_path(self) -> Path:
         return _resolve(self.EMAIL_TEMPLATE_PATH)
+
+    @property
+    def is_configured(self) -> bool:
+        """Configured enough to leave setup mode and accept jobs."""
+        return bool(self.BEARER_TOKEN.strip())
+
+
+# Keys the setup page is allowed to write to server.env, in file order.
+WRITABLE_KEYS = (
+    "BEARER_TOKEN",
+    "OLLAMA_MODEL",
+    "WHISPER_MODEL_DEFAULT",
+    "SMTP_USER",
+    "SMTP_APP_PASSWORD",
+    "SMTP_FROM",
+    "SERVER_PORT",
+)
+
+
+def write_env(values: dict) -> None:
+    """Persist selected settings to the config home's server.env.
+
+    Merges with any existing file so unrelated keys are preserved, then clears
+    the settings cache so the running server picks the changes up immediately.
+    """
+    _HOME.mkdir(parents=True, exist_ok=True)
+    existing: dict[str, str] = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            existing[key.strip()] = val
+    for key, val in values.items():
+        existing[key] = "" if val is None else str(val)
+    lines = [
+        "# Meeting Master home server settings — written by the setup page.",
+        "# Edit through the setup page (http://127.0.0.1:8080/setup) when possible.",
+    ]
+    lines += [f"{key}={existing[key]}" for key in existing]
+    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    get_settings.cache_clear()
 
 
 @lru_cache
