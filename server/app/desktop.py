@@ -20,7 +20,12 @@ import threading
 import time
 import webbrowser
 
-from .config import config_home, get_settings
+# Absolute (not relative) import: PyInstaller freezes THIS file as the entry
+# point, so it runs as __main__ with no parent package — a `from .config`
+# relative import fails there ("attempted relative import with no known parent
+# package"). `server/` is on sys.path (pathex in the .spec / `python -m`), so the
+# absolute form resolves both frozen and in a dev checkout.
+from app.config import config_home, get_settings
 
 log = logging.getLogger(__name__)
 
