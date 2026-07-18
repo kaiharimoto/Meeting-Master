@@ -1,0 +1,144 @@
+"""Stage 3b: extract candidate Q&A pairs from the transcript with an Ollama
+model.
+
+These are CANDIDATES only — the laptop presents them for the operator to
+approve (or cull) before any become meeting cards. For each detected question
+the model guesses ``answerer`` (who actually answered — the field that matters,
+since it becomes the card's participant) and ``directedTo`` (who the question
+seemed aimed at / who could answer — a softer culling aid).
+
+See _ollama.py for the shared chat/token helpers.
+"""
+
+import logging
+
+import httpx
+
+from ..config import Settings
+from ..models import ExtractedQuestion, MeetingMeta
+from . import _ollama
+
+log = logging.getLogger(__name__)
+
+# Keep the approval list reviewable; a real meeting rarely has more real Q&A.
+_MAX_QUESTIONS = 30
+
+_SCHEMA_HINT = (
+    'Respond with ONLY a JSON object of this exact shape:\n'
+    '{\n'
+    '  "questions": [\n'
+    '    {\n'
+    '      "question": "the question as asked, cleaned up",\n'
+    '      "answer": "the answer that was given",\n'
+    '      "answerer": "name of who actually answered, or empty string",\n'
+    '      "directedTo": "name of who the question was aimed at, or empty string"\n'
+    '    }\n'
+    '  ]\n'
+    '}'
+)
+
+SYSTEM_PROMPT = (
+    "You are a meeting-analysis assistant. Read a meeting transcript and find "
+    "the QUESTIONS that were asked AND received a substantive answer during the "
+    "meeting. Ignore rhetorical questions and small talk.\n\n"
+    "For each question output:\n"
+    "- question: the question, cleaned into a clear single sentence.\n"
+    "- answer: the answer that was given, concise but complete.\n"
+    "- answerer: the name of the person who actually gave the answer. Choose "
+    "from the listed attendees when the transcript makes it clear who spoke; "
+    "otherwise use an empty string. Never guess a name that is not supported "
+    "by the transcript.\n"
+    "- directedTo: the name of the person the question appeared to be aimed at "
+    "(who was expected to answer), or an empty string.\n\n"
+    "Use ONLY information in the transcript — never invent questions, answers, "
+    "or names. If no genuine Q&A pairs exist, return an empty questions array. "
+    + _SCHEMA_HINT
+)
+
+
+def _coerce(parsed) -> list[ExtractedQuestion]:
+    """Turn the model's JSON into ExtractedQuestion records, defensively."""
+    if isinstance(parsed, dict):
+        raw = parsed.get("questions")
+        if not isinstance(raw, list):
+            # Some models drop the wrapper and return a single object.
+            raw = [parsed] if parsed.get("question") else []
+    elif isinstance(parsed, list):
+        raw = parsed
+    else:
+        raw = []
+
+    out: list[ExtractedQuestion] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question") or "").strip()
+        if not question:
+            continue
+        out.append(
+            ExtractedQuestion(
+                question=question,
+                answer=str(item.get("answer") or "").strip(),
+                answerer=str(item.get("answerer") or "").strip(),
+                directedTo=str(item.get("directedTo") or item.get("directed_to") or "").strip(),
+            )
+        )
+    return out
+
+
+def _dedupe(questions: list[ExtractedQuestion]) -> list[ExtractedQuestion]:
+    """Drop repeats (case-folded question text) while preserving order."""
+    seen: set[str] = set()
+    out: list[ExtractedQuestion] = []
+    for q in questions:
+        key = q.question.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(q)
+    return out[:_MAX_QUESTIONS]
+
+
+async def run(
+    transcript_text: str, meeting: MeetingMeta, settings: Settings
+) -> list[ExtractedQuestion]:
+    context = _ollama.meeting_context(meeting)
+    num_predict = settings.EXTRACT_NUM_PREDICT
+    temperature = settings.EXTRACT_TEMPERATURE
+    budget_tokens = _ollama.input_budget_tokens(settings, num_predict)
+
+    async with httpx.AsyncClient(timeout=_ollama.DEFAULT_TIMEOUT) as client:
+        if _ollama.estimate_tokens(transcript_text) <= budget_tokens:
+            user_prompt = (
+                f"{context}\n"
+                "Extract the question-and-answer pairs from this meeting "
+                "transcript:\n\n"
+                f"{transcript_text}"
+            )
+            parsed = await _ollama.chat_json(
+                client, settings, SYSTEM_PROMPT, user_prompt,
+                num_predict=num_predict, temperature=temperature,
+            )
+            return _dedupe(_coerce(parsed))
+
+        # Long transcript: extract per chunk and concatenate. Q&A pairs are
+        # local to their part, so no cross-chunk merge pass is needed.
+        chunks = _ollama.split_by_token_budget(transcript_text, max(budget_tokens, 1))
+        log.info(
+            "Transcript ~%d tokens exceeds budget of %d — extracting from %d parts",
+            _ollama.estimate_tokens(transcript_text), budget_tokens, len(chunks),
+        )
+        collected: list[ExtractedQuestion] = []
+        for index, chunk in enumerate(chunks, start=1):
+            prompt = (
+                f"{context}\n"
+                f"Extract the question-and-answer pairs from PORTION {index} of "
+                f"{len(chunks)} of a longer meeting transcript:\n\n"
+                f"{chunk}"
+            )
+            parsed = await _ollama.chat_json(
+                client, settings, SYSTEM_PROMPT, prompt,
+                num_predict=num_predict, temperature=temperature,
+            )
+            collected.extend(_coerce(parsed))
+        return _dedupe(collected)

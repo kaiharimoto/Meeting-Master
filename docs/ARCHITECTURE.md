@@ -25,7 +25,7 @@ flowchart LR
         S["JobStore<br/>DATA_DIR/&lt;id&gt;/job.json"]
         FF["ffmpeg<br/>16 kHz mono PCM"]
         WC["whisper.cpp<br/>Vulkan build, ggml-large-v3-turbo.bin"]
-        OL["Ollama (native Windows)<br/>qwen2.5:14b-instruct-q6_K<br/>/api/chat, num_ctx=32768"]
+        OL["Ollama (native Windows)<br/>gemma4:26b<br/>/api/chat, num_ctx=32768"]
         SM["email/sender<br/>smtp.gmail.com:465 (App Password)"]
         A --> W --> FF --> WC --> OL
         A <--> S
@@ -88,7 +88,7 @@ stateDiagram-v2
     queued --> normalizing: worker dequeues
     normalizing --> transcribing: ffmpeg OK
     transcribing --> summarizing: whisper.cpp OK
-    summarizing --> ready: summary stored
+    summarizing --> ready: summary + Q&A candidates stored
     ready --> pdf_received: POST /jobs/{id}/pdf
     pdf_received --> emailed: SMTP send OK
     queued --> failed: pipeline error
@@ -183,7 +183,14 @@ Job record shape:
     "text": "str",
     "segments": [ { "start": 0.0, "end": 9.2, "text": "str" } ]
   },
-  "summary": "str",
+  "summary": {
+    "keyTakeaways": ["str"],
+    "followUps": ["str"],
+    "topics": ["str"]
+  },
+  "questions": [
+    { "question": "str", "answer": "str", "answerer": "str", "directedTo": "str" }
+  ],
   "pdf": { "received": false, "emailed": false },
   "error": null
 }

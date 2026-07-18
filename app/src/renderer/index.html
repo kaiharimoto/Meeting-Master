@@ -60,6 +60,8 @@
         <span class="hint-chip">Press <kbd>Q</kbd> to add a question</span>
       </div>
 
+      <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
+
       <div id="card-list" class="card-list" aria-live="polite"></div>
 
       <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
@@ -113,6 +115,33 @@
         </span>
         <button id="card-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
         <button id="card-save-btn" type="button" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ AI question review modal (hidden by default) ============ -->
+  <div id="extract-modal" class="modal-backdrop" hidden>
+    <div class="modal extract-modal" role="dialog" aria-modal="true" aria-labelledby="extract-modal-title">
+      <h3 id="extract-modal-title">AI-detected questions</h3>
+      <p class="extract-intro">
+        Review the questions the AI found in the recording. Keep the good ones,
+        fix the answerer if needed, then add them to your Q&amp;A list. Nothing is
+        added until you click <strong>Add selected</strong>.
+      </p>
+
+      <div class="extract-toolbar">
+        <button id="extract-all-btn" type="button" class="btn btn-secondary btn-small">Select all</button>
+        <button id="extract-none-btn" type="button" class="btn btn-secondary btn-small">Select none</button>
+        <span id="extract-selected-count" class="extract-count"></span>
+      </div>
+
+      <div id="extract-list" class="extract-list"></div>
+      <datalist id="extract-participant-options"></datalist>
+
+      <div class="modal-actions">
+        <span class="keyboard-hint">Approved questions become normal, editable cards.</span>
+        <button id="extract-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="extract-add-btn" type="button" class="btn btn-primary">Add selected</button>
       </div>
     </div>
   </div>

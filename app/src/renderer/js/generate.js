@@ -3,6 +3,7 @@
 // never an uncaught exception.
 
 import { setStatus, showError, friendlyState, isBusyState } from './status.js';
+import { renderExtractPrompt } from './extractReview.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -118,7 +119,13 @@ async function onPickAudio() {
       return;
     }
     ctx.state.job = { id: jobId, state: 'queued' };
+    // A re-run on the same meeting (no "New meeting") must surface the NEW
+    // recording's detected questions — clear the prior review so pollOnce's
+    // `!questionsReviewed` capture guard doesn't drop them.
+    ctx.state.extractedQuestions = [];
+    ctx.state.questionsReviewed = false;
     ctx.persist();
+    renderExtractPrompt();
     startPolling();
   } finally {
     uploading = false;
@@ -186,8 +193,14 @@ async function pollOnce() {
   ctx.state.job.state = job.state;
   if (job.transcript) ctx.state.transcript = job.transcript;
   if (job.summary !== null && job.summary !== undefined) ctx.state.summary = job.summary;
+  // Capture AI-detected Q&A candidates once (they are approved, not auto-added).
+  // Guard on !reviewed so a late poll can't resurrect a list the user culled.
+  if (Array.isArray(job.questions) && job.questions.length && !ctx.state.questionsReviewed) {
+    ctx.state.extractedQuestions = job.questions;
+  }
   ctx.persist();
   updateButtons(ctx);
+  renderExtractPrompt();
 
   if (job.state === 'failed') {
     stopPolling();
@@ -306,6 +319,8 @@ async function onDevMockShortcut(e) {
     ctx.state.options = mock.options || ctx.state.options;
     ctx.state.transcript = mock.transcript || null;
     ctx.state.summary = mock.summary || null;
+    ctx.state.extractedQuestions = mock.questions || [];
+    ctx.state.questionsReviewed = false;
     ctx.persist();
     ctx.renderAll();
     setStatus('Mock meeting loaded (dev shortcut).');

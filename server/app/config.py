@@ -110,12 +110,18 @@ class Settings(BaseSettings):
     WHISPER_LANGUAGE: str = "auto"
     WHISPER_TIMEOUT_SEC: int = 3600
 
-    # --- Summarization (native Ollama /api/chat — NOT the /v1 endpoint) ---
+    # --- Summarization + Q&A extraction (native Ollama /api/chat, NOT /v1) ---
     OLLAMA_URL: str = "http://127.0.0.1:11434"
-    OLLAMA_MODEL: str = "qwen2.5:14b-instruct-q6_K"
+    OLLAMA_MODEL: str = "gemma4:26b"
     NUM_CTX: int = 32768
-    SUMMARY_NUM_PREDICT: int = 700
+    # Structured summary output (3 bulleted sections) needs a little more room
+    # than plain prose did.
+    SUMMARY_NUM_PREDICT: int = 900
     SUMMARY_TEMPERATURE: float = 0.3
+    # Q&A extraction returns a JSON list — size it for a meeting's worth of
+    # question/answer pairs; keep the temperature low for faithful extraction.
+    EXTRACT_NUM_PREDICT: int = 1500
+    EXTRACT_TEMPERATURE: float = 0.2
 
     # --- Email (Gmail SMTP with an App Password) ---
     SMTP_HOST: str = "smtp.gmail.com"

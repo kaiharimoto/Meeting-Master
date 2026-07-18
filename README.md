@@ -5,12 +5,14 @@ meeting room, a portable Electron app on the work laptop captures meeting
 details and keyboard-driven Q&A cards while Vibe/OBS records the audio. After
 the meeting, the app uploads the WAV over Tailscale to an always-on home PC,
 where a FastAPI job service normalizes the audio with ffmpeg, transcribes it
-with whisper.cpp (Vulkan build on an AMD RX 7900 XTX), and summarizes it with
-a local Ollama model (`qwen2.5:14b-instruct-q6_K`). The laptop then renders a
-print-perfect PDF locally (Neue Haas Grotesk, 24pt details/questions, 16pt
-summary, color-coded) and sends it back to the home PC, which emails it via
-Gmail SMTP to a preset recipient list. No cloud AI, no third-party services —
-just your two machines and your tailnet.
+with whisper.cpp (Vulkan build on an AMD RX 7900 XTX), and with a local Ollama
+model (`gemma4:26b`) both writes a structured summary (Key Takeaways /
+Follow-Up Points / Topics Discussed) and extracts candidate Q&A pairs for the
+operator to approve. The laptop then renders a print-perfect PDF locally (Neue
+Haas Grotesk, medical-blue accent, ruled Q&A table + presentation-style summary
+deck) and sends it back to the home PC, which emails it via Gmail SMTP to a
+preset recipient list. No cloud AI, no third-party services — just your two
+machines and your tailnet.
 
 ## How the two machines talk
 
@@ -26,7 +28,7 @@ sequenceDiagram
     U->>L: Pick the recorded WAV
     L->>H: POST /jobs (Bearer token, meeting JSON + WAV)
     H-->>L: 202 { id }
-    Note over H: ffmpeg 16 kHz mono → whisper.cpp (Vulkan)<br/>→ Ollama qwen2.5:14b (native /api/chat)
+    Note over H: ffmpeg 16 kHz mono → whisper.cpp (Vulkan)<br/>→ Ollama gemma4:26b: summary + Q&A extraction (native /api/chat)
     loop poll every 3 s
         L->>H: GET /jobs/{id}
         H-->>L: queued → normalizing → transcribing → summarizing → ready
@@ -63,8 +65,11 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 7. In Meeting Master, click **Pick audio & start AI** and select the WAV. The
    app uploads it to the home server and polls progress
    (queued → normalizing → transcribing → summarizing → ready).
-8. When the job is **ready**, click **Generate PDF**. The PDF is saved under
-   `Documents\MeetingMaster\` — click **Open PDF** to review it.
+8. When the job is **ready**, the AI may surface a **"detected questions"**
+   prompt in the Q&A panel. Click **Review & add** to approve the Q&A pairs it
+   found — keep the good ones, fix the answerer, and they become normal cards
+   (nothing is added automatically). Then click **Generate PDF**. The PDF is
+   saved under `Documents\MeetingMaster\` — click **Open PDF** to review it.
 9. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
 
@@ -103,7 +108,7 @@ Full walk-throughs: [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md) and
 | `app/assets/fonts/` | Licensed Neue Haas Grotesk files (git-ignored, see `docs/FONTS.md`) |
 | `app/test/e2e/` | Playwright test suite |
 | `server/` | FastAPI home AI server (port 8080; `python -m app.main` in a dev checkout) |
-| `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize (Ollama) |
+| `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize + extract Q&A (Ollama) |
 | `server/app/routes/` | `/health` and `/jobs` endpoints |
 | `server/app/mailer/` | Gmail SMTP sender |
 | `server/tests/` | pytest suite (with fake ffmpeg/whisper stubs) |

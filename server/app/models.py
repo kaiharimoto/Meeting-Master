@@ -36,6 +36,34 @@ class Card(BaseModel):
     participant: str = ""
 
 
+class ExtractedQuestion(BaseModel):
+    """A Q&A pair the AI found in the transcript, offered to the operator for
+    approval (never auto-added to the meeting cards).
+
+    ``answerer`` is the one that matters — it becomes a card's ``participant``
+    when the operator approves the question. ``directedTo`` (who the question
+    seemed aimed at / who could answer) is a lower-confidence culling aid.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    question: str = ""
+    answer: str = ""
+    answerer: str = ""
+    directedTo: str = ""
+
+
+class MeetingSummary(BaseModel):
+    """Structured, presentation-style summary rendered as bulleted sections in
+    the PDF. Each list holds short, self-contained bullet strings."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    keyTakeaways: list[str] = Field(default_factory=list)
+    followUps: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
+
+
 class MeetingDetails(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -84,7 +112,15 @@ class JobRecord(BaseModel):
     updatedAt: str  # ISO-8601 UTC
     meeting: MeetingMeta
     transcript: Transcript | None = None
-    summary: str | None = None
+    # Structured, presentation-style summary (Key Takeaways / Follow-Ups /
+    # Topics). None until the summarize stage completes. `str` is tolerated ONLY
+    # so pre-upgrade job.json files (whose summary was plain prose) still load
+    # instead of being dropped whole by load_all() — the PDF renderer already
+    # handles both shapes. New jobs always store a MeetingSummary.
+    summary: MeetingSummary | str | None = None
+    # Q&A pairs the AI detected in the transcript, awaiting operator approval
+    # on the laptop — never merged into meeting.cards automatically.
+    questions: list[ExtractedQuestion] = Field(default_factory=list)
     # 0-100 progress for the current long stage (transcription); None otherwise.
     # Lets the laptop show "Transcribing… 42%" instead of a mystery spinner.
     progress: int | None = None

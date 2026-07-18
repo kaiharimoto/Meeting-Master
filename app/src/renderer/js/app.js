@@ -7,6 +7,7 @@ import { initCardList, renderCards } from './cardList.js';
 import { initGenerate, updateButtons } from './generate.js';
 import { initStatus, setStatus, showError } from './status.js';
 import { initSettings, openSettings } from './settings.js';
+import { initExtractReview, renderExtractPrompt } from './extractReview.js';
 
 const STORAGE_KEY = 'meetingmaster.meeting.v1';
 
@@ -19,6 +20,10 @@ function defaultState() {
     job: { id: null, state: null },
     transcript: null,
     summary: null,
+    // AI-detected Q&A pairs awaiting operator approval, and whether they've
+    // been reviewed (so the prompt doesn't nag after culling/dismissal).
+    extractedQuestions: [],
+    questionsReviewed: false,
     pdfPath: null,
   };
 }
@@ -59,6 +64,7 @@ function boot() {
     renderAll() {
       renderDetailsForm(ctx);
       renderCards(ctx);
+      renderExtractPrompt();
       updateButtons(ctx);
     },
   };
@@ -67,6 +73,7 @@ function boot() {
   initDetailsForm(ctx);
   initCardList(ctx, { onEditCard: (card) => openCardModal(card) });
   initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
+  initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
   initGenerate(ctx);
   // After a successful save, refresh the header connection info (but don't
   // re-trigger the launch-time auto-open of the Settings modal).

@@ -10,8 +10,8 @@ import asyncio
 import logging
 
 from .config import get_settings
-from .models import JobState
-from .pipeline import normalize, summarize, transcribe
+from .models import JobState, MeetingSummary
+from .pipeline import extract, normalize, summarize, transcribe
 from .store import JobStore
 
 log = logging.getLogger(__name__)
@@ -66,10 +66,25 @@ async def process(store: JobStore, job) -> None:
         store.update(job, transcript=transcript, progress=None)
 
         store.update(job, state=JobState.summarizing, progress=None)
-        summary = await summarize.run(transcript.text, job.meeting, settings)
+        # Summary and Q&A extraction both degrade gracefully: a JSON hiccup in
+        # one must not fail the whole job (the operator can still get a PDF and
+        # capture Q&A by hand). Each is a separate best-effort model call.
+        try:
+            summary = await summarize.run(transcript.text, job.meeting, settings)
+        except Exception:
+            log.exception("Job %s: summary generation failed — empty summary", job.id)
+            summary = MeetingSummary()
+        try:
+            questions = await extract.run(transcript.text, job.meeting, settings)
+        except Exception:
+            log.exception("Job %s: question extraction failed — no candidates", job.id)
+            questions = []
 
-        store.update(job, summary=summary, state=JobState.ready, progress=None)
-        log.info("Job %s ready", job.id)
+        store.update(
+            job, summary=summary, questions=questions,
+            state=JobState.ready, progress=None,
+        )
+        log.info("Job %s ready (%d candidate question(s))", job.id, len(questions))
     except Exception as exc:
         log.exception("Job %s failed", job.id)
         store.update(job, state=JobState.failed, error=str(exc))

@@ -10,9 +10,13 @@
  *
  * TYPE SCALE (v3 mock supersedes the original 24pt/16pt contract):
  *   title 42pt · Q index 22pt · summary header 20pt · Q/A text 13pt ·
- *   details values 12pt · summary body 11pt · labels/captions 8.5-9.5pt.
- * The e2e print spec asserts .question at 13pt (17.33px) and
- * #summary-body p at 11pt (~14.67px), plus the accent on .q-index.
+ *   key-takeaway text 12.5pt · details values 12pt · follow-up text 11pt ·
+ *   section kickers/labels/topic chips 9.5-10pt · captions 8.5pt.
+ * The summary is a structured "deck": Key Takeaways (accent-numbered), then
+ * Follow-Up Points (accent checkbox markers) beside Topics Discussed (outline
+ * accent chips). A legacy plain-string summary falls back to 2-column prose
+ * via #summary-body.is-prose. The e2e print spec asserts .question at 13pt,
+ * the accent .sum-heading kicker, and the takeaway/topic/follow-up counts.
  *
  * NOTE: no @font-face here — src/main/pdf.js injects Neue Haas Grotesk at
  * runtime (Roman 400 + Bold 700; Medium 500 optional).
@@ -195,21 +199,135 @@ section#summary {
   background: var(--accent);
 }
 
-#summary-body {
-  margin-top: 16pt;
+#summary-body { margin-top: 22pt; }
+
+/* Legacy path: a plain-string summary still renders as 2-column prose. */
+#summary-body.is-prose {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14pt 0.3in;
 }
 
-/* e2e asserts 11pt => ~14.67px computed. */
-#summary-body p {
+#summary-body.is-prose p {
   font-size: 11pt;
   line-height: 1.6;
   color: var(--ink-soft);
 }
 
-#summary-body .span-all { grid-column: 1 / -1; }
+#summary-body.is-prose .span-all { grid-column: 1 / -1; }
+
+/* ---- Structured summary: a presentation "deck" of bulleted sections ------- */
+
+.sum-section { break-inside: avoid; page-break-inside: avoid; }
+
+.sum-list { list-style: none; }
+
+/* Each section opens with an uppercase accent kicker + a short accent tick. */
+.sum-heading {
+  display: flex;
+  align-items: center;
+  gap: 9pt;
+  font-size: 10pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.sum-heading::before {
+  content: "";
+  width: 15pt;
+  height: 3pt;
+  background: var(--accent);
+  flex: none;
+}
+
+/* Key Takeaways — the hero block: big accent index numbers, roomy rows. */
+.sum-key { margin-bottom: 28pt; }
+
+.sum-key .sum-list {
+  margin-top: 14pt;
+  display: grid;
+  gap: 13pt;
+}
+
+.takeaway {
+  display: grid;
+  grid-template-columns: 0.44in 1fr;
+  column-gap: 12pt;
+  align-items: baseline;
+  break-inside: avoid;
+}
+
+.takeaway-num {
+  font-size: 18pt;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.takeaway-text {
+  font-size: 12.5pt;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* Lower band: Follow-Up Points beside Topics Discussed. */
+.sum-lower {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 0.42in;
+}
+
+/* Follow-Up Points — hollow accent checkbox markers read as action items. */
+.sum-followups .sum-list {
+  margin-top: 14pt;
+  display: grid;
+  gap: 10pt;
+}
+
+.followup {
+  display: grid;
+  grid-template-columns: 10pt 1fr;
+  column-gap: 10pt;
+  align-items: start;
+  break-inside: avoid;
+}
+
+.followup::before {
+  content: "";
+  margin-top: 2.5pt;
+  width: 9pt;
+  height: 9pt;
+  border: 1.25pt solid var(--accent);
+  border-radius: 2pt;
+}
+
+.followup-text {
+  font-size: 11pt;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* Topics Discussed — outline pill chips (ink-and-rules, no fill wash). */
+.sum-topics .sum-list {
+  margin-top: 14pt;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7pt;
+}
+
+.topic-chip {
+  padding: 4pt 11pt;
+  border: 1pt solid var(--accent);
+  border-radius: 999px;
+  font-size: 9.5pt;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
 
 /* ---- Colophon --------------------------------------------------------------- */
 

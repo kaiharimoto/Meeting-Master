@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from tests.conftest import CANNED_SUMMARY
+from tests.conftest import CANNED_QUESTIONS, CANNED_SUMMARY_SECTIONS
 
 AUTH = {"Authorization": "Bearer test-token"}
 
@@ -73,7 +73,16 @@ def test_full_pipeline(client):
     record = _wait_ready(client, job_id)
 
     assert "stub transcript" in record["transcript"]["text"]
-    assert record["summary"] == CANNED_SUMMARY
+
+    # Summary is now a structured object (Key Takeaways / Follow-Ups / Topics).
+    assert record["summary"]["keyTakeaways"] == CANNED_SUMMARY_SECTIONS["keyTakeaways"]
+    assert record["summary"]["followUps"] == CANNED_SUMMARY_SECTIONS["followUps"]
+    assert record["summary"]["topics"] == CANNED_SUMMARY_SECTIONS["topics"]
+
+    # Extracted Q&A candidates ride along, awaiting operator approval.
+    assert len(record["questions"]) == len(CANNED_QUESTIONS)
+    assert record["questions"][0]["question"] == CANNED_QUESTIONS[0]["question"]
+    assert record["questions"][0]["answerer"] == "Bob"
 
     first_segment = record["transcript"]["segments"][0]
     assert first_segment["start"] == 0.0
@@ -124,6 +133,31 @@ def test_pdf_upload_and_email(client, monkeypatch):
     record = client.get(f"/jobs/{job_id}", headers=AUTH).json()
     assert record["state"] == "emailed"
     assert record["pdf"] == {"received": True, "emailed": True}
+
+
+def test_legacy_string_summary_still_loads():
+    # Pre-upgrade job.json stored `summary` as plain prose. After the switch to
+    # a structured MeetingSummary, such a record must STILL validate (union
+    # tolerance) so JobStore.load_all() keeps the whole job instead of dropping
+    # it — otherwise an already-completed meeting would 404 after an upgrade.
+    from app.models import JobRecord
+
+    record = JobRecord.model_validate(
+        {
+            "id": "legacy-1",
+            "state": "emailed",
+            "createdAt": "2026-01-01T00:00:00+00:00",
+            "updatedAt": "2026-01-01T00:00:00+00:00",
+            "meeting": {"details": {"title": "Old Meeting"}},
+            "summary": "A legacy prose summary string.",
+            "pdf": {"received": True, "emailed": True},
+        }
+    )
+    assert record.summary == "A legacy prose summary string."
+    # And a round-trip through JSON (how the store persists/reloads) is stable.
+    assert JobRecord.model_validate_json(record.model_dump_json()).summary == (
+        "A legacy prose summary string."
+    )
 
 
 def test_pdf_rejected_before_ready(client, monkeypatch):

@@ -1,9 +1,10 @@
-"""Stage 3: summarize the transcript with a local Ollama model.
+"""Stage 3a: summarize the transcript into a structured, presentation-style
+summary with an Ollama model.
 
-IMPORTANT: this calls Ollama's NATIVE /api/chat endpoint, not the
-OpenAI-compatible /v1 endpoint — /v1 ignores options.num_ctx and silently
-truncates the prompt at the model's default 2048-token context, which destroys
-long transcripts.
+Output is a MeetingSummary with three bulleted sections — Key Takeaways,
+Follow-Up Points, Topics Discussed — rendered as a "deck" in the PDF rather
+than prose. See _ollama.py for the shared chat/token helpers and the reason
+these calls use the native /api/chat endpoint.
 """
 
 import logging
@@ -11,121 +12,160 @@ import logging
 import httpx
 
 from ..config import Settings
-from ..models import MeetingMeta
+from ..models import MeetingMeta, MeetingSummary
+from . import _ollama
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "You are a precise meeting-notes assistant. Write a faithful GENERAL "
-    "SUMMARY of the meeting transcript you are given, as 2-4 plain-prose "
-    "paragraphs. Use only information that appears in the transcript — never "
-    "invent names, numbers, decisions, or dates. Do not use bullet lists or "
-    "headings, and do not add any preamble such as 'Here is a summary'; "
-    "start directly with the summary text."
+# Keep the printed summary tight and slide-like — hard caps so a chatty model
+# can't blow out the PDF layout.
+_MAX_TAKEAWAYS = 8
+_MAX_FOLLOWUPS = 8
+_MAX_TOPICS = 12
+
+_SCHEMA_HINT = (
+    'Respond with ONLY a JSON object of this exact shape:\n'
+    '{\n'
+    '  "keyTakeaways": ["short bullet", ...],\n'
+    '  "followUps": ["short bullet", ...],\n'
+    '  "topics": ["short topic phrase", ...]\n'
+    '}'
 )
 
-# Rough token estimate. ASCII text runs ~4 chars/token, so 3 is conservative;
-# non-ASCII scripts (CJK especially) tokenize closer to one token PER CHARACTER,
-# so they must be counted at full weight or a long non-English transcript would
-# silently overflow num_ctx — the exact truncation bug this module guards against.
-_ASCII_CHARS_PER_TOKEN = 3
+SYSTEM_PROMPT = (
+    "You are a precise meeting-notes assistant. You read a meeting transcript "
+    "and produce a STRUCTURED summary as JSON, suitable for a one-page "
+    "presentation-style handout. Use ONLY information present in the transcript "
+    "— never invent names, numbers, decisions, dates, or owners.\n\n"
+    "Populate three sections:\n"
+    "- keyTakeaways: the most important decisions, outcomes, and conclusions. "
+    "Each a single crisp sentence.\n"
+    "- followUps: concrete action items, open questions, and next steps. Name "
+    "the owner and any deadline when the transcript states them.\n"
+    "- topics: the subjects that were discussed, as short noun phrases (2-5 "
+    "words each), not sentences.\n\n"
+    "Each array element is a plain string with no leading bullet character. "
+    "Omit a section's items (empty array) only if the transcript truly has "
+    "none. " + _SCHEMA_HINT
+)
 
-# Headroom reserved for the system prompt, meeting context, and chat framing.
-_PROMPT_OVERHEAD_TOKENS = 1000
-
-
-def _estimate_tokens(text: str) -> int:
-    ascii_chars = sum(1 for ch in text if ord(ch) < 128)
-    return ascii_chars // _ASCII_CHARS_PER_TOKEN + (len(text) - ascii_chars)
-
-
-def _split_by_token_budget(text: str, budget_tokens: int) -> list[str]:
-    """Split text into chunks whose estimated token count fits the budget."""
-    per_ascii = 1.0 / _ASCII_CHARS_PER_TOKEN
-    chunks: list[str] = []
-    start = 0
-    weight = 0.0
-    for i, ch in enumerate(text):
-        weight += per_ascii if ord(ch) < 128 else 1.0
-        if weight >= budget_tokens:
-            chunks.append(text[start : i + 1])
-            start = i + 1
-            weight = 0.0
-    if start < len(text):
-        chunks.append(text[start:])
-    return chunks or [text]
+# A single low-token-cost consolidation of per-chunk partials for long
+# transcripts (see run() below).
+_MERGE_SYSTEM_PROMPT = (
+    "You merge several partial structured summaries of ONE meeting into a "
+    "single structured summary. Deduplicate overlapping points, keep the most "
+    "specific wording, and preserve every distinct decision, action item, and "
+    "topic. Invent nothing. " + _SCHEMA_HINT
+)
 
 
-def _meeting_context(meeting: MeetingMeta) -> str:
-    d = meeting.details
-    attendees = ", ".join(d.attendees) if d.attendees else "(not listed)"
-    return (
-        f"Meeting title: {d.title}\n"
-        f"Date: {d.date} {d.time}\n"
-        f"Attendees: {attendees}\n"
+def _coerce(parsed) -> MeetingSummary:
+    """Turn the model's JSON into a MeetingSummary, defensively."""
+    data = parsed if isinstance(parsed, dict) else {}
+
+    def _list(key: str, *aliases: str, limit: int) -> list[str]:
+        raw = data.get(key)
+        for alias in aliases:
+            if not raw:
+                raw = data.get(alias)
+        if not isinstance(raw, list):
+            return []
+        cleaned = [_ollama.clean_bullet(item) for item in raw]
+        return [b for b in cleaned if b][:limit]
+
+    return MeetingSummary(
+        keyTakeaways=_list("keyTakeaways", "key_takeaways", limit=_MAX_TAKEAWAYS),
+        followUps=_list("followUps", "follow_ups", "followups", limit=_MAX_FOLLOWUPS),
+        topics=_list("topics", "topicsDiscussed", limit=_MAX_TOPICS),
     )
 
 
-async def _chat(client: httpx.AsyncClient, settings: Settings, user_prompt: str) -> str:
-    payload = {
-        "model": settings.OLLAMA_MODEL,
-        "stream": False,
-        "options": {
-            "num_ctx": settings.NUM_CTX,
-            "temperature": settings.SUMMARY_TEMPERATURE,
-            "num_predict": settings.SUMMARY_NUM_PREDICT,
-        },
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-    url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
-    resp = await client.post(url, json=payload)
-    resp.raise_for_status()
-    return resp.json()["message"]["content"].strip()
+def _merge(summaries: list[MeetingSummary]) -> MeetingSummary:
+    """Concatenate section lists across partials, de-duplicating case-folded."""
+    merged = MeetingSummary()
+    for field, limit in (
+        ("keyTakeaways", _MAX_TAKEAWAYS),
+        ("followUps", _MAX_FOLLOWUPS),
+        ("topics", _MAX_TOPICS),
+    ):
+        seen: set[str] = set()
+        out: list[str] = []
+        for s in summaries:
+            for item in getattr(s, field):
+                key = item.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(item)
+        setattr(merged, field, out[:limit])
+    return merged
 
 
-async def run(transcript_text: str, meeting: MeetingMeta, settings: Settings) -> str:
-    context = _meeting_context(meeting)
-    # Generation can take minutes for a long transcript on a local model,
-    # hence the generous read timeout (connect stays snappy).
-    timeout = httpx.Timeout(600.0, connect=10.0)
-    budget_tokens = (
-        settings.NUM_CTX - settings.SUMMARY_NUM_PREDICT - _PROMPT_OVERHEAD_TOKENS
-    )
+async def run(
+    transcript_text: str, meeting: MeetingMeta, settings: Settings
+) -> MeetingSummary:
+    context = _ollama.meeting_context(meeting)
+    num_predict = settings.SUMMARY_NUM_PREDICT
+    temperature = settings.SUMMARY_TEMPERATURE
+    budget_tokens = _ollama.input_budget_tokens(settings, num_predict)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        if _estimate_tokens(transcript_text) <= budget_tokens:
+    async with httpx.AsyncClient(timeout=_ollama.DEFAULT_TIMEOUT) as client:
+        if _ollama.estimate_tokens(transcript_text) <= budget_tokens:
             user_prompt = (
                 f"{context}\n"
-                "Summarize the following meeting transcript:\n\n"
+                "Summarize the following meeting transcript into the JSON "
+                "sections described:\n\n"
                 f"{transcript_text}"
             )
-            return await _chat(client, settings, user_prompt)
+            parsed = await _ollama.chat_json(
+                client, settings, SYSTEM_PROMPT, user_prompt,
+                num_predict=num_predict, temperature=temperature,
+            )
+            return _coerce(parsed)
 
-        # CHUNKING SAFEGUARD: the transcript likely exceeds the context window.
-        # Summarize token-budget-sized chunks, then summarize the summaries.
-        chunks = _split_by_token_budget(transcript_text, max(budget_tokens, 1))
+        # CHUNKING SAFEGUARD: the transcript exceeds the context window.
+        # Structure each chunk, then merge the partial summaries.
+        chunks = _ollama.split_by_token_budget(transcript_text, max(budget_tokens, 1))
         log.info(
-            "Transcript ~%d tokens exceeds budget of %d — chunking into %d parts",
-            _estimate_tokens(transcript_text), budget_tokens, len(chunks),
+            "Transcript ~%d tokens exceeds budget of %d — summarizing in %d parts",
+            _ollama.estimate_tokens(transcript_text), budget_tokens, len(chunks),
         )
-        partials: list[str] = []
+        partials: list[MeetingSummary] = []
         for index, chunk in enumerate(chunks, start=1):
             prompt = (
                 f"{context}\n"
-                f"Summarize this PORTION ({index} of {len(chunks)}) of a longer "
-                "meeting transcript. Capture every substantive point so the "
-                "portions can later be combined into one summary:\n\n"
+                f"Summarize PORTION {index} of {len(chunks)} of a longer meeting "
+                "transcript into the JSON sections described. Capture every "
+                "substantive point in this portion:\n\n"
                 f"{chunk}"
             )
-            partials.append(await _chat(client, settings, prompt))
+            parsed = await _ollama.chat_json(
+                client, settings, SYSTEM_PROMPT, prompt,
+                num_predict=num_predict, temperature=temperature,
+            )
+            partials.append(_coerce(parsed))
 
-        final_prompt = (
-            f"{context}\n"
-            "The following are summaries of consecutive portions of one meeting "
-            "transcript. Combine them into a single coherent general summary of "
-            "the whole meeting:\n\n" + "\n\n".join(partials)
-        )
-        return await _chat(client, settings, final_prompt)
+        merged = _merge(partials)
+        # One consolidation pass to dedupe/prioritize across the whole meeting.
+        try:
+            merge_prompt = (
+                f"{context}\n"
+                "Merge these partial structured summaries into one:\n\n"
+                + merged.model_dump_json(indent=2)
+            )
+            parsed = await _ollama.chat_json(
+                client, settings, _MERGE_SYSTEM_PROMPT, merge_prompt,
+                num_predict=num_predict, temperature=temperature,
+            )
+            consolidated = _coerce(parsed)
+            # Guard against the merge pass hallucinating everything away.
+            if consolidated.keyTakeaways or consolidated.topics:
+                return consolidated
+        except Exception:
+            # The consolidation pass is a best-effort refinement; ANY failure
+            # (HTTP, bad JSON, an unexpected 200 envelope -> KeyError, ...) must
+            # fall through to the already-computed merged partials, never
+            # discard them.
+            log.warning("Summary consolidation pass failed — using merged partials",
+                        exc_info=True)
+        return merged

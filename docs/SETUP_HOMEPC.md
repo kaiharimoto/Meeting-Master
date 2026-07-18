@@ -49,10 +49,13 @@ the green checks — the first two are quick; the model downloads are large:
 - **Ollama** — the local LLM runtime (installed natively for Windows, which is
   what the AMD RX 7900 XTX needs — never WSL2).
 - **Tailscale** — the private network that links this PC to the laptop.
-- **AI model** — the summarization model `qwen2.5:14b-instruct-q6_K`
-  (**~9 GB** download) plus the transcription model `large-v3-turbo`
+- **AI model** — the summarization/question-extraction model `gemma4:26b`
+  (**~16 GB** download) plus the transcription model `large-v3-turbo`
   (**~1.6 GB** download). Expect this to take a while on a normal connection;
-  the page shows progress and turns green when each is ready.
+  the page shows progress and turns green when each is ready. (Gemma 4 26B is a
+  fast mixture-of-experts model that fits the RX 7900 XTX's 24 GB with room for
+  the 32K context — swap it for another Ollama model any time from the setup
+  page's **AI model** field.)
 
 If an install button fails, just click it again, or install that one tool
 yourself from its own website and click **Detect** — see
@@ -90,7 +93,7 @@ recipient list, or the Connection Code.
 On the RX 7900 XTX, a **1-hour meeting** takes roughly:
 
 - **~2–3 minutes** to transcribe with `large-v3-turbo`,
-- **under 1 minute** to summarize with `qwen2.5:14b-instruct-q6_K`,
+- **~1–2 minutes** to summarize and extract the Q&A with `gemma4:26b`,
 - plus the WAV upload time, which depends on the laptop→home link (a ~600 MB
   WAV transfers in a few minutes over a direct Tailscale connection; slower if
   traffic is relayed — see

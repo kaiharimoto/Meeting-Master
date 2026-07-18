@@ -18,6 +18,22 @@ import pytest
 
 CANNED_SUMMARY = "A concise test summary of the meeting."
 
+# The fake Ollama returns these structured payloads for the JSON-mode calls the
+# summarize/extract stages make (branched on a marker in the request body).
+CANNED_SUMMARY_SECTIONS = {
+    "keyTakeaways": ["A key decision was reached.", "Budget was approved."],
+    "followUps": ["Alice to send the redlined contract."],
+    "topics": ["Pricing", "Timeline"],
+}
+CANNED_QUESTIONS = [
+    {
+        "question": "What is the renewal price?",
+        "answer": "A 12% increase locked for 24 months.",
+        "answerer": "Bob",
+        "directedTo": "Bob",
+    }
+]
+
 _TESTS_DIR = Path(__file__).resolve().parent
 _STUBS_DIR = _TESTS_DIR / "stubs"
 _TMP = Path(tempfile.mkdtemp(prefix="meeting-master-tests-"))
@@ -43,13 +59,21 @@ _TEMPLATE_FILE.write_text(
 (_TMP / "models").mkdir()  # WHISPER_MODEL_DIR — intentionally has no .bin files
 
 
-# --- fake Ollama: answers POST /api/chat with a canned summary ---
+# --- fake Ollama: answers POST /api/chat, branching on which stage called ---
 class _FakeOllamaHandler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802 (BaseHTTPRequestHandler API)
         length = int(self.headers.get("Content-Length") or 0)
-        self.rfile.read(length)  # drain the request body
+        request = self.rfile.read(length).decode("utf-8", "replace")
+        # The stages carry distinctive schema keywords in their prompts:
+        # extraction asks for "answerer"; summarization asks for "keyTakeaways".
+        if "answerer" in request:
+            content = json.dumps({"questions": CANNED_QUESTIONS})
+        elif "keyTakeaways" in request:
+            content = json.dumps(CANNED_SUMMARY_SECTIONS)
+        else:
+            content = CANNED_SUMMARY
         body = json.dumps(
-            {"message": {"role": "assistant", "content": CANNED_SUMMARY}}
+            {"message": {"role": "assistant", "content": content}}
         ).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

@@ -23,7 +23,7 @@
   </section>
 
   <section id="summary">
-    <h2 class="summary-header">General Summary</h2>
+    <h2 class="summary-header">Meeting Summary</h2>
     <div class="summary-rule"></div>
     <div id="summary-body"></div>
     <div class="colophon">
@@ -67,6 +67,124 @@
       var suffix = hours >= 12 ? 'PM' : 'AM';
       var twelve = hours % 12 === 0 ? 12 : hours % 12;
       return twelve + ':' + m[2] + ' ' + suffix;
+    }
+
+    function cleanStrings(list) {
+      if (!Array.isArray(list)) return [];
+      return list
+        .map(function (s) { return typeof s === 'string' ? s.trim() : ''; })
+        .filter(Boolean);
+    }
+
+    // Build one titled summary section (heading + a <ul>/<ol> of items). The
+    // caller supplies a per-item builder so takeaways, follow-ups, and topics
+    // can each carry their own marker treatment. Returns null when empty.
+    function buildSummarySection(heading, cssClass, items, listTag, buildItem) {
+      if (items.length === 0) return null;
+      var section = document.createElement('div');
+      section.className = 'sum-section ' + cssClass;
+
+      var head = document.createElement('div');
+      head.className = 'sum-heading';
+      head.textContent = heading;
+      section.appendChild(head);
+
+      var list = document.createElement(listTag);
+      list.className = 'sum-list';
+      items.forEach(function (text, i) {
+        list.appendChild(buildItem(text, i));
+      });
+      section.appendChild(list);
+      return section;
+    }
+
+    // Render data.summary, which is either the new structured object
+    // {keyTakeaways, followUps, topics} or (legacy/mock) a plain string.
+    function renderSummary(host, summary) {
+      host.textContent = '';
+
+      // Legacy: a plain-prose string renders as two-column paragraphs.
+      if (typeof summary === 'string') {
+        var text = summary.trim();
+        if (!text) return renderSummaryPlaceholder(host);
+        host.classList.add('is-prose');
+        var paras = text.split(/\n\s*\n/).map(function (p) { return p.trim(); })
+          .filter(Boolean);
+        paras.forEach(function (para, i) {
+          var p = document.createElement('p');
+          p.textContent = para;
+          if (paras.length % 2 === 1 && i === paras.length - 1) p.className = 'span-all';
+          host.appendChild(p);
+        });
+        return;
+      }
+
+      host.classList.remove('is-prose');
+      summary = summary || {};
+      var takeaways = cleanStrings(summary.keyTakeaways);
+      var followUps = cleanStrings(summary.followUps);
+      var topics = cleanStrings(summary.topics);
+
+      if (takeaways.length === 0 && followUps.length === 0 && topics.length === 0) {
+        return renderSummaryPlaceholder(host);
+      }
+
+      // Key Takeaways — full-width hero list with big accent index numbers.
+      var key = buildSummarySection(
+        'Key Takeaways', 'sum-key', takeaways, 'ol',
+        function (text, i) {
+          var li = document.createElement('li');
+          li.className = 'takeaway';
+          var num = document.createElement('span');
+          num.className = 'takeaway-num';
+          num.textContent = (i + 1 < 10 ? '0' : '') + (i + 1);
+          var body = document.createElement('span');
+          body.className = 'takeaway-text';
+          body.textContent = text;
+          li.appendChild(num);
+          li.appendChild(body);
+          return li;
+        }
+      );
+      if (key) host.appendChild(key);
+
+      // Follow-Up Points + Topics Discussed — a two-column lower band.
+      var lower = document.createElement('div');
+      lower.className = 'sum-lower';
+
+      var follow = buildSummarySection(
+        'Follow-Up Points', 'sum-followups', followUps, 'ul',
+        function (text) {
+          var li = document.createElement('li');
+          li.className = 'followup';
+          var body = document.createElement('span');
+          body.className = 'followup-text';
+          body.textContent = text;
+          li.appendChild(body);
+          return li;
+        }
+      );
+      if (follow) lower.appendChild(follow);
+
+      var topicSection = buildSummarySection(
+        'Topics Discussed', 'sum-topics', topics, 'ul',
+        function (text) {
+          var li = document.createElement('li');
+          li.className = 'topic-chip';
+          li.textContent = text;
+          return li;
+        }
+      );
+      if (topicSection) lower.appendChild(topicSection);
+
+      if (lower.childNodes.length) host.appendChild(lower);
+    }
+
+    function renderSummaryPlaceholder(host) {
+      var placeholder = document.createElement('p');
+      placeholder.className = 'placeholder span-all';
+      placeholder.textContent = '(No AI summary was generated for this meeting)';
+      host.appendChild(placeholder);
     }
 
     window.renderMeeting = function renderMeeting(data) {
@@ -147,28 +265,8 @@
         cardsHost.appendChild(el);
       });
 
-      // ---- Summary (two-column paragraphs; an odd last one spans both) ----
-      var summaryHost = document.getElementById('summary-body');
-      summaryHost.textContent = '';
-      var summary = typeof data.summary === 'string' ? data.summary.trim() : '';
-
-      if (summary) {
-        var paras = summary.split(/\n\s*\n/).map(function (p) { return p.trim(); })
-          .filter(Boolean);
-        paras.forEach(function (text, i) {
-          var p = document.createElement('p');
-          p.textContent = text;
-          if (paras.length % 2 === 1 && i === paras.length - 1) {
-            p.className = 'span-all';
-          }
-          summaryHost.appendChild(p);
-        });
-      } else {
-        var placeholder = document.createElement('p');
-        placeholder.className = 'placeholder span-all';
-        placeholder.textContent = '(No AI summary was generated for this meeting)';
-        summaryHost.appendChild(placeholder);
-      }
+      // ---- Summary (structured presentation-style sections) ----
+      renderSummary(document.getElementById('summary-body'), data.summary);
 
       // ---- Colophon ----
       document.getElementById('colophon-title').textContent = title;
