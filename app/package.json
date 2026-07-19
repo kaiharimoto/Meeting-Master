@@ -1,8 +1,8 @@
 {
   "name": "meeting-master-app",
   "productName": "MeetingMaster",
-  "version": "0.1.10",
-  "description": "Meeting Master laptop app \u2014 capture meeting Q&A, send audio to the home AI server, render print-perfect PDFs, and email them.",
+  "version": "0.2.0",
+  "description": "Meeting Master laptop app — capture meeting Q&A, send audio to the home AI server, render print-perfect PDFs, and email them.",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
@@ -14,8 +14,10 @@
     "nodemailer": "^6.9"
   },
   "devDependencies": {
+    "@playwright/test": "~1.56.0",
+    "@resvg/resvg-js": "^2.6.2",
     "electron": "^37",
     "electron-builder": "^25",
-    "@playwright/test": "~1.56.0"
+    "png2icons": "^2.0.1"
   }
 }

@@ -129,4 +129,41 @@ async function postPdf(jobId, pdfPath) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf };
+/** GET /health — unauthenticated reachability probe (5s timeout). */
+async function health() {
+  const cfg = config.get();
+  if (!cfg.serverUrl) throw new Error('HOME_SERVER_URL is not set.');
+  const res = await doFetch(
+    `${cfg.serverUrl}/health`,
+    { signal: AbortSignal.timeout(5000) },
+    'checking server health'
+  );
+  if (!res.ok) await throwHttpError(res, 'checking server health');
+  return res.json();
+}
+
+/** GET /jobs — trimmed list of recent jobs (newest first). */
+async function listJobs(limit = 50) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/jobs?limit=${encodeURIComponent(limit)}`,
+    { headers, signal: AbortSignal.timeout(15000) },
+    'listing jobs'
+  );
+  if (!res.ok) await throwHttpError(res, 'listing jobs');
+  return res.json();
+}
+
+/** GET /logs/tail — the last N server log lines. */
+async function getLogTail(lines = 200) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/logs/tail?lines=${encodeURIComponent(lines)}`,
+    { headers, signal: AbortSignal.timeout(15000) },
+    'fetching the server log'
+  );
+  if (!res.ok) await throwHttpError(res, 'fetching the server log');
+  return res.json();
+}
+
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail };

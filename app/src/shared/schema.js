@@ -19,6 +19,13 @@ const CHANNELS = Object.freeze({
   CONFIG_GET: 'config:get',
   CONFIG_SAVE: 'config:save',
   CONFIG_GET_FULL: 'config:getFull',
+  // App shell + live monitoring (v0.2.0)
+  APP_INFO: 'app:info',
+  WINDOW_SET_OVERLAY: 'window:setOverlay',
+  SERVER_EVENT: 'server:event', // main -> renderer push (SSE + reachability)
+  SERVER_STATUS_GET: 'server:statusGet',
+  JOBS_LIST: 'jobs:list',
+  LOGS_TAIL: 'logs:tail',
 });
 
 const JOB_STATES = Object.freeze([

@@ -5,6 +5,7 @@
 import { setStatus, showError, friendlyState, isBusyState } from './status.js';
 import { renderExtractPrompt, captureExtracted } from './extractReview.js';
 import { saveCurrentToHistory } from './history.js';
+import { showToast } from './toast.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -49,14 +50,19 @@ export function initGenerate(context) {
   updateButtons(ctx);
 }
 
-// Resume polling if the current job is mid-pipeline (used at boot AND after a
-// history snapshot restores a still-running meeting).
+// Resume polling if the current job is mid-pipeline (used at boot, after a
+// history snapshot restores a meeting, and after "New meeting"). When the
+// current job is terminal or absent this STOPS any leftover interval — an
+// interval leaked from a previous meeting would otherwise poll the restored
+// job and fire spurious ready/failed toasts.
 export function maybeResumePolling() {
   const job = ctx.state.job || {};
   if (ctx.api && job.id && job.state && job.state !== 'failed' &&
       !READY_STATES.includes(job.state)) {
     setStatus(friendlyState(job.state || 'queued'), { busy: true });
     startPolling();
+  } else {
+    stopPolling();
   }
 }
 
@@ -166,6 +172,10 @@ async function pollOnce() {
   if (pollInFlight) return; // a slow request is still pending — skip this tick
 
   const gen = pollGeneration;
+  // Identity snapshot: "New meeting" / history-open replace state.job with a
+  // fresh object; a response that resolves after that must not write the old
+  // meeting's results into the new meeting's state.
+  const jobRef = ctx.state.job;
   let job;
   pollInFlight = true;
   try {
@@ -197,8 +207,10 @@ async function pollOnce() {
     pollInFlight = false;
   }
   if (gen !== pollGeneration) return; // stale response — a newer one already won
+  if (ctx.state.job !== jobRef) return; // meeting was replaced mid-flight
 
   ctx.state.job.state = job.state;
+  ctx.state.job.progress = typeof job.progress === 'number' ? job.progress : null;
   if (job.transcript) ctx.state.transcript = job.transcript;
   if (job.summary !== null && job.summary !== undefined) ctx.state.summary = job.summary;
   // Capture AI-detected Q&A candidates once (they are approved, not auto-added),
@@ -210,13 +222,25 @@ async function pollOnce() {
   ctx.persist();
   updateButtons(ctx);
   renderExtractPrompt();
+  // Let passive views (the Activity pipeline) re-render on each poll result.
+  document.dispatchEvent(new CustomEvent('mm:job'));
 
   if (job.state === 'failed') {
     stopPolling();
     showError(`AI processing failed on the home server${job.error ? `: ${job.error}` : '.'}`);
+    showToast({
+      kind: 'error',
+      title: 'AI processing failed',
+      message: job.error || 'The home server reported a failure.',
+    });
   } else if (READY_STATES.includes(job.state)) {
     stopPolling();
     setStatus(friendlyState(job.state));
+    showToast({
+      kind: 'success',
+      title: 'Summary & Q&A are ready',
+      message: 'Review the detected questions, then generate the PDF.',
+    });
   } else {
     // Append a live percentage when the server reports one (transcription).
     let text = friendlyState(job.state);
@@ -250,6 +274,7 @@ async function onGeneratePdf() {
     showError(`PDF saved to ${pdfPath} — but: ${warning}`);
   } else {
     setStatus(`PDF saved to ${pdfPath}${warning ? ` (${warning})` : ''}`);
+    showToast({ kind: 'success', title: 'PDF saved', message: pdfPath });
   }
 }
 
@@ -277,6 +302,7 @@ async function onSendEmail() {
     setStatus('Sending the email from this laptop via Gmail…', { busy: true });
     await api.sendPdfViaLaptop(buildMeetingJson(), ctx.state.pdfPath);
     setStatus('Email sent from this laptop.');
+    showToast({ kind: 'success', title: 'Email sent', message: 'Sent from this laptop via Gmail.' });
     return;
   }
 
@@ -294,6 +320,7 @@ async function onSendEmail() {
   const result = await api.sendPdfViaHome(jobId, ctx.state.pdfPath);
   if (result && result.emailed) {
     setStatus('Email sent by the home server.');
+    showToast({ kind: 'success', title: 'Email sent', message: 'Delivered by the home server.' });
   } else {
     const detail = result && result.error ? `: ${result.error}` : '.';
     showError(`The home server stored the PDF but could not send the email${detail}`);

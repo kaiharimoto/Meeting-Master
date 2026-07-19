@@ -10,6 +10,10 @@ import { initSettings, openSettings } from './settings.js';
 import { initExtractReview, renderExtractPrompt } from './extractReview.js';
 import { initSummaryEdit, openSummaryEdit } from './summaryEdit.js';
 import { initHistory, saveCurrentToHistory } from './history.js';
+import { initNav } from './nav.js';
+import { initTheme } from './theme.js';
+import { initServerStatus } from './serverStatus.js';
+import { initActivity } from './activity.js';
 
 const STORAGE_KEY = 'meetingmaster.meeting.v1';
 
@@ -95,6 +99,12 @@ function boot() {
   // After a successful save, refresh the header connection info (but don't
   // re-trigger the launch-time auto-open of the Settings modal).
   initSettings(ctx, { onSaved: () => refreshConfig(ctx) });
+  initTheme(ctx);
+  initServerStatus(ctx);
+  initActivity(ctx);
+  initNav(); // last: emits the initial mm:screen event to ready listeners
+  initShortcutsOverlay();
+  showAppVersion(ctx);
 
   document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
   document.getElementById('edit-summary-btn').addEventListener('click', () => openSummaryEdit());
@@ -108,12 +118,58 @@ function boot() {
     Object.assign(state, defaultState());
     ctx.persist();
     ctx.renderAll();
+    // Kill any interval still polling the previous meeting's job.
+    maybeResumePolling();
     setStatus('New meeting started.');
   });
 
   ctx.renderAll();
   // Only the launch-time refresh auto-opens Settings when unconfigured.
   refreshConfig(ctx, { autoOpen: true });
+}
+
+// The "?" overlay listing the app's keyboard shortcuts.
+function initShortcutsOverlay() {
+  const backdrop = document.getElementById('shortcuts-modal');
+  if (!backdrop) return;
+  const close = () => {
+    backdrop.hidden = true;
+  };
+  document.getElementById('shortcuts-close-btn').addEventListener('click', close);
+  backdrop.addEventListener('mousedown', (e) => {
+    if (e.target === backdrop) close();
+  });
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    const typing =
+      t && t.tagName && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    if (typing) return;
+    // Don't stack on top of another open dialog.
+    if (document.querySelector('.modal-backdrop:not([hidden])')) return;
+    e.preventDefault();
+    backdrop.hidden = false;
+    document.getElementById('shortcuts-close-btn').focus();
+  });
+}
+
+// Sidebar footer version label (the channel only exists on newer preloads —
+// guarded so the e2e window.api stubs stay valid).
+async function showAppVersion(ctx) {
+  const el = document.getElementById('app-version');
+  if (!el || !ctx.api || typeof ctx.api.getAppInfo !== 'function') return;
+  try {
+    const info = await ctx.api.getAppInfo();
+    if (info && info.version) el.textContent = `v${info.version}`;
+  } catch {
+    // Version display is a nicety — never an error path.
+  }
 }
 
 async function refreshConfig(ctx, { autoOpen = false } = {}) {

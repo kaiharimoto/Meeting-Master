@@ -36,3 +36,4 @@ playwright-report/
 .DS_Store
 Thumbs.db
 *.log
+_dashboard.e2e.html

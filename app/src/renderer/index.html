@@ -7,87 +7,185 @@
     content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
   />
   <title>Meeting Master</title>
+  <script src="js/themeBoot.js"></script>
   <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1 class="app-title">Meeting Master</h1>
-    <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
-    <div id="connection-info" class="connection-info" title="Home server connection"></div>
-    <button id="history-btn" type="button" class="btn btn-secondary">History</button>
-    <button id="settings-btn" type="button" class="btn btn-secondary">Settings</button>
-  </header>
+  <!-- Frameless-window drag strip (native controls overlay top-right on Windows). -->
+  <div id="titlebar" aria-hidden="true"><span>Meeting Master</span></div>
 
-  <main class="app-main">
-    <!-- ============ 1. Meeting details ============ -->
-    <section class="panel" aria-labelledby="details-heading">
-      <h2 id="details-heading">Meeting details</h2>
-
-      <div class="field-grid">
-        <div class="field field-wide">
-          <label for="meeting-title-input">Title</label>
-          <input id="meeting-title-input" type="text" autocomplete="off"
-                 placeholder="e.g. Q3 Vendor Contract Review" />
-        </div>
-
-        <div class="field">
-          <label for="meeting-date-input">Date</label>
-          <input id="meeting-date-input" type="date" />
-        </div>
-
-        <div class="field">
-          <label for="meeting-time-input">Time</label>
-          <input id="meeting-time-input" type="time" />
-        </div>
-
-        <div class="field field-wide">
-          <label for="meeting-attendees-input">Attendees</label>
-          <textarea id="meeting-attendees-input" rows="3"
-                    placeholder="One per line, or comma separated"></textarea>
-        </div>
-
-        <div class="field field-wide">
-          <label for="meeting-recipients-input">Email recipients</label>
-          <input id="meeting-recipients-input" type="text" autocomplete="off"
-                 placeholder="Leave empty to use the preset list on the home server" />
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ 2. Questions & answers ============ -->
-    <section class="panel" aria-labelledby="qa-heading">
-      <div class="panel-heading-row">
-        <h2 id="qa-heading">Questions &amp; answers</h2>
-        <span class="hint-chip">Press <kbd>Q</kbd> to add a question</span>
+  <div class="app-frame">
+    <!-- ============ Sidebar ============ -->
+    <aside id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span class="brand-name">Meeting Master</span>
       </div>
 
-      <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
+      <nav class="sidebar-nav" aria-label="Primary">
+        <button id="nav-meeting" type="button" class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          Meeting
+        </button>
+        <button id="nav-activity" type="button" class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Activity
+        </button>
+        <button id="history-btn" type="button" class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+        </button>
+        <button id="settings-btn" type="button" class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
+      </nav>
 
-      <div id="card-list" class="card-list" aria-live="polite"></div>
+      <div class="sidebar-spacer"></div>
 
-      <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
-    </section>
-
-    <!-- ============ 3. Generate & send ============ -->
-    <section class="panel" aria-labelledby="generate-heading">
-      <h2 id="generate-heading">Generate &amp; send</h2>
-
-      <div class="button-row">
-        <button id="pick-audio-btn" type="button" class="btn btn-primary">Pick audio &amp; start AI</button>
-        <button id="edit-summary-btn" type="button" class="btn btn-secondary">Edit summary</button>
-        <button id="generate-pdf-btn" type="button" class="btn btn-primary">Generate PDF</button>
-        <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
-        <button id="send-email-btn" type="button" class="btn btn-primary" disabled>Send email</button>
+      <div class="sidebar-foot">
+        <button id="server-pill" type="button" class="server-pill" data-status="unknown"
+                aria-label="Home server status">
+          <span class="pill-dot" aria-hidden="true"></span>
+          <span class="pill-label" id="server-pill-label">Server status</span>
+        </button>
+        <div id="connection-info" class="connection-info" title="Home server connection"></div>
+        <div class="sidebar-foot-row">
+          <button id="theme-toggle-btn" type="button" class="icon-btn" aria-label="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <span id="app-version" class="app-version"></span>
+        </div>
       </div>
+    </aside>
 
-      <div id="status-line" class="status-line" role="status" aria-live="polite">
-        <span id="status-spinner" class="spinner" hidden></span>
-        <span id="status-text">Ready.</span>
-      </div>
+    <!-- ============ Content ============ -->
+    <main class="app-content">
+      <!-- ============ Meeting screen ============ -->
+      <section id="screen-meeting" class="screen">
+        <div class="screen-head">
+          <h2 class="screen-title">Meeting</h2>
+          <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
+        </div>
 
-      <p id="config-note" class="config-note" hidden></p>
-    </section>
-  </main>
+        <!-- 1. Meeting details -->
+        <section class="panel" aria-labelledby="details-heading">
+          <h2 id="details-heading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Meeting details
+          </h2>
+
+          <div class="field-grid">
+            <div class="field field-wide">
+              <label for="meeting-title-input">Title</label>
+              <input id="meeting-title-input" type="text" autocomplete="off"
+                     placeholder="e.g. Q3 Vendor Contract Review" />
+            </div>
+
+            <div class="field">
+              <label for="meeting-date-input">Date</label>
+              <input id="meeting-date-input" type="date" />
+            </div>
+
+            <div class="field">
+              <label for="meeting-time-input">Time</label>
+              <input id="meeting-time-input" type="time" />
+            </div>
+
+            <div class="field field-wide">
+              <label for="meeting-attendees-input">Attendees</label>
+              <textarea id="meeting-attendees-input" rows="3"
+                        placeholder="One per line, or comma separated"></textarea>
+            </div>
+
+            <div class="field field-wide">
+              <label for="meeting-recipients-input">Email recipients</label>
+              <input id="meeting-recipients-input" type="text" autocomplete="off"
+                     placeholder="Leave empty to use the preset list on the home server" />
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Questions & answers -->
+        <section class="panel" aria-labelledby="qa-heading">
+          <div class="panel-heading-row">
+            <h2 id="qa-heading">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Questions &amp; answers
+            </h2>
+            <span class="hint-chip">Press <kbd>Q</kbd> to add a question</span>
+          </div>
+
+          <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
+
+          <div id="card-list" class="card-list" aria-live="polite"></div>
+
+          <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
+        </section>
+
+        <!-- 3. Generate & send -->
+        <section class="panel" aria-labelledby="generate-heading">
+          <h2 id="generate-heading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Generate &amp; send
+          </h2>
+
+          <div class="button-row">
+            <button id="pick-audio-btn" type="button" class="btn btn-primary">Pick audio &amp; start AI</button>
+            <button id="edit-summary-btn" type="button" class="btn btn-secondary">Edit summary</button>
+            <button id="generate-pdf-btn" type="button" class="btn btn-primary">Generate PDF</button>
+            <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
+            <button id="send-email-btn" type="button" class="btn btn-primary" disabled>Send email</button>
+          </div>
+
+          <div id="status-line" class="status-line" role="status" aria-live="polite">
+            <span id="status-spinner" class="spinner" hidden></span>
+            <span id="status-text">Ready.</span>
+          </div>
+
+          <p id="config-note" class="config-note" hidden></p>
+        </section>
+      </section>
+
+      <!-- ============ Activity screen ============ -->
+      <section id="screen-activity" class="screen" hidden>
+        <div class="screen-head">
+          <h2 class="screen-title">Activity</h2>
+        </div>
+
+        <section class="panel" aria-labelledby="pipeline-heading">
+          <h2 id="pipeline-heading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Current job
+          </h2>
+          <div id="pipeline-host"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="jobs-heading">
+          <h2 id="jobs-heading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            Recent jobs on the home server
+          </h2>
+          <div id="jobs-list-host"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="log-heading">
+          <h2 id="log-heading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Server log
+          </h2>
+          <div class="log-toolbar">
+            <label class="log-follow">
+              <input id="log-follow-check" type="checkbox" checked /> Follow
+            </label>
+            <button id="log-refresh-btn" type="button" class="btn btn-secondary btn-small">Refresh</button>
+          </div>
+          <div id="log-view" class="log-view"></div>
+        </section>
+      </section>
+    </main>
+  </div>
 
   <!-- ============ Q&A capture modal (hidden by default) ============ -->
   <div id="card-modal" class="modal-backdrop" hidden>
@@ -192,8 +290,8 @@
     </div>
   </div>
 
-  <!-- ============ Meeting history modal (hidden by default) ============ -->
-  <div id="history-modal" class="modal-backdrop" hidden>
+  <!-- ============ Meeting history sheet (hidden by default) ============ -->
+  <div id="history-modal" class="modal-backdrop modal--sheet" hidden>
     <div class="modal history-modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
       <div class="history-head">
         <h3 id="history-modal-title">Meeting history</h3>
@@ -212,8 +310,8 @@
     </div>
   </div>
 
-  <!-- ============ Settings modal (hidden by default) ============ -->
-  <div id="settings-modal" class="modal-backdrop" hidden>
+  <!-- ============ Settings sheet (hidden by default) ============ -->
+  <div id="settings-modal" class="modal-backdrop modal--sheet" hidden>
     <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <h3 id="settings-modal-title">Settings</h3>
       <p id="settings-welcome" class="settings-welcome" hidden>
@@ -290,6 +388,26 @@
       </div>
     </div>
   </div>
+
+  <!-- ============ Keyboard shortcuts modal (hidden by default) ============ -->
+  <div id="shortcuts-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
+      <h3 id="shortcuts-modal-title">Keyboard shortcuts</h3>
+      <div class="shortcuts-list">
+        <div class="shortcut-row"><kbd>Q</kbd><span>Capture a new question</span></div>
+        <div class="shortcut-row"><kbd>Enter</kbd><span>Save the open question card</span></div>
+        <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>Enter</kbd><span>New line inside an answer</span></div>
+        <div class="shortcut-row"><kbd>Esc</kbd><span>Close the open dialog</span></div>
+        <div class="shortcut-row"><kbd>?</kbd><span>Show these shortcuts</span></div>
+      </div>
+      <div class="modal-actions">
+        <span class="keyboard-hint"></span>
+        <button id="shortcuts-close-btn" type="button" class="btn btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-region" aria-live="polite"></div>
 
   <script type="module" src="js/app.js"></script>
 </body>

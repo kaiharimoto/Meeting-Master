@@ -3,400 +3,241 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Meeting Master — Home Server Setup</title>
-<style>
-  :root {
-    --bg: #0f1117; --panel: #171a23; --panel2: #1e222d; --border: #2a2f3c;
-    --text: #e7e9ee; --muted: #9aa2b1; --accent: #5b8cff; --accent2: #3f6fe0;
-    --ok: #37c98b; --warn: #e0a53f; --err: #e8636b; --chip: #232838;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  a { color: var(--accent); }
-  .wrap { max-width: 780px; margin: 0 auto; padding: 32px 20px 80px; }
-  header h1 { font-size: 24px; margin: 0 0 4px; }
-  header p { color: var(--muted); margin: 0 0 24px; }
-  .card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    padding: 22px; margin-bottom: 20px;
-  }
-  .card h2 { font-size: 17px; margin: 0 0 4px; }
-  .card .hint { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
-  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
-  input[type=text], input[type=email], input[type=password], textarea {
-    width: 100%; background: var(--panel2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 9px; padding: 10px 12px; font: inherit;
-  }
-  textarea { resize: vertical; min-height: 60px; }
-  textarea.tpl { min-height: 150px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
-  .note { font-size: 12px; color: var(--warn); margin-top: 6px; }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
-  .dep {
-    border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px;
-    margin-bottom: 12px; background: var(--panel2);
-  }
-  .dep-head { display: flex; align-items: center; gap: 10px; }
-  .dep-title { font-weight: 600; flex: 1; }
-  .badge {
-    width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 13px; background: var(--chip); color: var(--muted);
-  }
-  .badge.ok { background: rgba(55,201,139,.16); color: var(--ok); }
-  .sub { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
-  .sub .lbl { flex: 1; color: var(--text); }
-  .sub .st { font-size: 12px; color: var(--muted); }
-  button {
-    background: var(--accent); color: #fff; border: 0; border-radius: 9px;
-    padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer;
-  }
-  button:hover { background: var(--accent2); }
-  button.ghost { background: var(--chip); color: var(--text); }
-  button.ghost:hover { background: #2c3346; }
-  button:disabled { opacity: .5; cursor: default; }
-  button.small { padding: 6px 11px; font-size: 13px; }
-  .bar { height: 7px; background: var(--chip); border-radius: 5px; overflow: hidden; margin-top: 9px; display: none; }
-  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease; }
-  .bar.show { display: block; }
-  .taskmsg { font-size: 12px; color: var(--muted); margin-top: 6px; word-break: break-word; }
-  .taskmsg.err { color: var(--err); }
-  .taskmsg a { word-break: break-all; }
-  .actions { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
-  .savebar {
-    position: sticky; bottom: 0; z-index: 10;
-    margin-top: 8px; padding: 14px 0;
-    background: linear-gradient(to top, var(--bg) 62%, transparent);
-  }
-  #code-card { display: none; }
-  #code-card.show { display: block; }
-  .codebox {
-    display: flex; gap: 10px; align-items: stretch; margin: 8px 0 4px;
-  }
-  .codebox code {
-    flex: 1; background: #0b0d13; border: 1px solid var(--border); border-radius: 9px;
-    padding: 14px; font-family: ui-monospace, Consolas, monospace; font-size: 13px;
-    word-break: break-all; color: #cfe0ff;
-  }
-  .steps { color: var(--muted); font-size: 13px; margin: 12px 0 0; padding-left: 18px; }
-  .steps li { margin: 4px 0; }
-  .banner {
-    background: rgba(55,201,139,.12); border: 1px solid rgba(55,201,139,.4);
-    color: var(--ok); border-radius: 10px; padding: 10px 14px; font-size: 14px;
-    margin-bottom: 18px; display: none;
-  }
-  .banner.show { display: block; }
-  .toast {
-    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
-    background: #222836; border: 1px solid var(--border); color: var(--text);
-    padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .25s;
-    pointer-events: none; font-size: 14px;
-  }
-  .toast.show { opacity: 1; }
-</style>
+<title>Meeting Master — Home Server</title>
+<script>
+  // Pre-paint theme boot (mirrors the laptop app's themeBoot.js contract).
+  (function () {
+    var pref = "system";
+    try { pref = localStorage.getItem("mmserver.theme.v1") || "system"; } catch (e) {}
+    var dark = pref === "dark" ||
+      (pref !== "light" && window.matchMedia &&
+       window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+<link rel="stylesheet" href="/setup/assets/dashboard.css" />
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Meeting Master — Home Server Setup</h1>
-    <p>Configure this PC once. When you're done you'll get a connection code to paste into the laptop app.</p>
+  <header class="masthead">
+    <span class="brand-mark" aria-hidden="true">M</span>
+    <div class="masthead-text">
+      <h1>Meeting Master</h1>
+      <p>Home server</p>
+    </div>
+    <div class="masthead-side">
+      <span class="conn-pill" id="conn-pill" data-status="unknown">
+        <span class="pill-dot"></span><span id="conn-pill-label">Connecting…</span>
+      </span>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
   </header>
 
-  <div id="saved-banner" class="banner">Settings saved. Your connection code is below.</div>
-
-  <!-- EMAIL -->
-  <div class="card">
-    <h2>1 · Email delivery</h2>
-    <p class="hint">Finished meeting notes are emailed from a Gmail account using an App Password.</p>
-    <div class="row2">
-      <div>
-        <label for="smtpUser">Gmail address</label>
-        <input id="smtpUser" type="email" placeholder="you@gmail.com" autocomplete="off" />
-      </div>
-      <div>
-        <label for="smtpFrom">Send notes from (optional)</label>
-        <input id="smtpFrom" type="email" placeholder="defaults to the Gmail address" autocomplete="off" />
-      </div>
-    </div>
-    <label for="smtpPass">Gmail App Password
-      (<a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">create one here</a>)</label>
-    <input id="smtpPass" type="password" placeholder="16-character app password" autocomplete="new-password" />
-    <div class="note">Use an App Password, NOT your normal Google account password.</div>
-
-    <label for="recipients">Default recipients (one email per line)</label>
-    <textarea id="recipients" placeholder="teammate@example.com&#10;boss@example.com"></textarea>
-
-    <label for="template">Email template</label>
-    <textarea id="template" class="tpl" spellcheck="false"></textarea>
-    <div class="note" style="color:var(--muted)">Placeholders: {{title}} {{date}} {{time}} {{attendees}}. First line must start with "Subject:".</div>
+  <div id="setup-banner" class="banner warn">
+    <strong>Finish setup:</strong> add your email settings and click
+    <em>Save &amp; Finish</em> in the <a href="#settings" id="banner-settings-link">Settings tab</a>
+    to get your laptop connection code.
   </div>
+  <div id="saved-banner" class="banner">Settings saved. Your connection code is on the Overview tab.</div>
 
-  <!-- DEPENDENCIES -->
-  <div class="card">
-    <h2>2 · Required software</h2>
-    <p class="hint">One-click installs. Each shows a green check once detected. You can re-run any step safely.</p>
+  <nav class="tabs" aria-label="Dashboard sections">
+    <button class="tab active" data-tab="overview" type="button">Overview</button>
+    <button class="tab" data-tab="jobs" type="button">Jobs</button>
+    <button class="tab" data-tab="logs" type="button">Logs</button>
+    <button class="tab" data-tab="settings" type="button">Settings</button>
+  </nav>
 
-    <div class="dep" id="dep-ollama">
-      <div class="dep-head">
-        <span class="badge" data-badge>·</span>
-        <span class="dep-title">Ollama + AI model</span>
+  <!-- ================= OVERVIEW ================= -->
+  <section class="tab-panel" id="tab-overview">
+    <div class="cards-grid">
+      <div class="card stat-card">
+        <div class="stat-head">Server</div>
+        <div class="stat-value" id="ov-server">—</div>
+        <div class="stat-sub" id="ov-server-sub">version —</div>
       </div>
-      <div class="sub">
-        <span class="lbl">Ollama engine</span>
-        <span class="st" data-st="ollama"></span>
-        <button class="ghost small" data-install="ollama">Install Ollama</button>
+      <div class="card stat-card">
+        <div class="stat-head">AI engine</div>
+        <div class="stat-value" id="ov-ollama">—</div>
+        <div class="stat-sub" id="ov-ollama-sub"></div>
       </div>
-      <div class="bar" data-bar="ollama"><i></i></div>
-      <div class="taskmsg" data-msg="ollama"></div>
-      <div class="sub">
-        <span class="lbl">AI model <span class="st" data-model-name></span></span>
-        <span class="st" data-st="model"></span>
-        <button class="ghost small" data-install="model">Download model</button>
+      <div class="card stat-card">
+        <div class="stat-head">Transcription</div>
+        <div class="stat-value" id="ov-whisper">—</div>
+        <div class="stat-sub" id="ov-whisper-sub"></div>
       </div>
-      <div class="bar" data-bar="model"><i></i></div>
-      <div class="taskmsg" data-msg="model"></div>
+      <div class="card stat-card">
+        <div class="stat-head">Remote access</div>
+        <div class="stat-value" id="ov-tailscale">—</div>
+        <div class="stat-sub" id="ov-tailscale-sub"></div>
+      </div>
     </div>
 
-    <div class="dep" id="dep-tailscale">
-      <div class="dep-head">
-        <span class="badge" data-badge>·</span>
-        <span class="dep-title">Tailscale — secure remote access</span>
+    <!-- Software installs / progress -->
+    <div class="card">
+      <h2>Required software</h2>
+      <p class="hint">One-click installs. Each shows a green check once detected. You can re-run any step safely.</p>
+
+      <div class="dep" id="dep-ollama">
+        <div class="dep-head">
+          <span class="badge" data-badge>·</span>
+          <span class="dep-title">Ollama + AI model</span>
+        </div>
+        <div class="sub">
+          <span class="lbl">Ollama engine</span>
+          <span class="st" data-st="ollama"></span>
+          <button class="ghost small" data-install="ollama" type="button">Install Ollama</button>
+        </div>
+        <div class="bar" data-bar="ollama"><i></i></div>
+        <div class="taskmsg" data-msg="ollama"></div>
+        <div class="sub">
+          <span class="lbl">AI model <span class="st" data-model-name></span></span>
+          <span class="st" data-st="model"></span>
+          <button class="ghost small" data-install="model" type="button">Download model</button>
+        </div>
+        <div class="bar" data-bar="model"><i></i></div>
+        <div class="taskmsg" data-msg="model"></div>
       </div>
-      <div class="sub">
-        <span class="lbl">Tailscale</span>
-        <span class="st" data-st="tailscale"></span>
-        <button class="ghost small" data-install="tailscale">Install</button>
+
+      <div class="dep" id="dep-tailscale">
+        <div class="dep-head">
+          <span class="badge" data-badge>·</span>
+          <span class="dep-title">Tailscale — secure remote access</span>
+        </div>
+        <div class="sub">
+          <span class="lbl">Tailscale</span>
+          <span class="st" data-st="tailscale"></span>
+          <button class="ghost small" data-install="tailscale" type="button">Install</button>
+        </div>
+        <div class="bar" data-bar="tailscale"><i></i></div>
+        <div class="taskmsg" data-msg="tailscale"></div>
+        <div class="sub">
+          <span class="lbl">Sign in</span>
+          <span class="st" data-st="tsup"></span>
+          <button class="ghost small" data-install="tailscale-up" type="button">Sign in</button>
+        </div>
+        <div class="taskmsg" data-msg="tailscale-up"></div>
+        <div class="sub">
+          <span class="lbl">Enable remote access</span>
+          <span class="st" data-st="tsserve"></span>
+          <button class="ghost small" data-install="tailscale-serve" type="button">Enable</button>
+        </div>
+        <div class="taskmsg" data-msg="tailscale-serve"></div>
       </div>
-      <div class="bar" data-bar="tailscale"><i></i></div>
-      <div class="taskmsg" data-msg="tailscale"></div>
-      <div class="sub">
-        <span class="lbl">Sign in</span>
-        <span class="st" data-st="tsup"></span>
-        <button class="ghost small" data-install="tailscale-up">Sign in</button>
+
+      <div class="dep" id="dep-whisper">
+        <div class="dep-head">
+          <span class="badge" data-badge>·</span>
+          <span class="dep-title">AI transcription model</span>
+        </div>
+        <div class="sub">
+          <span class="lbl">Whisper model <span class="st" data-whisper-name></span></span>
+          <span class="st" data-st="whisper"></span>
+          <button class="ghost small" data-install="whisper-model" type="button">Download</button>
+        </div>
+        <div class="bar" data-bar="whisper-model"><i></i></div>
+        <div class="taskmsg" data-msg="whisper-model"></div>
       </div>
-      <div class="taskmsg" data-msg="tailscale-up"></div>
-      <div class="sub">
-        <span class="lbl">Enable remote access</span>
-        <span class="st" data-st="tsserve"></span>
-        <button class="ghost small" data-install="tailscale-serve">Enable</button>
-      </div>
-      <div class="taskmsg" data-msg="tailscale-serve"></div>
     </div>
 
-    <div class="dep" id="dep-whisper">
-      <div class="dep-head">
-        <span class="badge" data-badge>·</span>
-        <span class="dep-title">AI transcription model</span>
+    <!-- Connection code -->
+    <div class="card" id="code-card">
+      <h2>Connect your laptop</h2>
+      <p class="hint">This code contains the server address and its access token.</p>
+      <div class="codebox">
+        <code id="code"></code>
+        <button id="copy" type="button">Copy</button>
       </div>
-      <div class="sub">
-        <span class="lbl">Whisper model <span class="st" data-whisper-name></span></span>
-        <span class="st" data-st="whisper"></span>
-        <button class="ghost small" data-install="whisper-model">Download</button>
+      <div class="st" id="server-url"></div>
+      <ol class="steps">
+        <li>Open <strong>Meeting Master</strong> on your laptop.</li>
+        <li>Go to <strong>Settings</strong>.</li>
+        <li>Paste this connection code and save.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ================= JOBS ================= -->
+  <section class="tab-panel" id="tab-jobs" hidden>
+    <div class="card">
+      <h2>Jobs</h2>
+      <p class="hint">Every meeting this server has processed, updating live.</p>
+      <div id="jobs-host"></div>
+    </div>
+  </section>
+
+  <!-- ================= LOGS ================= -->
+  <section class="tab-panel" id="tab-logs" hidden>
+    <div class="card">
+      <h2>Server log</h2>
+      <div class="log-toolbar">
+        <label class="log-follow"><input id="log-follow" type="checkbox" checked /> Follow</label>
+        <button class="ghost small" id="log-refresh" type="button">Refresh</button>
       </div>
-      <div class="bar" data-bar="whisper-model"><i></i></div>
-      <div class="taskmsg" data-msg="whisper-model"></div>
+      <div id="log-view" class="log-view"></div>
     </div>
-  </div>
+  </section>
 
-  <!-- SAVE -->
-  <div class="card savebar">
-    <div class="actions">
-      <button id="save">Save &amp; Finish</button>
-      <span class="st" id="save-status"></span>
-    </div>
-  </div>
+  <!-- ================= SETTINGS ================= -->
+  <section class="tab-panel" id="tab-settings" hidden>
+    <div class="card">
+      <h2>Email delivery</h2>
+      <p class="hint">Finished meeting notes are emailed from a Gmail account using an App Password.</p>
+      <div class="row2">
+        <div>
+          <label for="smtpUser">Gmail address</label>
+          <input id="smtpUser" type="email" placeholder="you@gmail.com" autocomplete="off" />
+        </div>
+        <div>
+          <label for="smtpFrom">Send notes from (optional)</label>
+          <input id="smtpFrom" type="email" placeholder="defaults to the Gmail address" autocomplete="off" />
+        </div>
+      </div>
+      <label for="smtpPass">Gmail App Password
+        (<a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">create one here</a>)</label>
+      <input id="smtpPass" type="password" placeholder="16-character app password" autocomplete="new-password" />
+      <div class="note">Use an App Password, NOT your normal Google account password.</div>
 
-  <!-- CONNECTION CODE -->
-  <div class="card" id="code-card">
-    <h2>3 · Connect your laptop</h2>
-    <p class="hint">This code contains the server address and its access token.</p>
-    <div class="codebox">
-      <code id="code"></code>
-      <button id="copy">Copy</button>
+      <label for="recipients">Default recipients (one email per line)</label>
+      <textarea id="recipients" placeholder="teammate@example.com&#10;boss@example.com"></textarea>
+
+      <label for="template">Email template</label>
+      <textarea id="template" class="tpl" spellcheck="false"></textarea>
+      <div class="note quiet">Placeholders: {{title}} {{date}} {{time}} {{attendees}}. First line must start with "Subject:".</div>
     </div>
-    <div class="st" id="server-url"></div>
-    <ol class="steps">
-      <li>Open <strong>Meeting Master</strong> on your laptop.</li>
-      <li>Go to <strong>Settings</strong>.</li>
-      <li>Paste this connection code and save.</li>
-    </ol>
-  </div>
+
+    <div class="card">
+      <h2>AI models</h2>
+      <p class="hint">Which local models this server uses. Changing the summary model requires pulling it in Ollama first (Overview tab).</p>
+      <div class="row2">
+        <div>
+          <label for="ollamaModel">Summary model (Ollama)</label>
+          <input id="ollamaModel" type="text" autocomplete="off" placeholder="gemma4:26b" />
+        </div>
+        <div>
+          <label for="whisperModel">Transcription model (Whisper)</label>
+          <input id="whisperModel" type="text" autocomplete="off" placeholder="large-v3-turbo" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card savebar">
+      <div class="actions">
+        <button id="save" type="button">Save &amp; Finish</button>
+        <span class="st" id="save-status"></span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span id="foot-version"></span>
+  </footer>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script>
-(function () {
-  "use strict";
-  var $ = function (s, r) { return (r || document).querySelector(s); };
-  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
-  var pollTimer = null;
-  // "edited" flags so a background poll never overwrites a field the operator
-  // has started filling in (the Gmail field losing its text was exactly this).
-  var editedTemplate = false, editedRecipients = false, editedUser = false, editedFrom = false;
-
-  function toast(msg) {
-    var t = $("#toast"); t.textContent = msg; t.classList.add("show");
-    setTimeout(function () { t.classList.remove("show"); }, 1600);
-  }
-
-  function setBadge(depId, ok) {
-    var b = $("[data-badge]", $("#" + depId));
-    if (!b) return;
-    b.classList.toggle("ok", !!ok);
-    b.textContent = ok ? "✓" : "·";
-  }
-
-  function setStatus(key, ok, text) {
-    var el = $('[data-st="' + key + '"]');
-    if (!el) return;
-    el.textContent = text || (ok ? "installed" : "not detected");
-    el.style.color = ok ? "var(--ok)" : "var(--muted)";
-  }
-
-  function renderTask(name, task) {
-    var bar = $('[data-bar="' + name + '"]');
-    var msg = $('[data-msg="' + name + '"]');
-    task = task || { state: "idle", progress: null, message: "" };
-    if (bar) {
-      var running = task.state === "running";
-      bar.classList.toggle("show", running || task.state === "failed");
-      var pct = typeof task.progress === "number" ? task.progress : (running ? 8 : 0);
-      $("i", bar).style.width = Math.max(0, Math.min(100, pct)) + "%";
-      $("i", bar).style.background = task.state === "failed" ? "var(--err)" : "var(--accent)";
-    }
-    if (msg) {
-      msg.textContent = task.message || "";
-      msg.classList.toggle("err", task.state === "failed");
-      linkify(msg);
-    }
-    // Disable an install button while its task runs.
-    var btn = $('[data-install="' + name + '"]');
-    if (btn) btn.disabled = task.state === "running";
-  }
-
-  function linkify(el) {
-    var txt = el.textContent;
-    var m = txt.match(/https?:\/\/[^\s]+/);
-    if (!m) return;
-    el.innerHTML = txt.replace(m[0],
-      '<a href="' + m[0] + '" target="_blank" rel="noopener">' + m[0] + '</a>');
-  }
-
-  function anyRunning(tasks) {
-    return Object.keys(tasks || {}).some(function (k) { return tasks[k].state === "running"; });
-  }
-
-  function render(state) {
-    // Email (don't stomp fields the user is editing — via a persistent "edited"
-    // flag, not just current focus, so clicking away doesn't lose the text).
-    if (!editedUser && document.activeElement !== $("#smtpUser")) $("#smtpUser").value = state.email.user || "";
-    if (!editedFrom && document.activeElement !== $("#smtpFrom")) $("#smtpFrom").value = state.email.from || "";
-    if ($("#smtpPass").placeholder && state.email.hasPassword)
-      $("#smtpPass").placeholder = "•••••••• (saved — leave blank to keep)";
-    if (!editedRecipients) $("#recipients").value = (state.recipients || []).join("\n");
-    if (!editedTemplate) $("#template").value = state.emailTemplate || "";
-
-    // Dependency detection.
-    var d = state.deps || {};
-    var o = d.ollama || {}, ts = d.tailscale || {}, w = d.whisperModel || {};
-    $("[data-model-name]").textContent = o.model ? "(" + o.model + ")" : "";
-    $("[data-whisper-name]").textContent = w.name ? "(" + w.name + ")" : "";
-    setStatus("ollama", o.installed);
-    setStatus("model", o.modelPresent, o.modelPresent ? "downloaded" : "not downloaded");
-    setStatus("tailscale", ts.installed);
-    setStatus("tsup", ts.loggedIn, ts.loggedIn ? "signed in" : "not signed in");
-    setStatus("tsserve", !!ts.serveUrl, ts.serveUrl ? "on" : "off");
-    setStatus("whisper", w.present, w.present ? "downloaded" : "not downloaded");
-    setBadge("dep-ollama", o.installed && o.modelPresent);
-    setBadge("dep-tailscale", ts.installed && ts.loggedIn && !!ts.serveUrl);
-    setBadge("dep-whisper", w.present);
-
-    // Tasks / progress bars.
-    var tasks = state.tasks || {};
-    ["ollama", "model", "whisper-model", "tailscale", "tailscale-up", "tailscale-serve"]
-      .forEach(function (n) { renderTask(n, tasks[n]); });
-
-    // Connection code / configured banner.
-    if (state.configured && state.connectionCode) {
-      $("#code").textContent = state.connectionCode;
-      $("#server-url").textContent = "Server URL: " + (state.serverUrl || "");
-      $("#code-card").classList.add("show");
-      $("#saved-banner").classList.add("show");
-    }
-
-    // Keep polling while any install runs.
-    schedulePoll(anyRunning(tasks));
-  }
-
-  function schedulePoll(fast) {
-    if (pollTimer) clearTimeout(pollTimer);
-    pollTimer = setTimeout(refresh, fast ? 1500 : 5000);
-  }
-
-  function refresh() {
-    fetch("/setup/state").then(function (r) { return r.json(); })
-      .then(render)
-      .catch(function () { schedulePoll(false); });
-  }
-
-  function install(component) {
-    fetch("/setup/install/" + component, { method: "POST" })
-      .then(function (r) { return r.json(); })
-      .then(function (res) { renderTask(component, res.task); schedulePoll(true); })
-      .catch(function () { toast("Could not start install"); });
-  }
-
-  function save() {
-    var btn = $("#save"); btn.disabled = true; $("#save-status").textContent = "Saving…";
-    var body = {
-      smtpUser: $("#smtpUser").value.trim(),
-      smtpFrom: $("#smtpFrom").value.trim(),
-      smtpAppPassword: $("#smtpPass").value,
-      recipients: $("#recipients").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean),
-      emailTemplate: $("#template").value
-    };
-    fetch("/setup/save", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    }).then(function (r) { return r.json(); })
-      .then(function (state) {
-        btn.disabled = false; $("#save-status").textContent = "Saved.";
-        $("#smtpPass").value = "";
-        editedTemplate = false; editedRecipients = false; editedUser = false; editedFrom = false;
-        render(state);
-        $("#code-card").scrollIntoView({ behavior: "smooth" });
-      })
-      .catch(function () {
-        btn.disabled = false; $("#save-status").textContent = "Save failed — try again.";
-      });
-  }
-
-  // Wire events.
-  $$("[data-install]").forEach(function (b) {
-    b.addEventListener("click", function () { install(b.getAttribute("data-install")); });
-  });
-  $("#save").addEventListener("click", save);
-  $("#template").addEventListener("input", function () { editedTemplate = true; });
-  $("#recipients").addEventListener("input", function () { editedRecipients = true; });
-  $("#smtpUser").addEventListener("input", function () { editedUser = true; });
-  $("#smtpFrom").addEventListener("input", function () { editedFrom = true; });
-  $("#copy").addEventListener("click", function () {
-    var text = $("#code").textContent;
-    navigator.clipboard.writeText(text).then(function () { toast("Copied"); },
-      function () {
-        var r = document.createRange(); r.selectNode($("#code"));
-        window.getSelection().removeAllRanges(); window.getSelection().addRange(r);
-        try { document.execCommand("copy"); toast("Copied"); } catch (e) { toast("Copy failed"); }
-        window.getSelection().removeAllRanges();
-      });
-  });
-
-  refresh();
-})();
-</script>
+<script src="/setup/assets/dashboard.js"></script>
 </body>
 </html>

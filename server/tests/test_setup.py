@@ -149,6 +149,14 @@ def test_save_generates_token_and_configures(fresh_home, no_tools):
     assert state["email"]["user"] == "me@gmail.com"
     assert state["email"]["hasPassword"] is True
 
+    # REGRESSION: a second save without a token must PRESERVE the existing one
+    # (rotating it would silently 401 the already-connected laptop — the
+    # dashboard's Settings tab makes re-saves routine).
+    first_token = state["token"]
+    resp2 = client.post("/setup/save", json=body)
+    assert resp2.status_code == 200, resp2.text
+    assert resp2.json()["token"] == first_token
+
     # Persisted to the throwaway home.
     env_file = home / "server.env"
     assert env_file.exists()

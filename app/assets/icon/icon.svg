@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Meeting Master app icon: navy rounded square, geometric white M,
+       accent underline (the "minutes" rule). Keep shapes bold — this must
+       read at 16px in the Windows taskbar. -->
+  <rect width="512" height="512" rx="112" fill="#1a2b4a"/>
+  <polyline points="148,340 148,172 256,296 364,172 364,340"
+            fill="none" stroke="#ffffff" stroke-width="52"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="156" y="392" width="200" height="30" rx="15" fill="#4d8bf5"/>
+</svg>

@@ -57,7 +57,9 @@ def test_auth_required(client):
     # /health is deliberately open... (tests configure a token, so configured).
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "configured": True}
+    body = response.json()
+    assert body["status"] == "ok" and body["configured"] is True
+    assert body["version"]  # surfaced for the dashboards
     # ...but /jobs endpoints reject missing and wrong tokens alike.
     assert client.get("/jobs/anything").status_code == 401
     assert (

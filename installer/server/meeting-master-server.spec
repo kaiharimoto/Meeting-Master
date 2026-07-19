@@ -86,6 +86,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    # Brand icon for the exe (taskbar/explorer). Committed binary generated
+    # from app/assets/icon/icon.svg by app/scripts/build-icons.js.
+    icon=os.path.join(SPEC_DIR, "icon.ico"),
 )
 
 coll = COLLECT(

@@ -173,6 +173,25 @@ async def setup_page() -> FileResponse:
     return FileResponse(_STATIC_DIR / "setup.html")
 
 
+# Dashboard assets, served by explicit whitelist — deliberately NOT a
+# StaticFiles mount (mounts would bypass this router's loopback dependency).
+_ASSET_WHITELIST = {
+    "dashboard.css": "text/css",
+    "dashboard.js": "text/javascript",
+}
+
+
+@router.get("/assets/{name}")
+async def setup_asset(name: str) -> FileResponse:
+    media_type = _ASSET_WHITELIST.get(name)
+    path = _STATIC_DIR / name
+    # A whitelisted-but-missing file means a broken frozen bundle — a clear
+    # 404 beats FileResponse's 500-with-traceback when diagnosing that.
+    if media_type is None or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"Unknown asset: {name}")
+    return FileResponse(path, media_type=media_type)
+
+
 @router.get("/state")
 async def get_state() -> dict:
     return await build_state()
@@ -182,7 +201,11 @@ async def get_state() -> dict:
 async def save(body: SaveBody) -> dict:
     settings = config.get_settings()
 
-    token = (body.token or "").strip() or secrets.token_urlsafe(32)
+    # Preserve the existing token on re-saves: the dashboard's Settings tab is
+    # revisited routinely (model changes, recipients), and rotating the token
+    # on every save would silently 401 the already-connected laptop. A new
+    # token is minted only on true first-run (no token supplied AND none saved).
+    token = (body.token or "").strip() or settings.BEARER_TOKEN or secrets.token_urlsafe(32)
 
     # Recipients JSON array + email template file live in the config home.
     recipients = [r.strip() for r in body.recipients if r.strip()]
@@ -228,3 +251,28 @@ async def get_connection_code() -> dict:
         "connectionCode": connection_code(settings),
         "serverUrl": server_url(settings),
     }
+
+
+# --- Monitoring mirrors (loopback-only, for the local dashboard) -------------
+# Same handler bodies as the bearer-gated /jobs, /events, /logs/tail — mounted
+# here so the dashboard works from the home PC's browser without a token, and
+# BEFORE first-run setup completes (require_loopback comes from this router).
+@router.get("/jobs")
+async def setup_jobs(request: Request, limit: int = 50) -> dict:
+    from ..routes import monitor
+
+    return monitor.jobs_payload(request, limit)
+
+
+@router.get("/events")
+async def setup_events(request: Request):
+    from ..routes import monitor
+
+    return monitor.event_stream(request)
+
+
+@router.get("/logs")
+async def setup_logs(request: Request, lines: int = 200) -> dict:
+    from ..routes import monitor
+
+    return monitor.logs_payload(request, lines)

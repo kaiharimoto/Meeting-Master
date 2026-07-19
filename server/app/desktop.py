@@ -100,15 +100,15 @@ def _wait_for_port(host: str, port: int, timeout: float = 20.0) -> bool:
     return False
 
 
-def _setup_url() -> str:
+def _dashboard_url() -> str:
     return f"http://127.0.0.1:{get_settings().SERVER_PORT}/setup"
 
 
-def _open_setup() -> None:
+def _open_dashboard() -> None:
     try:
-        webbrowser.open(_setup_url())
+        webbrowser.open(_dashboard_url())
     except Exception:
-        log.warning("Could not open a browser for %s", _setup_url(), exc_info=True)
+        log.warning("Could not open a browser for %s", _dashboard_url(), exc_info=True)
 
 
 def _open_data_folder() -> None:
@@ -137,12 +137,17 @@ def _run_tray() -> None:
         _block_forever()
         return
 
-    image = Image.new("RGB", (64, 64), (23, 26, 35))
+    # Brand-matching tray mark: navy rounded square + white "M" strokes +
+    # accent underline (mirrors app/assets/icon/icon.svg).
+    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((14, 14, 50, 50), fill=(91, 140, 255))
+    draw.rounded_rectangle((2, 2, 62, 62), radius=14, fill=(26, 43, 74))
+    m = [(18, 43), (18, 21), (32, 37), (46, 21), (46, 43)]
+    draw.line(m, fill=(255, 255, 255), width=6, joint="curve")
+    draw.rounded_rectangle((20, 50, 44, 55), radius=2, fill=(77, 139, 245))
 
-    def _on_setup(icon, item):
-        _open_setup()
+    def _on_dashboard(icon, item):
+        _open_dashboard()
 
     def _on_data(icon, item):
         _open_data_folder()
@@ -152,7 +157,7 @@ def _run_tray() -> None:
         os._exit(0)
 
     menu = pystray.Menu(
-        pystray.MenuItem("Open setup / settings", _on_setup, default=True),
+        pystray.MenuItem("Open dashboard", _on_dashboard, default=True),
         pystray.MenuItem("Open data & settings folder", _on_data),
         pystray.MenuItem("Quit", _on_quit),
     )
@@ -179,15 +184,14 @@ def main() -> None:
     server_thread = threading.Thread(target=_serve, daemon=True, name="uvicorn")
     server_thread.start()
 
-    # Only open the setup page once the server is actually accepting
+    # Only open the dashboard once the server is actually accepting
     # connections — otherwise the browser lands on ERR_CONNECTION_REFUSED.
+    # Configured or not, launching the app now always lands somewhere useful:
+    # first run gets the setup flow, later runs get the monitoring dashboard.
     port = get_settings().SERVER_PORT
     if _wait_for_port("127.0.0.1", port):
-        if not get_settings().is_configured:
-            log.info("Server not configured yet — opening setup at %s", _setup_url())
-            _open_setup()
-        else:
-            log.info("Server configured and running on port %s", port)
+        log.info("Server running on port %s — opening %s", port, _dashboard_url())
+        _open_dashboard()
     else:
         log.error(
             "Server never started listening on port %s — see the log above. "

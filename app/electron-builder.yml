@@ -15,6 +15,8 @@ extraResources:
     to: print
 win:
   target: nsis
+  # Generated from assets/icon/icon.svg by scripts/build-icons.js (committed).
+  icon: build/icon.ico
 # A normal double-click installer (no admin, per-user) — not a portable exe.
 nsis:
   oneClick: false

@@ -5,11 +5,15 @@ apart from "reachable but not configured yet"."""
 
 from fastapi import APIRouter
 
-from ..config import get_settings
+from ..config import APP_VERSION, get_settings
 
 router = APIRouter()
 
 
 @router.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "configured": get_settings().is_configured}
+    return {
+        "status": "ok",
+        "configured": get_settings().is_configured,
+        "version": APP_VERSION,
+    }

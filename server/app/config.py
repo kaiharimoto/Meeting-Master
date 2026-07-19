@@ -28,6 +28,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # for relative overrides in a source checkout.
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
+# Surfaced by /health and the dashboards. Keep in step with app/package.json.
+APP_VERSION = "0.2.0"
+
 
 def config_home() -> Path:
     """The writable directory holding server.env, models/, data/, etc."""

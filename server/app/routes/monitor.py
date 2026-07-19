@@ -1,0 +1,146 @@
+"""Monitoring endpoints: job list, live SSE event stream, and log tail.
+
+The handler functions are written once and mounted TWICE:
+  * bearer-gated at the API root (`/jobs`, `/events`, `/logs/tail`) for the
+    laptop app over Tailscale;
+  * loopback-only under `/setup` (`/setup/jobs`, `/setup/events`,
+    `/setup/logs`) for the local dashboard — registered in setup/routes.py,
+    which carries the require_loopback dependency, and deliberately NOT gated
+    on is_configured so the dashboard works during first-run setup.
+
+Job payloads are TRIMMED (id/state/progress/title/...) — never the transcript,
+summary, or questions; those stay on the bearer-gated per-job endpoint.
+"""
+
+import asyncio
+import json
+import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
+
+from ..auth import verify_token
+from ..config import APP_VERSION, get_settings
+from ..models import JobRecord
+from .jobs import require_configured
+
+log = logging.getLogger(__name__)
+
+_PING_INTERVAL_SEC = 15.0
+
+
+def trim_job(record: JobRecord) -> dict:
+    """The list/event view of a job — small, and free of meeting content."""
+    state = record.state.value if hasattr(record.state, "value") else str(record.state)
+    return {
+        "id": record.id,
+        "state": state,
+        "progress": record.progress,
+        "createdAt": record.createdAt,
+        "updatedAt": record.updatedAt,
+        "title": record.meeting.details.title,
+        "error": record.error,
+        "pdf": {"received": record.pdf.received, "emailed": record.pdf.emailed},
+    }
+
+
+# ---- Shared handler bodies (used by both mounts) ----------------------------
+
+def jobs_payload(request: Request, limit: int) -> dict:
+    store = request.app.state.store
+    limit = max(1, min(int(limit), 200))
+    return {"jobs": [trim_job(r) for r in store.list()[:limit]]}
+
+
+def logs_payload(request: Request, lines: int) -> dict:
+    ring = getattr(request.app.state, "log_ring", None)
+    lines = max(1, min(int(lines), 1000))
+    return {"lines": ring.tail(lines) if ring is not None else []}
+
+
+def _sse(eid: int, event: str, data_json: str) -> str:
+    return f"id: {eid}\nevent: {event}\ndata: {data_json}\n\n"
+
+
+def _hello_payload(request: Request) -> str:
+    store = request.app.state.store
+    return json.dumps(
+        {
+            "serverTime": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "configured": get_settings().is_configured,
+            "version": APP_VERSION,
+            "jobs": [trim_job(r) for r in store.list()[:50]],
+        },
+        default=str,
+    )
+
+
+def event_stream(request: Request) -> StreamingResponse:
+    """SSE: hello snapshot (or Last-Event-ID replay), then live events with a
+    comment ping every 15s so proxies/timeouts keep the connection alive."""
+    broker = request.app.state.broker
+
+    async def gen():
+        q = broker.subscribe()
+        try:
+            yield "retry: 3000\n\n"
+
+            replay = None
+            last = request.headers.get("last-event-id", "")
+            if last.isdigit():
+                replay = broker.replay_since(int(last))
+
+            if replay is None:
+                # Unknown/absent id: full snapshot removes the subscribe race.
+                yield _sse(broker.last_id, "hello", _hello_payload(request))
+            else:
+                for eid, event, data_json in replay:
+                    yield _sse(eid, event, data_json)
+
+            while True:
+                # Broker dropped us as a slow consumer: end the stream so the
+                # client reconnects and receives a fresh snapshot (drain any
+                # already-queued events first — they're still valid).
+                if getattr(q, "_mm_dropped", False) and q.empty():
+                    log.info("Closing SSE stream for a lagging subscriber")
+                    return
+                try:
+                    eid, event, data_json = await asyncio.wait_for(
+                        q.get(), timeout=_PING_INTERVAL_SEC
+                    )
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    continue
+                yield _sse(eid, event, data_json)
+        finally:
+            broker.unsubscribe(q)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # defeat any buffering reverse proxy
+        },
+    )
+
+
+# ---- Bearer-gated router (laptop, over Tailscale) ---------------------------
+
+router = APIRouter(dependencies=[Depends(require_configured), Depends(verify_token)])
+
+
+@router.get("/jobs")
+async def list_jobs(request: Request, limit: int = Query(50)) -> dict:
+    return jobs_payload(request, limit)
+
+
+@router.get("/events")
+async def events(request: Request) -> StreamingResponse:
+    return event_stream(request)
+
+
+@router.get("/logs/tail")
+async def logs_tail(request: Request, lines: int = Query(200)) -> dict:
+    return logs_payload(request, lines)

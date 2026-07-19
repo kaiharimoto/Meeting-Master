@@ -17,6 +17,22 @@ After the home-server installer finishes it should open
 - **Port already in use:** if something else owns port 8080, the setup page lets
   you change the port; then browse to `http://127.0.0.1:<new-port>/setup`.
 
+## The laptop's server pill is red / "Server unreachable"
+
+The pill in the laptop's sidebar is fed by a live event stream plus a
+periodic `/health` probe. If it's red:
+
+- Confirm the home PC is on and the Meeting Master tray icon is present.
+- Check Tailscale is **Connected** on both machines.
+- Click the pill for details (server URL, live-events state) — then open
+  **Settings** from the popover to re-check the connection code if needed.
+- A red pill doesn't block the workflow by itself — uploads and status polling
+  retry independently — but jobs can't reach a server that's actually down.
+
+The **Activity** screen's job list and server log come from the same stream:
+if they stall while the pill is green, the server is up but the stream was
+interrupted; it reconnects automatically with a few seconds' backoff.
+
 ## A dependency install failed
 
 The setup page installs Ollama, Tailscale, and the AI models with **Install**

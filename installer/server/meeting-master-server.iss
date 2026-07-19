@@ -45,6 +45,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
+; Brand icon (generated from app/assets/icon/icon.svg — committed binary).
+SetupIconFile={#SourcePath}\icon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -19,17 +19,21 @@ needs.
 2. Double-click it and click through the installer. **No admin rights are
    required** — it installs per-user.
 3. When it finishes it launches automatically, adds a **tray icon**, and opens
-   the **Setup** page in your default browser at
-   `http://127.0.0.1:8080/setup`. (If the page doesn't open on its own, browse
-   to that address — see
-   [TROUBLESHOOTING.md](TROUBLESHOOTING.md#the-setup-page-didnt-open).)
+   the **server dashboard** in your default browser at
+   `http://127.0.0.1:8080/setup` — tabs for **Overview** (health, software,
+   connection code), **Jobs** (every meeting processed, updating live),
+   **Logs**, and **Settings**. On first run it lands on Settings so you can
+   finish setup. (If the page doesn't open on its own, browse to that address —
+   see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#the-setup-page-didnt-open).)
 
 The server **auto-starts at login** from now on, so the whole stack comes back
 after a reboot with nothing to do.
 
-## 2. Work through the Setup page
+## 2. Work through setup on the dashboard
 
-Everything below happens on the `http://127.0.0.1:8080/setup` page.
+Everything below happens on the `http://127.0.0.1:8080/setup` dashboard —
+email settings live in the **Settings** tab, software installs and the
+connection code in **Overview**.
 
 ### a. Email
 

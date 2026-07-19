@@ -88,10 +88,13 @@ Two installers, one per machine — do the home PC first (it produces the
 `laptop-installer`).
 
 1. **Home PC** — run `MeetingMaster-HomeServer-Setup.exe`. It installs
-   per-user, launches, and opens a **Setup page** in your browser. There you
-   enter your Gmail App Password + recipients, click **Install** for Ollama /
-   Tailscale / the AI models (wait for green checks), sign in to Tailscale, then
-   **Save & Finish** and copy the **Connection Code**.
+   per-user, launches, and opens the **server dashboard** in your browser
+   (Overview · Jobs · Logs · Settings, light/dark). On first run, enter your
+   Gmail App Password + recipients under **Settings**, click **Install** for
+   Ollama / Tailscale / the AI models on **Overview** (wait for green checks),
+   sign in to Tailscale, then **Save & Finish** and copy the **Connection
+   Code**. After setup, launching the app opens the same dashboard for
+   monitoring jobs and logs.
 2. **Laptop** — run `MeetingMaster-Setup-<version>.exe`, install Tailscale and
    sign in to the **same** account, then open Meeting Master → **Settings** and
    **paste the Connection Code**. Done.
@@ -109,13 +112,13 @@ Full walk-throughs: [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md) and
 | `app/` | Electron laptop app (`npm start`; NSIS setup exe via `npm run dist`) |
 | `app/src/main/` | Main process: config, IPC, PDF rendering, home-server client, SMTP |
 | `app/src/preload/` | `contextBridge` — the only bridge to `window.api` |
-| `app/src/renderer/` | UI (details form, Q&A capture, generate/send) + print template |
+| `app/src/renderer/` | UI: sidebar app shell (Meeting · Activity · History · Settings), dark/light themes, live server monitoring + print template |
 | `app/src/shared/schema.js` | Single source of truth for IPC channel names + job states |
 | `app/assets/fonts/` | Licensed Neue Haas Grotesk files (git-ignored, see `docs/FONTS.md`) |
 | `app/test/e2e/` | Playwright test suite |
 | `server/` | FastAPI home AI server (port 8080; `python -m app.main` in a dev checkout) |
 | `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize + extract Q&A (Ollama) |
-| `server/app/routes/` | `/health` and `/jobs` endpoints |
+| `server/app/routes/` | `/health`, `/jobs`, and live-monitoring endpoints (`/events` SSE, `/logs/tail`) |
 | `server/app/mailer/` | Gmail SMTP sender |
 | `server/tests/` | pytest suite (with fake ffmpeg/whisper stubs) |
 | `installer/` | Home-server packaging: PyInstaller spec, Inno Setup script, bundled `bin/` |

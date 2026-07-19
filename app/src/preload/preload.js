@@ -40,10 +40,25 @@ contextBridge.exposeInMainWorld('api', {
   getFullConfig: () => call(CHANNELS.CONFIG_GET_FULL),
   saveConfig: (values) => call(CHANNELS.CONFIG_SAVE, values),
 
+  // App shell + live monitoring (v0.2.0)
+  getAppInfo: () => call(CHANNELS.APP_INFO),
+  setWindowOverlay: (theme) => call(CHANNELS.WINDOW_SET_OVERLAY, theme),
+  getServerStatus: () => call(CHANNELS.SERVER_STATUS_GET),
+  listJobs: (limit) => call(CHANNELS.JOBS_LIST, limit),
+  getLogTail: (lines) => call(CHANNELS.LOGS_TAIL, lines),
+
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
   onJobProgress: (cb) => {
     const listener = (_event, payload) => cb(payload);
     ipcRenderer.on(CHANNELS.JOB_PROGRESS, listener);
     return () => ipcRenderer.removeListener(CHANNELS.JOB_PROGRESS, listener);
+  },
+
+  // Subscribe to main->renderer server events (SSE relays + reachability
+  // status changes); returns an unsubscribe fn.
+  onServerEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.SERVER_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.SERVER_EVENT, listener);
   },
 });

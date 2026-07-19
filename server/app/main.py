@@ -16,7 +16,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .config import get_settings
-from .routes import health, jobs
+from .events import EventBroker, RingLogHandler
+from .routes import health, jobs, monitor
 from .setup import routes as setup_routes
 from .store import JobStore
 from .worker import reset_queue, worker_loop
@@ -43,6 +44,20 @@ async def lifespan(app: FastAPI):
     settings.models_dir.mkdir(parents=True, exist_ok=True)
     store.load_all()
     app.state.store = store
+
+    # Live monitoring: the broker fans job/log events out to SSE subscribers.
+    broker = EventBroker()
+    broker.bind_loop(asyncio.get_running_loop())
+    log_ring = RingLogHandler(broker)
+    logging.getLogger().addHandler(log_ring)
+    # publish_threadsafe is correct from any thread INCLUDING the loop thread,
+    # so the store observer never has to care where update() was called from.
+    store.on_change = lambda record: broker.publish_threadsafe(
+        "job", monitor.trim_job(record)
+    )
+    app.state.broker = broker
+    app.state.log_ring = log_ring
+
     reset_queue()  # bind the job queue to this event loop (see worker.py)
     worker_task = asyncio.create_task(worker_loop(store))
     log.info("Home AI server ready (data dir: %s)", settings.data_dir)
@@ -54,12 +69,15 @@ async def lifespan(app: FastAPI):
             await worker_task
         except asyncio.CancelledError:
             pass
+        store.on_change = None
+        logging.getLogger().removeHandler(log_ring)
 
 
 app = FastAPI(title="Meeting Master — Home AI Server", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(setup_routes.router)
 app.include_router(jobs.router)
+app.include_router(monitor.router)
 
 
 if __name__ == "__main__":

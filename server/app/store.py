@@ -30,6 +30,10 @@ class JobStore:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._jobs: dict[str, JobRecord] = {}
+        # Optional observer invoked after every create/update — the event
+        # broker hooks in here so monitoring UIs see changes live. Failures
+        # are swallowed: telemetry must never break the pipeline.
+        self.on_change = None
 
     @property
     def data_dir(self) -> Path:
@@ -53,6 +57,7 @@ class JobStore:
         self.job_dir(job_id).mkdir(parents=True, exist_ok=True)
         self._jobs[job_id] = record
         self.save(record)
+        self._notify(record)
         return record
 
     def save(self, record: JobRecord) -> None:
@@ -65,10 +70,27 @@ class JobStore:
             setattr(record, field, value)
         record.updatedAt = _utcnow_iso()
         self.save(record)
+        self._notify(record)
         return record
+
+    def _notify(self, record: JobRecord) -> None:
+        if self.on_change is None:
+            return
+        try:
+            self.on_change(record)
+        except Exception:
+            log.debug("Job on_change observer failed", exc_info=True)
 
     def get(self, job_id: str) -> JobRecord | None:
         return self._jobs.get(job_id)
+
+    def list(self) -> list[JobRecord]:
+        """All jobs, newest first. createdAt has only second precision, so
+        insertion order (dicts preserve it) breaks ties between jobs created
+        within the same second."""
+        indexed = enumerate(self._jobs.values())
+        ordered = sorted(indexed, key=lambda p: (p[1].createdAt, p[0]), reverse=True)
+        return [record for _, record in ordered]
 
     def load_all(self) -> None:
         """Scan DATA_DIR/*/job.json into memory (called once at startup)."""

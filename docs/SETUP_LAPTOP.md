@@ -67,6 +67,18 @@ non-blocking warning.
 The day-to-day flow is the "Repeatable per-meeting workflow" in the
 [README](../README.md#repeatable-per-meeting-workflow).
 
+## 6. Finding your way around the app
+
+- The **sidebar** switches between **Meeting** (capture + generate), **Activity**
+  (live pipeline for the current job, the home server's recent jobs, and its
+  streaming log), **History** (reopen past meetings), and **Settings**.
+- The **server pill** at the bottom of the sidebar shows home-server
+  reachability at a glance (green = online, amber = not configured, red =
+  unreachable) — click it for details.
+- The **sun/moon button** toggles light/dark; the app follows your Windows
+  theme until you choose one explicitly. Press <kbd>?</kbd> anywhere for the
+  keyboard-shortcut list.
+
 ---
 
 **Developers** running the app from source (`npm start`): see the Development

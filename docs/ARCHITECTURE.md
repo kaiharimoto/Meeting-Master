@@ -227,6 +227,27 @@ Job record shape:
   The laptop shows the error; retry by sending again — no re-upload of the
   audio needed.
 
+### Live monitoring (v0.2.0)
+
+Written once in `server/app/routes/monitor.py` and mounted twice: bearer-gated
+at the API root for the laptop, and loopback-only under `/setup` for the local
+dashboard (which therefore works even before first-run setup).
+
+| Laptop (Bearer) | Dashboard (loopback) | What it returns |
+| --- | --- | --- |
+| `GET /jobs?limit=50` | `GET /setup/jobs` | `{"jobs": [...]}` — trimmed records: `id, state, progress, createdAt, updatedAt, title, error, pdf`. Never transcript/summary/questions. |
+| `GET /events` | `GET /setup/events` | Server-Sent Events: `hello` snapshot (`serverTime, configured, version, jobs[]`), then `job` (trimmed record on every store change) and `log` (`{line}`) events, `: ping` comments every 15 s, `Last-Event-ID` replay from a 256-event ring. |
+| `GET /logs/tail?lines=200` | `GET /setup/logs` | `{"lines": [...]}` from an in-memory 500-line log ring (`RingLogHandler`). |
+
+`GET /setup/assets/{name}` serves the dashboard's CSS/JS by strict whitelist
+(deliberately not a `StaticFiles` mount, which would bypass the loopback
+guard). The `EventBroker` (`server/app/events.py`) is wired in `main.py`'s
+lifespan: `store.on_change` publishes every job mutation; a logging handler
+publishes every log line. On the laptop, `src/main/sseClient.js` consumes the
+stream (the renderer has no network access and never sees the token) and
+re-emits events over the `server:event` IPC channel; the renderer's 3-second
+polling remains the functional fallback — SSE failure is only ever cosmetic.
+
 ## IPC channels
 
 Channel names live in `app/src/shared/schema.js` (`CHANNELS`) and are used by

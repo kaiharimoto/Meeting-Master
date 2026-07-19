@@ -3,18 +3,21 @@
 // Registers an ipcMain.handle for every channel in shared/schema.js CHANNELS,
 // plus the main->renderer JOB_PROGRESS event.
 
-const { ipcMain, dialog, shell } = require('electron');
+const { app, ipcMain, dialog, shell } = require('electron');
 const { CHANNELS } = require('../shared/schema');
 const config = require('./config');
 const homeClient = require('./homeClient');
 const pdf = require('./pdf');
 const emailer = require('./emailer');
+const sseClient = require('./sseClient');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
  *        Getter (not a direct reference) so recreated windows keep working.
+ * @param {{setOverlayTheme?: (theme: string) => void}} [hooks]
+ *        Main-process callbacks that don't belong to any service module.
  */
-function registerIpcHandlers(getMainWindow) {
+function registerIpcHandlers(getMainWindow, hooks = {}) {
   function sendProgress(payload) {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) {
@@ -132,6 +135,26 @@ function registerIpcHandlers(getMainWindow) {
     return { filePath: !canceled && filePath ? filePath : null };
   });
 
+  // ---- App shell ---------------------------------------------------------------
+
+  handle(CHANNELS.APP_INFO, () => ({
+    version: app.getVersion(),
+    platform: process.platform,
+  }));
+
+  handle(CHANNELS.WINDOW_SET_OVERLAY, (theme) => {
+    if (typeof hooks.setOverlayTheme === 'function') {
+      hooks.setOverlayTheme(theme === 'dark' ? 'dark' : 'light');
+    }
+    return { ok: true };
+  });
+
+  // ---- Live monitoring -------------------------------------------------------
+
+  handle(CHANNELS.SERVER_STATUS_GET, () => sseClient.getStatus());
+  handle(CHANNELS.JOBS_LIST, (limit) => homeClient.listJobs(limit));
+  handle(CHANNELS.LOGS_TAIL, (lines) => homeClient.getLogTail(lines));
+
   // ---- Config ------------------------------------------------------------------
 
   handle(CHANNELS.CONFIG_GET, () => {
@@ -191,6 +214,8 @@ function registerIpcHandlers(getMainWindow) {
     }
 
     config.save(toSave);
+    // New URL/token: reconnect the live event stream against them.
+    sseClient.restart();
     return safeFull(config.get());
   });
 }
