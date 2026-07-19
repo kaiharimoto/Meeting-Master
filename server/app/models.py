@@ -51,16 +51,35 @@ class ExtractedQuestion(BaseModel):
     answer: str = ""
     answerer: str = ""
     directedTo: str = ""
+    # Confidence in the ``answerer`` attribution: "high" when the transcript
+    # clearly names who spoke, else "low" (the approval UI flags low ones so the
+    # operator double-checks). Empty answerer is always treated as low.
+    confidence: str = "high"
+
+
+class ActionItem(BaseModel):
+    """A follow-up task extracted from the meeting: what to do, who owns it,
+    when it's due, and how urgent. Rendered as a ruled table in the PDF."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    task: str = ""
+    owner: str = ""      # who owns it (or "" if the transcript never says)
+    due: str = ""        # due date/'when' AS STATED ("Nov 15", "next sprint"), or ""
+    priority: str = "normal"  # "high" | "normal" | "low"
 
 
 class MeetingSummary(BaseModel):
-    """Structured, presentation-style summary rendered as bulleted sections in
-    the PDF. Each list holds short, self-contained bullet strings."""
+    """Structured, presentation-style summary rendered as a bulleted "deck" in
+    the PDF: Key Takeaways, Decisions, Action Items (owner/due/priority), Key
+    Figures, and Topics. String lists hold short self-contained bullets."""
 
     model_config = ConfigDict(extra="ignore")
 
     keyTakeaways: list[str] = Field(default_factory=list)
-    followUps: list[str] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    actionItems: list[ActionItem] = Field(default_factory=list)
+    keyFigures: list[str] = Field(default_factory=list)
     topics: list[str] = Field(default_factory=list)
 
 
@@ -112,8 +131,9 @@ class JobRecord(BaseModel):
     updatedAt: str  # ISO-8601 UTC
     meeting: MeetingMeta
     transcript: Transcript | None = None
-    # Structured, presentation-style summary (Key Takeaways / Follow-Ups /
-    # Topics). None until the summarize stage completes. `str` is tolerated ONLY
+    # Structured, presentation-style summary (Key Takeaways / Decisions /
+    # Action Items / Key Figures / Topics). None until summarize completes.
+    # `str` is tolerated ONLY
     # so pre-upgrade job.json files (whose summary was plain prose) still load
     # instead of being dropped whole by load_all() — the PDF renderer already
     # handles both shapes. New jobs always store a MeetingSummary.

@@ -3,7 +3,8 @@
 // never an uncaught exception.
 
 import { setStatus, showError, friendlyState, isBusyState } from './status.js';
-import { renderExtractPrompt } from './extractReview.js';
+import { renderExtractPrompt, captureExtracted } from './extractReview.js';
+import { saveCurrentToHistory } from './history.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -43,13 +44,20 @@ export function initGenerate(context) {
 
   // A renderer reload (or app restart) must not orphan a running job: the job
   // id is persisted, so resume polling if it never reached a terminal state.
+  maybeResumePolling();
+
+  updateButtons(ctx);
+}
+
+// Resume polling if the current job is mid-pipeline (used at boot AND after a
+// history snapshot restores a still-running meeting).
+export function maybeResumePolling() {
   const job = ctx.state.job || {};
-  if (ctx.api && job.id && job.state !== 'failed' && !READY_STATES.includes(job.state)) {
+  if (ctx.api && job.id && job.state && job.state !== 'failed' &&
+      !READY_STATES.includes(job.state)) {
     setStatus(friendlyState(job.state || 'queued'), { busy: true });
     startPolling();
   }
-
-  updateButtons(ctx);
 }
 
 // The meeting JSON exactly as POST /jobs expects it (schemaVersion 1).
@@ -193,10 +201,11 @@ async function pollOnce() {
   ctx.state.job.state = job.state;
   if (job.transcript) ctx.state.transcript = job.transcript;
   if (job.summary !== null && job.summary !== undefined) ctx.state.summary = job.summary;
-  // Capture AI-detected Q&A candidates once (they are approved, not auto-added).
-  // Guard on !reviewed so a late poll can't resurrect a list the user culled.
+  // Capture AI-detected Q&A candidates once (they are approved, not auto-added),
+  // dropping any that duplicate a card the operator already typed. Guard on
+  // !reviewed so a late poll can't resurrect a list the user culled.
   if (Array.isArray(job.questions) && job.questions.length && !ctx.state.questionsReviewed) {
-    ctx.state.extractedQuestions = job.questions;
+    captureExtracted(job.questions);
   }
   ctx.persist();
   updateButtons(ctx);
@@ -234,6 +243,8 @@ async function onGeneratePdf() {
   ctx.state.pdfPath = pdfPath;
   ctx.persist();
   updateButtons(ctx);
+  // A generated PDF is a natural checkpoint — snapshot the meeting to history.
+  saveCurrentToHistory();
 
   if (!fontUsed && warning) {
     showError(`PDF saved to ${pdfPath} — but: ${warning}`);

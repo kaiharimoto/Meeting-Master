@@ -42,11 +42,16 @@ test('print template renders the fixture with the contracted typography', async 
     .evaluate((el) => getComputedStyle(el).color);
   expect(indexColor).toBe(ACCENT);
 
-  // ---- Structured summary ----------------------------------------------------
+  // ---- Contents index (page 1) -----------------------------------------------
+  await expect(page.locator('#contents')).toBeVisible();
+  // Q&A + the five populated summary sections = six rows.
+  await expect(page.locator('.toc-row')).toHaveCount(6);
 
-  // Three accent section kickers: Key Takeaways, Follow-Up Points, Topics.
+  // ---- Structured summary deck -----------------------------------------------
+
+  // Five accent section kickers: Takeaways, Decisions, Action Items, Figures, Topics.
   const headings = page.locator('.sum-heading');
-  await expect(headings).toHaveCount(3);
+  await expect(headings).toHaveCount(5);
   await expect(headings.nth(0)).toHaveText('Key Takeaways');
   const headingColor = await headings
     .first()
@@ -61,10 +66,18 @@ test('print template renders the fixture with the contracted typography', async 
     fixture.summary.keyTakeaways[0].slice(0, 24)
   );
 
-  // Follow-ups and topics each render their full fixture list.
-  await expect(page.locator('.followup')).toHaveCount(
-    fixture.summary.followUps.length
+  // Decisions render their full list.
+  await expect(page.locator('.decision')).toHaveCount(fixture.summary.decisions.length);
+
+  // Action Items: one table row per item, with priority-dot classes.
+  await expect(page.locator('.ai-task')).toHaveCount(fixture.summary.actionItems.length);
+  await expect(page.locator('.ai-pri-high')).toHaveCount(
+    // fixture priority dots include the table body + the legend swatch.
+    fixture.summary.actionItems.filter((a) => a.priority === 'high').length + 1
   );
+
+  // Key figures and topics each render their full fixture list.
+  await expect(page.locator('.figure')).toHaveCount(fixture.summary.keyFigures.length);
   const chips = page.locator('.topic-chip');
   await expect(chips).toHaveCount(fixture.summary.topics.length);
   const chipColor = await chips.first().evaluate((el) => getComputedStyle(el).color);

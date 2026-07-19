@@ -185,11 +185,13 @@ Job record shape:
   },
   "summary": {
     "keyTakeaways": ["str"],
-    "followUps": ["str"],
+    "decisions": ["str"],
+    "actionItems": [ { "task": "str", "owner": "str", "due": "str", "priority": "high|normal|low" } ],
+    "keyFigures": ["str"],
     "topics": ["str"]
   },
   "questions": [
-    { "question": "str", "answer": "str", "answerer": "str", "directedTo": "str" }
+    { "question": "str", "answer": "str", "answerer": "str", "directedTo": "str", "confidence": "high|low" }
   ],
   "pdf": { "received": false, "emailed": false },
   "error": null

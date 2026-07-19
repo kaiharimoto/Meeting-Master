@@ -4,15 +4,23 @@
 import { initDetailsForm, renderDetailsForm } from './detailsForm.js';
 import { initCapture, openCardModal } from './capture.js';
 import { initCardList, renderCards } from './cardList.js';
-import { initGenerate, updateButtons } from './generate.js';
+import { initGenerate, updateButtons, maybeResumePolling } from './generate.js';
 import { initStatus, setStatus, showError } from './status.js';
 import { initSettings, openSettings } from './settings.js';
 import { initExtractReview, renderExtractPrompt } from './extractReview.js';
+import { initSummaryEdit, openSummaryEdit } from './summaryEdit.js';
+import { initHistory, saveCurrentToHistory } from './history.js';
 
 const STORAGE_KEY = 'meetingmaster.meeting.v1';
 
+function newMeetingId() {
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function defaultState() {
   return {
+    // Stable id so a saved meeting updates its own history entry (not a dup).
+    meetingId: newMeetingId(),
     details: { title: '', date: '', time: '', attendees: [] },
     cards: [],
     recipients: [],
@@ -75,15 +83,27 @@ function boot() {
   initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
   initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
   initGenerate(ctx);
+  initSummaryEdit(ctx, { onSaved: () => setStatus('Summary updated — it will appear in the next PDF.') });
+  initHistory(ctx, {
+    onOpened: () => {
+      ctx.renderAll();
+      // A restored snapshot might still be mid-pipeline — pick polling back up.
+      maybeResumePolling();
+      setStatus('Opened a saved meeting.');
+    },
+  });
   // After a successful save, refresh the header connection info (but don't
   // re-trigger the launch-time auto-open of the Settings modal).
   initSettings(ctx, { onSaved: () => refreshConfig(ctx) });
 
   document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
+  document.getElementById('edit-summary-btn').addEventListener('click', () => openSummaryEdit());
 
   document.getElementById('new-meeting-btn').addEventListener('click', () => {
     const ok = confirm('Start a new meeting? This clears the details, Q&A cards, and job state.');
     if (!ok) return;
+    // Preserve the outgoing meeting in history before clearing it.
+    saveCurrentToHistory();
     // Replace contents in place — modules hold a reference to `state`.
     Object.assign(state, defaultState());
     ctx.persist();

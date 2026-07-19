@@ -74,15 +74,24 @@ def test_full_pipeline(client):
 
     assert "stub transcript" in record["transcript"]["text"]
 
-    # Summary is now a structured object (Key Takeaways / Follow-Ups / Topics).
-    assert record["summary"]["keyTakeaways"] == CANNED_SUMMARY_SECTIONS["keyTakeaways"]
-    assert record["summary"]["followUps"] == CANNED_SUMMARY_SECTIONS["followUps"]
-    assert record["summary"]["topics"] == CANNED_SUMMARY_SECTIONS["topics"]
+    # Summary is a structured deck: takeaways / decisions / action items /
+    # figures / topics.
+    summary = record["summary"]
+    assert summary["keyTakeaways"] == CANNED_SUMMARY_SECTIONS["keyTakeaways"]
+    assert summary["decisions"] == CANNED_SUMMARY_SECTIONS["decisions"]
+    assert summary["topics"] == CANNED_SUMMARY_SECTIONS["topics"]
+    assert summary["keyFigures"] == CANNED_SUMMARY_SECTIONS["keyFigures"]
+    # Action items keep their owner/due/priority structure.
+    assert len(summary["actionItems"]) == 1
+    assert summary["actionItems"][0]["owner"] == "Alice"
+    assert summary["actionItems"][0]["due"] == "Nov 15"
+    assert summary["actionItems"][0]["priority"] == "high"
 
     # Extracted Q&A candidates ride along, awaiting operator approval.
     assert len(record["questions"]) == len(CANNED_QUESTIONS)
     assert record["questions"][0]["question"] == CANNED_QUESTIONS[0]["question"]
     assert record["questions"][0]["answerer"] == "Bob"
+    assert record["questions"][0]["confidence"] == "high"
 
     first_segment = record["transcript"]["segments"][0]
     assert first_segment["start"] == 0.0

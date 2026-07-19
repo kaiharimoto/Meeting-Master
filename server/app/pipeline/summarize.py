@@ -1,10 +1,10 @@
 """Stage 3a: summarize the transcript into a structured, presentation-style
 summary with an Ollama model.
 
-Output is a MeetingSummary with three bulleted sections — Key Takeaways,
-Follow-Up Points, Topics Discussed — rendered as a "deck" in the PDF rather
-than prose. See _ollama.py for the shared chat/token helpers and the reason
-these calls use the native /api/chat endpoint.
+Output is a MeetingSummary rendered as a "deck" in the PDF:
+  Key Takeaways · Decisions · Action Items (owner/due/priority) · Key Figures · Topics
+See _ollama.py for the shared chat/token helpers and the reason these calls use
+the native /api/chat endpoint.
 """
 
 import logging
@@ -12,22 +12,31 @@ import logging
 import httpx
 
 from ..config import Settings
-from ..models import MeetingMeta, MeetingSummary
+from ..models import ActionItem, MeetingMeta, MeetingSummary
 from . import _ollama
 
 log = logging.getLogger(__name__)
 
-# Keep the printed summary tight and slide-like — hard caps so a chatty model
+# Keep the printed deck tight and slide-like — hard caps so a chatty model
 # can't blow out the PDF layout.
 _MAX_TAKEAWAYS = 8
-_MAX_FOLLOWUPS = 8
+_MAX_DECISIONS = 8
+_MAX_ACTIONS = 10
+_MAX_FIGURES = 8
 _MAX_TOPICS = 12
+
+_VALID_PRIORITY = {"high", "normal", "low"}
 
 _SCHEMA_HINT = (
     'Respond with ONLY a JSON object of this exact shape:\n'
     '{\n'
     '  "keyTakeaways": ["short bullet", ...],\n'
-    '  "followUps": ["short bullet", ...],\n'
+    '  "decisions": ["a decision that was made", ...],\n'
+    '  "actionItems": [\n'
+    '    {"task": "what to do", "owner": "name or empty", '
+    '"due": "when as stated or empty", "priority": "high|normal|low"}\n'
+    '  ],\n'
+    '  "keyFigures": ["a notable number/date/amount with its context", ...],\n'
     '  "topics": ["short topic phrase", ...]\n'
     '}'
 )
@@ -37,16 +46,22 @@ SYSTEM_PROMPT = (
     "and produce a STRUCTURED summary as JSON, suitable for a one-page "
     "presentation-style handout. Use ONLY information present in the transcript "
     "— never invent names, numbers, decisions, dates, or owners.\n\n"
-    "Populate three sections:\n"
-    "- keyTakeaways: the most important decisions, outcomes, and conclusions. "
-    "Each a single crisp sentence.\n"
-    "- followUps: concrete action items, open questions, and next steps. Name "
-    "the owner and any deadline when the transcript states them.\n"
-    "- topics: the subjects that were discussed, as short noun phrases (2-5 "
-    "words each), not sentences.\n\n"
-    "Each array element is a plain string with no leading bullet character. "
-    "Omit a section's items (empty array) only if the transcript truly has "
-    "none. " + _SCHEMA_HINT
+    "Populate these sections:\n"
+    "- keyTakeaways: the most important outcomes and conclusions, each a single "
+    "crisp sentence.\n"
+    "- decisions: concrete decisions the group actually made (agreements, "
+    "approvals, choices). One decision per string. Empty array if none.\n"
+    "- actionItems: things someone must DO after the meeting. For each, give the "
+    "task, the owner (the person responsible, or empty string if unstated), the "
+    "due date/timeframe exactly as stated (e.g. 'Nov 15', 'next sprint', or "
+    "empty string), and a priority of 'high', 'normal', or 'low'.\n"
+    "- keyFigures: notable numbers, dates, amounts, or percentages mentioned, "
+    "each with a few words of context (e.g. '12% price increase, locked 24 "
+    "months').\n"
+    "- topics: the subjects discussed, as short noun phrases (2-5 words), not "
+    "sentences.\n\n"
+    "String array elements carry no leading bullet character. Omit a section "
+    "(empty array) only if the transcript truly has none. " + _SCHEMA_HINT
 )
 
 # A single low-token-cost consolidation of per-chunk partials for long
@@ -54,38 +69,77 @@ SYSTEM_PROMPT = (
 _MERGE_SYSTEM_PROMPT = (
     "You merge several partial structured summaries of ONE meeting into a "
     "single structured summary. Deduplicate overlapping points, keep the most "
-    "specific wording, and preserve every distinct decision, action item, and "
-    "topic. Invent nothing. " + _SCHEMA_HINT
+    "specific wording, and preserve every distinct takeaway, decision, action "
+    "item, figure, and topic. Invent nothing. " + _SCHEMA_HINT
 )
+
+
+def _string_list(data: dict, key: str, *aliases: str, limit: int) -> list[str]:
+    raw = data.get(key)
+    for alias in aliases:
+        if not raw:
+            raw = data.get(alias)
+    if not isinstance(raw, list):
+        return []
+    cleaned = [_ollama.clean_bullet(item) for item in raw]
+    return [b for b in cleaned if b][:limit]
+
+
+def _action_items(data: dict) -> list[ActionItem]:
+    raw = data.get("actionItems")
+    if not raw:
+        raw = data.get("action_items")
+    if not isinstance(raw, list):
+        return []
+    out: list[ActionItem] = []
+    for item in raw:
+        if len(out) >= _MAX_ACTIONS:  # cap applies to BOTH branches below
+            break
+        if isinstance(item, str):
+            # Some models emit a bare string; treat it as an ownerless task.
+            task = _ollama.clean_bullet(item)
+            if task:
+                out.append(ActionItem(task=task))
+            continue
+        if not isinstance(item, dict):
+            continue
+        task = _ollama.clean_bullet(item.get("task") or item.get("action") or "")
+        if not task:
+            continue
+        priority = str(item.get("priority") or "normal").strip().lower()
+        if priority not in _VALID_PRIORITY:
+            priority = "normal"
+        out.append(
+            ActionItem(
+                task=task,
+                owner=str(item.get("owner") or item.get("assignee") or "").strip(),
+                due=str(item.get("due") or item.get("dueDate") or item.get("when") or "").strip(),
+                priority=priority,
+            )
+        )
+    return out
 
 
 def _coerce(parsed) -> MeetingSummary:
     """Turn the model's JSON into a MeetingSummary, defensively."""
     data = parsed if isinstance(parsed, dict) else {}
-
-    def _list(key: str, *aliases: str, limit: int) -> list[str]:
-        raw = data.get(key)
-        for alias in aliases:
-            if not raw:
-                raw = data.get(alias)
-        if not isinstance(raw, list):
-            return []
-        cleaned = [_ollama.clean_bullet(item) for item in raw]
-        return [b for b in cleaned if b][:limit]
-
     return MeetingSummary(
-        keyTakeaways=_list("keyTakeaways", "key_takeaways", limit=_MAX_TAKEAWAYS),
-        followUps=_list("followUps", "follow_ups", "followups", limit=_MAX_FOLLOWUPS),
-        topics=_list("topics", "topicsDiscussed", limit=_MAX_TOPICS),
+        keyTakeaways=_string_list(data, "keyTakeaways", "key_takeaways", limit=_MAX_TAKEAWAYS),
+        decisions=_string_list(data, "decisions", "decisionsMade", limit=_MAX_DECISIONS),
+        actionItems=_action_items(data),
+        keyFigures=_string_list(data, "keyFigures", "key_figures", "figures", limit=_MAX_FIGURES),
+        topics=_string_list(data, "topics", "topicsDiscussed", limit=_MAX_TOPICS),
     )
 
 
 def _merge(summaries: list[MeetingSummary]) -> MeetingSummary:
     """Concatenate section lists across partials, de-duplicating case-folded."""
     merged = MeetingSummary()
+    # String sections.
     for field, limit in (
         ("keyTakeaways", _MAX_TAKEAWAYS),
-        ("followUps", _MAX_FOLLOWUPS),
+        ("decisions", _MAX_DECISIONS),
+        ("keyFigures", _MAX_FIGURES),
         ("topics", _MAX_TOPICS),
     ):
         seen: set[str] = set()
@@ -98,6 +152,17 @@ def _merge(summaries: list[MeetingSummary]) -> MeetingSummary:
                 seen.add(key)
                 out.append(item)
         setattr(merged, field, out[:limit])
+    # Action items, de-duplicated by task text.
+    seen_tasks: set[str] = set()
+    actions: list[ActionItem] = []
+    for s in summaries:
+        for ai in s.actionItems:
+            key = ai.task.casefold()
+            if key in seen_tasks:
+                continue
+            seen_tasks.add(key)
+            actions.append(ai)
+    merged.actionItems = actions[:_MAX_ACTIONS]
     return merged
 
 
@@ -159,7 +224,7 @@ async def run(
             )
             consolidated = _coerce(parsed)
             # Guard against the merge pass hallucinating everything away.
-            if consolidated.keyTakeaways or consolidated.topics:
+            if consolidated.keyTakeaways or consolidated.topics or consolidated.actionItems:
                 return consolidated
         except Exception:
             # The consolidation pass is a best-effort refinement; ANY failure

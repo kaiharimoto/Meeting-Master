@@ -457,6 +457,161 @@ kbd {
   content: "· ";
 }
 
+/* Low-confidence answerer flag */
+.extract-row.is-unsure {
+  border-left-color: var(--chip-ink);
+}
+
+.extract-flag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--chip-ink);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  padding: 1px 9px;
+  white-space: nowrap;
+}
+
+.extract-flag::before { content: "\26A0  "; }
+
+/* ---------- Edit-summary modal ---------- */
+
+.summary-modal {
+  gap: 12px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.summary-intro,
+.history-intro {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.sum-actions-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.action-edit-row {
+  display: grid;
+  grid-template-columns: 1fr 130px 108px 92px 30px;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-edit-row input,
+.action-edit-row select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+}
+
+.action-edit-row input:focus,
+.action-edit-row select:focus {
+  border-color: var(--accent);
+}
+
+.ae-del {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ae-del:hover {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+/* ---------- Meeting-history modal ---------- */
+
+.history-modal {
+  gap: 12px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-head h3 {
+  margin: 0;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 56vh;
+  overflow-y: auto;
+}
+
+.history-empty {
+  color: var(--ink-soft);
+  font-style: italic;
+  padding: 18px 12px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #f8fafc;
+}
+
+.history-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.history-title {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.history-meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.history-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+.history-del:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 /* ---------- Status line ---------- */
 
 .status-line {

@@ -28,6 +28,7 @@
   --ink-soft: #23282e;   /* answers, summary body */
   --muted: #6a7076;      /* placeholders, colophon date */
   --accent: #3e7ca6;     /* calm medical blue */
+  --accent-mid: #94b6cc; /* lighter blue — normal-priority dot (same hue) */
   --rule-soft: #b9bec4;  /* hairline under the Q&A header */
 }
 
@@ -108,6 +109,43 @@ body {
   line-height: 1.35;
   font-weight: 400;
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Contents index (page 1) --------------------------------------------- */
+
+section#contents { margin-top: 26pt; }
+
+.contents-head {
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8pt;
+}
+
+.contents-rows { display: grid; gap: 1pt; }
+
+.toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8pt;
+  padding: 3.5pt 0;
+}
+
+.toc-name { font-size: 10.5pt; font-weight: 600; color: var(--ink); }
+
+.toc-dots {
+  flex: 1;
+  border-bottom: 1pt dotted var(--rule-soft);
+  transform: translateY(-3pt);
+}
+
+.toc-count {
+  font-size: 10.5pt;
+  font-weight: 700;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -274,41 +312,130 @@ section#summary {
   color: var(--ink);
 }
 
-/* Lower band: Follow-Up Points beside Topics Discussed. */
-.sum-lower {
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: 0.42in;
-}
+/* Decisions — filled accent markers: settled, agreed points. */
+.sum-decisions { margin-bottom: 28pt; }
 
-/* Follow-Up Points — hollow accent checkbox markers read as action items. */
-.sum-followups .sum-list {
+.sum-decisions .sum-list {
   margin-top: 14pt;
   display: grid;
   gap: 10pt;
 }
 
-.followup {
+.decision {
   display: grid;
-  grid-template-columns: 10pt 1fr;
-  column-gap: 10pt;
+  grid-template-columns: 12pt 1fr;
+  column-gap: 11pt;
   align-items: start;
   break-inside: avoid;
 }
 
-.followup::before {
+.decision::before {
   content: "";
-  margin-top: 2.5pt;
+  margin-top: 3pt;
   width: 9pt;
   height: 9pt;
-  border: 1.25pt solid var(--accent);
+  background: var(--accent);
   border-radius: 2pt;
 }
 
-.followup-text {
-  font-size: 11pt;
-  line-height: 1.4;
+.decision-text { font-size: 12pt; line-height: 1.4; color: var(--ink); }
+
+/* Action Items — a ruled table: priority dot · task · owner · due. */
+.sum-actions { margin-bottom: 28pt; }
+
+.ai-table { margin-top: 14pt; display: grid; }
+
+.ai-row {
+  display: grid;
+  grid-template-columns: 16pt 1fr 1.2in 1in;
+  column-gap: 12pt;
+  align-items: baseline;
+  padding: 8pt 0;
+  border-top: 0.75pt solid var(--rule-soft);
+  break-inside: avoid;
+}
+
+.ai-row:last-of-type { border-bottom: 0.75pt solid var(--rule-soft); }
+
+.ai-head {
+  border-top: none;
+  padding: 0 0 6pt;
+  font-size: 8.5pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.ai-pri {
+  width: 9pt;
+  height: 9pt;
+  margin-top: 3pt;
+  border-radius: 50%;
+  justify-self: center;
+}
+
+/* High is also a touch larger so priority survives grayscale printing. */
+.ai-pri-high { background: var(--accent); width: 10.5pt; height: 10.5pt; margin-top: 2.25pt; }
+.ai-pri-normal { background: var(--accent-mid); }
+.ai-pri-low { background: #fff; border: 1pt solid var(--muted); }
+
+.ai-task { font-size: 11pt; line-height: 1.35; color: var(--ink); }
+.ai-owner { font-size: 10pt; font-weight: 700; color: var(--ink-soft); }
+.ai-due {
+  font-size: 10pt;
   color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-legend {
+  margin-top: 9pt;
+  display: flex;
+  gap: 16pt;
+  font-size: 8.5pt;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.ai-legend-item { display: inline-flex; align-items: center; gap: 5pt; }
+.ai-legend .ai-pri { margin-top: 0; width: 8pt; height: 8pt; }
+
+/* Lower band: Key Figures beside Topics Discussed. */
+.sum-lower {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 0.42in;
+}
+
+/* Key Figures — accent tick markers; notable numbers, dates, amounts. */
+.sum-figures .sum-list {
+  margin-top: 14pt;
+  display: grid;
+  gap: 9pt;
+}
+
+.figure {
+  display: grid;
+  grid-template-columns: 3pt 1fr;
+  column-gap: 11pt;
+  align-items: start;
+  break-inside: avoid;
+}
+
+.figure::before {
+  content: "";
+  margin-top: 2pt;
+  width: 3pt;
+  height: 13pt;
+  background: var(--accent);
+  border-radius: 1pt;
+}
+
+.figure-text {
+  font-size: 11pt;
+  line-height: 1.35;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Topics Discussed — outline pill chips (ink-and-rules, no fill wash). */

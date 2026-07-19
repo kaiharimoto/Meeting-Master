@@ -16,6 +16,11 @@
     <div class="detail-band" id="detail-band"></div>
   </section>
 
+  <section id="contents" hidden>
+    <div class="contents-head">Contents</div>
+    <div class="contents-rows" id="contents-rows"></div>
+  </section>
+
   <section id="qa">
     <h2 class="section-header">Q&amp;A<span id="qa-count" class="section-count"></span></h2>
     <div class="section-rule"></div>
@@ -76,9 +81,29 @@
         .filter(Boolean);
     }
 
+    // Normalize the actionItems array to clean {task, owner, due, priority}.
+    function cleanActions(list) {
+      if (!Array.isArray(list)) return [];
+      var valid = { high: 1, normal: 1, low: 1 };
+      return list
+        .map(function (a) {
+          if (!a || typeof a !== 'object') return null;
+          var task = typeof a.task === 'string' ? a.task.trim() : '';
+          if (!task) return null;
+          var pri = String(a.priority || 'normal').toLowerCase();
+          return {
+            task: task,
+            owner: typeof a.owner === 'string' ? a.owner.trim() : '',
+            due: typeof a.due === 'string' ? a.due.trim() : '',
+            priority: valid[pri] ? pri : 'normal',
+          };
+        })
+        .filter(Boolean);
+    }
+
     // Build one titled summary section (heading + a <ul>/<ol> of items). The
-    // caller supplies a per-item builder so takeaways, follow-ups, and topics
-    // can each carry their own marker treatment. Returns null when empty.
+    // caller supplies a per-item builder so each section carries its own marker
+    // treatment. Returns null when empty.
     function buildSummarySection(heading, cssClass, items, listTag, buildItem) {
       if (items.length === 0) return null;
       var section = document.createElement('div');
@@ -91,15 +116,83 @@
 
       var list = document.createElement(listTag);
       list.className = 'sum-list';
-      items.forEach(function (text, i) {
-        list.appendChild(buildItem(text, i));
+      items.forEach(function (item, i) {
+        list.appendChild(buildItem(item, i));
       });
       section.appendChild(list);
       return section;
     }
 
-    // Render data.summary, which is either the new structured object
-    // {keyTakeaways, followUps, topics} or (legacy/mock) a plain string.
+    // Action Items — a ruled table: priority dot | task | owner | due.
+    function buildActionItems(actions) {
+      var section = document.createElement('div');
+      section.className = 'sum-section sum-actions';
+
+      var head = document.createElement('div');
+      head.className = 'sum-heading';
+      head.textContent = 'Action Items';
+      section.appendChild(head);
+
+      var table = document.createElement('div');
+      table.className = 'ai-table';
+
+      var header = document.createElement('div');
+      header.className = 'ai-row ai-head';
+      ['', 'Task', 'Owner', 'Due'].forEach(function (label) {
+        var c = document.createElement('span');
+        c.textContent = label;
+        header.appendChild(c);
+      });
+      table.appendChild(header);
+
+      actions.forEach(function (a) {
+        var row = document.createElement('div');
+        row.className = 'ai-row';
+
+        var dot = document.createElement('span');
+        dot.className = 'ai-pri ai-pri-' + a.priority;
+        dot.title = a.priority.charAt(0).toUpperCase() + a.priority.slice(1) + ' priority';
+        row.appendChild(dot);
+
+        var task = document.createElement('span');
+        task.className = 'ai-task';
+        task.textContent = a.task;
+        row.appendChild(task);
+
+        var owner = document.createElement('span');
+        owner.className = 'ai-owner';
+        owner.textContent = a.owner || '—';
+        row.appendChild(owner);
+
+        var due = document.createElement('span');
+        due.className = 'ai-due';
+        due.textContent = a.due || '—';
+        row.appendChild(due);
+
+        table.appendChild(row);
+      });
+      section.appendChild(table);
+
+      // Legend so the priority dots are decodable on paper.
+      var legend = document.createElement('div');
+      legend.className = 'ai-legend';
+      [['high', 'High'], ['normal', 'Normal'], ['low', 'Low']].forEach(function (p) {
+        var item = document.createElement('span');
+        item.className = 'ai-legend-item';
+        var d = document.createElement('span');
+        d.className = 'ai-pri ai-pri-' + p[0];
+        var t = document.createElement('span');
+        t.textContent = p[1];
+        item.appendChild(d);
+        item.appendChild(t);
+        legend.appendChild(item);
+      });
+      section.appendChild(legend);
+      return section;
+    }
+
+    // Render data.summary, either the structured object
+    // {keyTakeaways, decisions, actionItems, keyFigures, topics} or (legacy) a string.
     function renderSummary(host, summary) {
       host.textContent = '';
 
@@ -122,10 +215,13 @@
       host.classList.remove('is-prose');
       summary = summary || {};
       var takeaways = cleanStrings(summary.keyTakeaways);
-      var followUps = cleanStrings(summary.followUps);
+      var decisions = cleanStrings(summary.decisions);
+      var actions = cleanActions(summary.actionItems);
+      var figures = cleanStrings(summary.keyFigures);
       var topics = cleanStrings(summary.topics);
 
-      if (takeaways.length === 0 && followUps.length === 0 && topics.length === 0) {
+      if (!takeaways.length && !decisions.length && !actions.length &&
+          !figures.length && !topics.length) {
         return renderSummaryPlaceholder(host);
       }
 
@@ -148,23 +244,41 @@
       );
       if (key) host.appendChild(key);
 
-      // Follow-Up Points + Topics Discussed — a two-column lower band.
-      var lower = document.createElement('div');
-      lower.className = 'sum-lower';
-
-      var follow = buildSummarySection(
-        'Follow-Up Points', 'sum-followups', followUps, 'ul',
+      // Decisions — filled accent markers (agreed = settled).
+      var dec = buildSummarySection(
+        'Decisions', 'sum-decisions', decisions, 'ul',
         function (text) {
           var li = document.createElement('li');
-          li.className = 'followup';
+          li.className = 'decision';
           var body = document.createElement('span');
-          body.className = 'followup-text';
+          body.className = 'decision-text';
           body.textContent = text;
           li.appendChild(body);
           return li;
         }
       );
-      if (follow) lower.appendChild(follow);
+      if (dec) host.appendChild(dec);
+
+      // Action Items — ruled table with priority dots.
+      if (actions.length) host.appendChild(buildActionItems(actions));
+
+      // Key Figures + Topics Discussed — a two-column lower band.
+      var lower = document.createElement('div');
+      lower.className = 'sum-lower';
+
+      var fig = buildSummarySection(
+        'Key Figures', 'sum-figures', figures, 'ul',
+        function (text) {
+          var li = document.createElement('li');
+          li.className = 'figure';
+          var body = document.createElement('span');
+          body.className = 'figure-text';
+          body.textContent = text;
+          li.appendChild(body);
+          return li;
+        }
+      );
+      if (fig) lower.appendChild(fig);
 
       var topicSection = buildSummarySection(
         'Topics Discussed', 'sum-topics', topics, 'ul',
@@ -185,6 +299,49 @@
       placeholder.className = 'placeholder span-all';
       placeholder.textContent = '(No AI summary was generated for this meeting)';
       host.appendChild(placeholder);
+    }
+
+    // Contents index (page 1): section names + item counts, dot-leader style.
+    // A quick map of what's inside; shown only when there are >= 2 sections.
+    function renderContents(cards, summary) {
+      var section = document.getElementById('contents');
+      var rows = document.getElementById('contents-rows');
+      rows.textContent = '';
+
+      var entries = [['Questions & Answers', cards.length]];
+      if (summary && typeof summary === 'object') {
+        entries.push(['Key Takeaways', cleanStrings(summary.keyTakeaways).length]);
+        entries.push(['Decisions', cleanStrings(summary.decisions).length]);
+        entries.push(['Action Items', cleanActions(summary.actionItems).length]);
+        entries.push(['Key Figures', cleanStrings(summary.keyFigures).length]);
+        entries.push(['Topics Discussed', cleanStrings(summary.topics).length]);
+      } else if (typeof summary === 'string' && summary.trim()) {
+        entries.push(['Meeting Summary', 1]);
+      }
+
+      var present = entries.filter(function (e) { return e[1] > 0; });
+      if (present.length < 2) {
+        section.hidden = true;
+        return;
+      }
+
+      present.forEach(function (e) {
+        var row = document.createElement('div');
+        row.className = 'toc-row';
+        var name = document.createElement('span');
+        name.className = 'toc-name';
+        name.textContent = e[0];
+        var dots = document.createElement('span');
+        dots.className = 'toc-dots';
+        var count = document.createElement('span');
+        count.className = 'toc-count';
+        count.textContent = String(e[1]);
+        row.appendChild(name);
+        row.appendChild(dots);
+        row.appendChild(count);
+        rows.appendChild(row);
+      });
+      section.hidden = false;
     }
 
     window.renderMeeting = function renderMeeting(data) {
@@ -264,6 +421,9 @@
 
         cardsHost.appendChild(el);
       });
+
+      // ---- Contents index (page 1) ----
+      renderContents(cards, data.summary);
 
       // ---- Summary (structured presentation-style sections) ----
       renderSummary(document.getElementById('summary-body'), data.summary);

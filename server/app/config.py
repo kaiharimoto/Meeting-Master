@@ -114,9 +114,9 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "gemma4:26b"
     NUM_CTX: int = 32768
-    # Structured summary output (3 bulleted sections) needs a little more room
-    # than plain prose did.
-    SUMMARY_NUM_PREDICT: int = 900
+    # Structured summary output (Key Takeaways / Decisions / Action Items /
+    # Key Figures / Topics) — five sections including a table need real room.
+    SUMMARY_NUM_PREDICT: int = 1400
     SUMMARY_TEMPERATURE: float = 0.3
     # Q&A extraction returns a JSON list — size it for a meeting's worth of
     # question/answer pairs; keep the temperature low for faithful extraction.

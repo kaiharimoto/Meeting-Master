@@ -30,6 +30,64 @@ function pending() {
   return Array.isArray(qs) ? qs : [];
 }
 
+// ---- De-dupe extracted questions against cards the operator already typed ---
+
+// Common function words are ignored when matching so they can't, on their own,
+// make two genuinely different questions look like duplicates.
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'was', 'are', 'were', 'been', 'this', 'that', 'with',
+  'you', 'your', 'our', 'their', 'they', 'them', 'how', 'who', 'what', 'when',
+  'where', 'which', 'will', 'would', 'could', 'can', 'should', 'about', 'into',
+  'from', 'have', 'has', 'had', 'does', 'did', 'any', 'not', 'but', 'get',
+]);
+
+function normQ(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Content words only: length > 2 and not a stopword.
+function tokenSet(norm) {
+  return new Set(norm.split(' ').filter((w) => w.length > 2 && !STOPWORDS.has(w)));
+}
+
+// True when two questions are the same or near-identical. Uses Jaccard overlap
+// for near-identical wording, plus a containment check (on CONTENT words) so a
+// short typed question sitting inside a longer AI phrasing also counts as a
+// duplicate — but requires ≥ 2 shared content words so a single common word
+// can't collapse two distinct questions.
+function isDuplicate(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const sa = tokenSet(a);
+  const sb = tokenSet(b);
+  if (sa.size === 0 || sb.size === 0) return false;
+  let shared = 0;
+  sa.forEach((w) => { if (sb.has(w)) shared += 1; });
+  const union = sa.size + sb.size - shared;
+  const jaccard = union > 0 ? shared / union : 0;
+  const smaller = Math.min(sa.size, sb.size);
+  const containment = smaller > 0 ? shared / smaller : 0;
+  return jaccard >= 0.7 || (smaller >= 2 && shared >= 2 && containment >= 0.9);
+}
+
+// Capture AI candidates into state, dropping any that duplicate an existing
+// manual card (the operator already typed that question during the meeting).
+export function captureExtracted(questions) {
+  const list = Array.isArray(questions) ? questions : [];
+  const existing = (ctx.state.cards || []).map((c) => normQ(c.question)).filter(Boolean);
+  const deduped = list.filter((q) => {
+    if (!q || !q.question) return false;
+    const nq = normQ(q.question);
+    return !existing.some((e) => isDuplicate(nq, e));
+  });
+  ctx.state.extractedQuestions = deduped;
+  return deduped.length;
+}
+
 export function initExtractReview(context, opts) {
   ctx = context;
   onCardsAdded = (opts && opts.onCardsAdded) || function () {};
@@ -193,6 +251,18 @@ function buildRow(candidate, index) {
   answerer.placeholder = 'Who answered?';
   answererLabel.append(answerer);
   meta.append(answererLabel);
+
+  // Confidence flag: the AI wasn't sure who answered — worth a glance before
+  // you approve it. (Empty answerer is always low-confidence server-side.)
+  const lowConfidence = candidate.confidence === 'low';
+  if (lowConfidence) {
+    row.classList.add('is-unsure');
+    const flag = document.createElement('span');
+    flag.className = 'extract-flag';
+    flag.textContent = 'check answerer';
+    flag.title = 'The AI was unsure who answered — please confirm.';
+    meta.append(flag);
+  }
 
   // Lower-confidence culling aid: who the question seemed aimed at, when the
   // model guessed someone other than the answerer.

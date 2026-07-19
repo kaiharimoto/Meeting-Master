@@ -31,7 +31,8 @@ _SCHEMA_HINT = (
     '      "question": "the question as asked, cleaned up",\n'
     '      "answer": "the answer that was given",\n'
     '      "answerer": "name of who actually answered, or empty string",\n'
-    '      "directedTo": "name of who the question was aimed at, or empty string"\n'
+    '      "directedTo": "name of who the question was aimed at, or empty string",\n'
+    '      "confidence": "high or low — how sure you are of the answerer"\n'
     '    }\n'
     '  ]\n'
     '}'
@@ -49,7 +50,10 @@ SYSTEM_PROMPT = (
     "otherwise use an empty string. Never guess a name that is not supported "
     "by the transcript.\n"
     "- directedTo: the name of the person the question appeared to be aimed at "
-    "(who was expected to answer), or an empty string.\n\n"
+    "(who was expected to answer), or an empty string.\n"
+    "- confidence: 'high' if the transcript clearly identifies who gave the "
+    "answer, otherwise 'low'. Use 'low' whenever the answerer is a guess or "
+    "unknown.\n\n"
     "Use ONLY information in the transcript — never invent questions, answers, "
     "or names. If no genuine Q&A pairs exist, return an empty questions array. "
     + _SCHEMA_HINT
@@ -75,12 +79,19 @@ def _coerce(parsed) -> list[ExtractedQuestion]:
         question = str(item.get("question") or "").strip()
         if not question:
             continue
+        answerer = str(item.get("answerer") or "").strip()
+        confidence = str(item.get("confidence") or "").strip().lower()
+        # No answerer => nothing to be confident about; force low so the UI
+        # flags it. Anything the model didn't clearly mark "high" is treated low.
+        if not answerer or confidence != "high":
+            confidence = "low"
         out.append(
             ExtractedQuestion(
                 question=question,
                 answer=str(item.get("answer") or "").strip(),
-                answerer=str(item.get("answerer") or "").strip(),
+                answerer=answerer,
                 directedTo=str(item.get("directedTo") or item.get("directed_to") or "").strip(),
+                confidence=confidence,
             )
         )
     return out

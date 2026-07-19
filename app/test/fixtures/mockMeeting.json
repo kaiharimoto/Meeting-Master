@@ -39,19 +39,22 @@
       "question": "What is the renewal price for the next contract term?",
       "answer": "A 12% increase over the current rate, locked in for 24 months with no mid-term adjustments.",
       "answerer": "Bob Ramirez",
-      "directedTo": "Bob Ramirez"
+      "directedTo": "Bob Ramirez",
+      "confidence": "high"
     },
     {
       "question": "Can the SLA response time be improved for critical incidents?",
       "answer": "The vendor agreed to a 30-minute response window for P1 incidents, down from 2 hours.",
       "answerer": "Alice Chen",
-      "directedTo": "Alice Chen"
+      "directedTo": "Alice Chen",
+      "confidence": "high"
     },
     {
       "question": "Who owns integration testing on our side?",
       "answer": "The platform team, with QA providing regression coverage in the final two sprints.",
-      "answerer": "",
-      "directedTo": "Priya Natarajan"
+      "answerer": "Priya Natarajan",
+      "directedTo": "Priya Natarajan",
+      "confidence": "low"
     }
   ],
   "summary": {
@@ -60,10 +63,21 @@
       "A 30-minute P1 incident response window was secured (from 2 hours), contingent on adopting the vendor's new incident intake API.",
       "The data migration has a hard deadline of November 15th, with a two-week buffer before the legacy platform is decommissioned."
     ],
-    "followUps": [
-      "Platform team to own integration testing; QA to add regression coverage in the final two sprints.",
-      "Adopt the vendor's incident intake API to unlock the improved SLA.",
-      "Reconvene in two weeks to review the redlined contract."
+    "decisions": [
+      "Accept the 12% renewal, locked for 24 months with no mid-term adjustments.",
+      "Adopt the vendor's incident intake API to secure the 30-minute P1 SLA."
+    ],
+    "actionItems": [
+      { "task": "Own integration testing; add QA regression coverage in the final two sprints.", "owner": "Platform team", "due": "Final two sprints", "priority": "normal" },
+      { "task": "Complete the data migration before the legacy platform is decommissioned.", "owner": "Priya Natarajan", "due": "Nov 15", "priority": "high" },
+      { "task": "Circulate the redlined contract for review.", "owner": "Bob Ramirez", "due": "In two weeks", "priority": "normal" },
+      { "task": "Confirm the incident intake API integration scope.", "owner": "", "due": "", "priority": "low" }
+    ],
+    "keyFigures": [
+      "12% price increase, locked 24 months",
+      "P1 response: 30 minutes (down from 2 hours)",
+      "Migration deadline: November 15th",
+      "Earlier vendor ask: 20% (May)"
     ],
     "topics": [
       "Contract pricing",

@@ -32,12 +32,14 @@ const SEED = {
       answer: 'A 12% increase locked for 24 months.',
       answerer: 'Bob Ramirez',
       directedTo: 'Bob Ramirez',
+      confidence: 'high',
     },
     {
       question: 'Who owns integration testing?',
       answer: 'The platform team, with QA regression coverage.',
       answerer: '',
       directedTo: 'Priya Natarajan',
+      confidence: 'low',
     },
   ],
   questionsReviewed: false,
@@ -104,4 +106,15 @@ test('dismiss hides the prompt without adding any cards', async ({ page }) => {
 
   await expect(prompt).toBeHidden();
   await expect(page.locator('#card-list .qa-card')).toHaveCount(0);
+});
+
+test('low-confidence answerer rows are flagged for review', async ({ page }) => {
+  await page.getByRole('button', { name: 'Review & add' }).click();
+  await expect(page.locator('#extract-modal')).toBeVisible();
+
+  const rows = page.locator('.extract-row');
+  // Exactly the low-confidence candidate (row 2) carries the flag.
+  await expect(page.locator('.extract-flag')).toHaveCount(1);
+  await expect(rows.nth(0).locator('.extract-flag')).toHaveCount(0);
+  await expect(rows.nth(1).locator('.extract-flag')).toBeVisible();
 });

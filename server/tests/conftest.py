@@ -22,7 +22,16 @@ CANNED_SUMMARY = "A concise test summary of the meeting."
 # summarize/extract stages make (branched on a marker in the request body).
 CANNED_SUMMARY_SECTIONS = {
     "keyTakeaways": ["A key decision was reached.", "Budget was approved."],
-    "followUps": ["Alice to send the redlined contract."],
+    "decisions": ["Approved the vendor renewal at 12%."],
+    "actionItems": [
+        {
+            "task": "Send the redlined contract.",
+            "owner": "Alice",
+            "due": "Nov 15",
+            "priority": "high",
+        }
+    ],
+    "keyFigures": ["12% price increase, locked 24 months"],
     "topics": ["Pricing", "Timeline"],
 }
 CANNED_QUESTIONS = [
@@ -31,6 +40,7 @@ CANNED_QUESTIONS = [
         "answer": "A 12% increase locked for 24 months.",
         "answerer": "Bob",
         "directedTo": "Bob",
+        "confidence": "high",
     }
 ]
 

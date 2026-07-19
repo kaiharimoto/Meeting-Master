@@ -7,7 +7,7 @@ the meeting, the app uploads the WAV over Tailscale to an always-on home PC,
 where a FastAPI job service normalizes the audio with ffmpeg, transcribes it
 with whisper.cpp (Vulkan build on an AMD RX 7900 XTX), and with a local Ollama
 model (`gemma4:26b`) both writes a structured summary (Key Takeaways /
-Follow-Up Points / Topics Discussed) and extracts candidate Q&A pairs for the
+Decisions / Action Items / Key Figures / Topics) and extracts candidate Q&A pairs for the
 operator to approve. The laptop then renders a print-perfect PDF locally (Neue
 Haas Grotesk, medical-blue accent, ruled Q&A table + presentation-style summary
 deck) and sends it back to the home PC, which emails it via Gmail SMTP to a
@@ -67,11 +67,17 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    (queued → normalizing → transcribing → summarizing → ready).
 8. When the job is **ready**, the AI may surface a **"detected questions"**
    prompt in the Q&A panel. Click **Review & add** to approve the Q&A pairs it
-   found — keep the good ones, fix the answerer, and they become normal cards
-   (nothing is added automatically). Then click **Generate PDF**. The PDF is
-   saved under `Documents\MeetingMaster\` — click **Open PDF** to review it.
+   found — keep the good ones (low-confidence answerers are flagged), fix the
+   answerer, and they become normal cards (nothing is added automatically).
+   Optionally click **Edit summary** to tweak the Key Takeaways, Decisions,
+   Action Items, Key Figures, and Topics before printing. Then click
+   **Generate PDF** — saved under `Documents\MeetingMaster\`; click **Open PDF**
+   to review it.
 9. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
+
+Past meetings are saved automatically (and via **History → Save current**);
+reopen any of them from the **History** button to review, regenerate, or re-send.
 
 ## Quickstart
 
