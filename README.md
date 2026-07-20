@@ -79,6 +79,12 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 Past meetings are saved automatically (and via **History → Save current**);
 reopen any of them from the **History** button to review, regenerate, or re-send.
 
+**Updates are automatic** (v0.2.1+): the home server watches GitHub for new
+releases (add a read-only GitHub token on its dashboard while the repo is
+private) and updates itself with one click; the laptop app downloads updates
+from the home server in the background and applies them on restart. Licensed
+fonts live in an update-proof folder (laptop **Settings → Open fonts folder**).
+
 ## Quickstart
 
 Two installers, one per machine — do the home PC first (it produces the

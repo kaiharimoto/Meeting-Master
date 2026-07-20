@@ -47,6 +47,12 @@ contextBridge.exposeInMainWorld('api', {
   listJobs: (limit) => call(CHANNELS.JOBS_LIST, limit),
   getLogTail: (lines) => call(CHANNELS.LOGS_TAIL, lines),
 
+  // Auto-update + fonts (v0.2.1)
+  getUpdateState: () => call(CHANNELS.UPDATE_STATE_GET),
+  checkForUpdate: () => call(CHANNELS.UPDATE_CHECK),
+  installUpdate: () => call(CHANNELS.UPDATE_INSTALL),
+  openFontsFolder: () => call(CHANNELS.FONTS_OPEN),
+
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
   onJobProgress: (cb) => {
     const listener = (_event, payload) => cb(payload);
@@ -60,5 +66,12 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_event, payload) => cb(payload);
     ipcRenderer.on(CHANNELS.SERVER_EVENT, listener);
     return () => ipcRenderer.removeListener(CHANNELS.SERVER_EVENT, listener);
+  },
+
+  // Subscribe to app-update state changes; returns an unsubscribe fn.
+  onAppUpdate: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.APP_UPDATE, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.APP_UPDATE, listener);
   },
 });

@@ -22,6 +22,20 @@
     setTimeout(function () { t.classList.remove("show"); }, 1600);
   }
 
+  // True when version string a is strictly newer than b (semver-ish x.y.z).
+  function semverNewer(a, b) {
+    var pv = function (s) {
+      var m = /(\d+)\.(\d+)\.(\d+)/.exec(s || "");
+      return m ? [+m[1], +m[2], +m[3]] : null;
+    };
+    var va = pv(a), vb = pv(b);
+    if (!va || !vb) return false;
+    for (var i = 0; i < 3; i++) {
+      if (va[i] !== vb[i]) return va[i] > vb[i];
+    }
+    return false;
+  }
+
   // ---- Theme ---------------------------------------------------------------
   function applyTheme(pref) {
     var dark = pref === "dark" ||
@@ -171,8 +185,40 @@
 
     // Tasks / progress bars.
     var tasks = state.tasks || {};
-    ["ollama", "model", "whisper-model", "tailscale", "tailscale-up", "tailscale-serve"]
+    ["ollama", "model", "whisper-model", "tailscale", "tailscale-up",
+     "tailscale-serve", "update-check", "server-update"]
       .forEach(function (n) { renderTask(n, tasks[n]); });
+
+    // Updates card. Error first (a failed check must never read "up to date"),
+    // then a real semver comparison — a string compare would call an OLDER
+    // release an "update" after a rollback.
+    var up = state.updates || {};
+    $("#up-current").textContent = "v" + (up.current || "?");
+    $("#up-latest-tag").textContent = up.tag ? "(" + up.tag + ")" : "";
+    var status = $("#up-status");
+    if (up.error) {
+      status.textContent = "check failed";
+      status.style.color = "var(--danger)";
+      status.title = up.error;
+    } else if (semverNewer(up.latest, up.current)) {
+      status.textContent = "update available";
+      status.style.color = "var(--warn-ink)";
+      status.title = "";
+    } else if (up.checkedAt) {
+      status.textContent = "up to date";
+      status.style.color = "var(--success)";
+      status.title = "";
+    } else {
+      status.textContent = "not checked yet";
+      status.style.color = "var(--ink-faint)";
+      status.title = "";
+    }
+    $("#up-apply-row").hidden = !up.serverReady;
+    $("#up-laptop-note").textContent = up.laptopReady
+      ? "Laptop update feed ready — the laptop app fetches updates from this server automatically."
+      : "";
+    if (state.githubTokenSet)
+      $("#githubToken").placeholder = "•••••••• (saved — leave blank to keep)";
 
     // Banners + connection code.
     $("#setup-banner").classList.toggle("show", !state.configured);
@@ -213,7 +259,8 @@
       recipients: $("#recipients").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean),
       emailTemplate: $("#template").value,
       ollamaModel: $("#ollamaModel").value.trim() || null,
-      whisperModel: $("#whisperModel").value.trim() || null
+      whisperModel: $("#whisperModel").value.trim() || null,
+      githubToken: $("#githubToken").value
     };
     fetch("/setup/save", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -222,6 +269,7 @@
       .then(function (state) {
         btn.disabled = false; $("#save-status").textContent = "Saved.";
         $("#smtpPass").value = "";
+        $("#githubToken").value = "";
         editedTemplate = editedRecipients = editedUser = editedFrom = false;
         editedOllama = editedWhisper = false;
         $("#saved-banner").classList.add("show");

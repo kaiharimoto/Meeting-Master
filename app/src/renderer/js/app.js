@@ -14,6 +14,7 @@ import { initNav } from './nav.js';
 import { initTheme } from './theme.js';
 import { initServerStatus } from './serverStatus.js';
 import { initActivity } from './activity.js';
+import { initAppUpdate } from './appUpdate.js';
 
 const STORAGE_KEY = 'meetingmaster.meeting.v1';
 
@@ -104,10 +105,25 @@ function boot() {
   initActivity(ctx);
   initNav(); // last: emits the initial mm:screen event to ready listeners
   initShortcutsOverlay();
-  showAppVersion(ctx);
+  showAppVersion(ctx).then(() => initAppUpdate(ctx));
 
   document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
   document.getElementById('edit-summary-btn').addEventListener('click', () => openSummaryEdit());
+
+  const fontsBtn = document.getElementById('open-fonts-btn');
+  if (fontsBtn) {
+    fontsBtn.addEventListener('click', async () => {
+      if (!ctx.api || typeof ctx.api.openFontsFolder !== 'function') {
+        showError('Opening the fonts folder needs the desktop app.');
+        return;
+      }
+      try {
+        await ctx.api.openFontsFolder();
+      } catch (err) {
+        showError(err && err.message ? err.message : String(err));
+      }
+    });
+  }
 
   document.getElementById('new-meeting-btn').addEventListener('click', () => {
     const ok = confirm('Start a new meeting? This clears the details, Q&A cards, and job state.');
@@ -160,13 +176,17 @@ function initShortcutsOverlay() {
 }
 
 // Sidebar footer version label (the channel only exists on newer preloads —
-// guarded so the e2e window.api stubs stay valid).
+// guarded so the e2e window.api stubs stay valid). Stores the base version on
+// the element so appUpdate.js can render "v1 → v2 ready" without re-fetching.
 async function showAppVersion(ctx) {
   const el = document.getElementById('app-version');
   if (!el || !ctx.api || typeof ctx.api.getAppInfo !== 'function') return;
   try {
     const info = await ctx.api.getAppInfo();
-    if (info && info.version) el.textContent = `v${info.version}`;
+    if (info && info.version) {
+      el.dataset.baseVersion = info.version;
+      el.textContent = `v${info.version}`;
+    }
   } catch {
     // Version display is a nicety — never an error path.
   }

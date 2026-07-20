@@ -105,7 +105,8 @@ async function renderMeetingPdf({ meeting, transcript, summary, pageSize }) {
       warning =
         'Neue Haas Grotesk font files were not found — the PDF uses the Arial ' +
         `fallback. Drop the font files into ${paths.fontsDir()} ` +
-        '(see assets/fonts/README.md).';
+        '(Settings → Open fonts folder; see docs/FONTS.md). That folder ' +
+        'survives app updates.';
     }
 
     // ---- Inject the data -------------------------------------------------

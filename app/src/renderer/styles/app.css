@@ -445,6 +445,11 @@ kbd {
   color: var(--ink-faint);
 }
 
+.app-version.update-ready {
+  color: var(--success);
+  font-weight: 700;
+}
+
 /* Theme toggle shows the icon for the theme you'd switch TO. */
 #theme-toggle-btn .icon-sun {
   display: none;
@@ -1230,6 +1235,10 @@ kbd {
   color: var(--ink-soft);
   margin-top: 1px;
   overflow-wrap: break-word;
+}
+
+.toast-action {
+  margin-top: 8px;
 }
 
 .toast-close {

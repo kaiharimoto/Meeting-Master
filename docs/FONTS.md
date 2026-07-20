@@ -22,14 +22,23 @@ Any other filename is not picked up. (Lookup logic:
 
 ## Where the files live
 
+- **Installed app (the normal case):** the **user fonts folder** —
+  `%APPDATA%\meeting-master-app\fonts` on Windows (Electron's `userData`
+  directory + `fonts`). Open it from the app: **Settings → Open fonts
+  folder**. This location **survives app updates** — the installer never
+  touches it. Drop the files there once and every future version keeps them.
 - **Development:** `app/assets/fonts/` (next to
   `app/assets/fonts/README.md`).
-- **Packaged app:** `resources/fonts/` — the app's unpacked resources
-  directory (`process.resourcesPath`), where electron-builder's
-  `extraResources` places them. This means the files must be present in
-  `app/assets/fonts/` **when you run `npm run dist`**; the build copies them
-  into the exe. They are deliberately kept outside the asar archive so the
-  renderer can load them via plain `file://` URLs.
+- **Bundled fallback:** `resources/fonts/` (`process.resourcesPath`) — fonts
+  present in `app/assets/fonts/` at `npm run dist` time are copied here by
+  `extraResources`. The user folder is checked FIRST; the bundled dir is only
+  a fallback, because updates replace it wholesale. On startup the app
+  migrates any fonts it finds in the bundled dir into the user folder
+  (`paths.migrateFonts()`), so pre-0.2.1 installs keep their fonts across
+  the next update automatically.
+
+Lookup order per file: user folder then bundled dir, `.woff2` → `.otf` →
+`.ttf` (`app/src/main/paths.js` → `findFont()`).
 
 ## How the fonts reach the PDF (runtime injection)
 

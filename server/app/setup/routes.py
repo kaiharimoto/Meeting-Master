@@ -153,7 +153,15 @@ async def build_state() -> dict:
         "whisperModel": settings.WHISPER_MODEL_DEFAULT,
         "deps": await bootstrap.detect(),
         "tasks": bootstrap.all_task_states(),
+        "updates": _updates_snapshot(),
+        "githubTokenSet": bool(settings.GITHUB_TOKEN),
     }
+
+
+def _updates_snapshot() -> dict:
+    from .. import updates  # local import — updates imports bootstrap from this package
+
+    return updates.snapshot()
 
 
 class SaveBody(BaseModel):
@@ -165,6 +173,7 @@ class SaveBody(BaseModel):
     emailTemplate: str = ""
     ollamaModel: str | None = None
     whisperModel: str | None = None
+    githubToken: str = ""
 
 
 # --- Routes -----------------------------------------------------------------
@@ -226,6 +235,10 @@ async def save(body: SaveBody) -> dict:
     password = body.smtpAppPassword.strip() or settings.SMTP_APP_PASSWORD
     if password:
         values["SMTP_APP_PASSWORD"] = password
+    # Same pattern for the GitHub token (auto-updates on a private repo).
+    github_token = body.githubToken.strip() or settings.GITHUB_TOKEN
+    if github_token:
+        values["GITHUB_TOKEN"] = github_token
     if body.ollamaModel and body.ollamaModel.strip():
         values["OLLAMA_MODEL"] = body.ollamaModel.strip()
     if body.whisperModel and body.whisperModel.strip():

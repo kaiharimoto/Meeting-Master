@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 
 
 def config_home() -> Path:
@@ -141,6 +141,15 @@ class Settings(BaseSettings):
     # --- Networking (surfaced on the setup page) ---
     SERVER_PORT: int = 8080
 
+    # --- Auto-updates ---
+    # GitHub repo the release installers come from, and an optional token for
+    # private repos (fine-grained PAT with contents:read on that one repo —
+    # set it on the dashboard's Settings tab; not needed if releases are
+    # public). The server checks/downloads; the laptop updates FROM the server.
+    UPDATE_REPO: str = "kaiharimoto/Meeting-Master"
+    GITHUB_TOKEN: str = ""
+    UPDATE_CHECK_HOURS: float = 6.0
+
     # Resolved-path accessors — always use these instead of the raw strings.
     @property
     def data_dir(self) -> Path:
@@ -173,6 +182,7 @@ WRITABLE_KEYS = (
     "SMTP_APP_PASSWORD",
     "SMTP_FROM",
     "SERVER_PORT",
+    "GITHUB_TOKEN",
 )
 
 

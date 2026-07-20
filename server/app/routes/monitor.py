@@ -15,11 +15,13 @@ summary, or questions; those stay on the bearer-gated per-job endpoint.
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 
+from .. import updates
 from ..auth import verify_token
 from ..config import APP_VERSION, get_settings
 from ..models import JobRecord
@@ -144,3 +146,28 @@ async def events(request: Request) -> StreamingResponse:
 @router.get("/logs/tail")
 async def logs_tail(request: Request, lines: int = Query(200)) -> dict:
     return logs_payload(request, lines)
+
+
+# ---- Laptop auto-update feed ------------------------------------------------
+# electron-updater (generic provider) on the laptop fetches latest.yml and the
+# installer it names from here — files the server cached from GitHub. Strict
+# name whitelist; served only when a cache exists.
+
+_UPDATE_NAME_RE = re.compile(r"^(latest\.yml|MeetingMaster-Setup-[\w.\-]+\.exe(\.blockmap)?)$")
+
+
+@router.get("/updates/laptop/{name}")
+async def laptop_update_asset(name: str) -> FileResponse:
+    if not _UPDATE_NAME_RE.match(name):
+        raise HTTPException(status_code=404, detail=f"Unknown update asset: {name}")
+    cache = updates.laptop_dir()
+    if cache is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No update cache yet — the server hasn't fetched a release.",
+        )
+    path = cache / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"Asset not cached: {name}")
+    media = "text/yaml" if name.endswith(".yml") else "application/octet-stream"
+    return FileResponse(path, media_type=media)

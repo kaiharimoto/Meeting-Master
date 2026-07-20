@@ -75,6 +75,33 @@
       </div>
     </div>
 
+    <!-- Updates -->
+    <div class="card" id="updates-card">
+      <h2>Updates</h2>
+      <p class="hint">
+        This server checks GitHub for new releases and updates the whole
+        system: itself with one click below, and the laptop app automatically
+        over your secure connection.
+      </p>
+      <div class="sub">
+        <span class="lbl">This server</span>
+        <span class="st" id="up-current"></span>
+      </div>
+      <div class="sub">
+        <span class="lbl">Latest release <span class="st" id="up-latest-tag"></span></span>
+        <span class="st" id="up-status"></span>
+        <button class="ghost small" data-install="update-check" type="button">Check for updates</button>
+      </div>
+      <div class="bar" data-bar="update-check"><i></i></div>
+      <div class="taskmsg" data-msg="update-check"></div>
+      <div class="sub" id="up-apply-row" hidden>
+        <span class="lbl">A newer server version is downloaded and ready</span>
+        <button class="small" data-install="server-update" type="button">Update &amp; restart server</button>
+      </div>
+      <div class="taskmsg" data-msg="server-update"></div>
+      <div class="taskmsg" id="up-laptop-note"></div>
+    </div>
+
     <!-- Software installs / progress -->
     <div class="card">
       <h2>Required software</h2>
@@ -206,6 +233,17 @@
       <label for="template">Email template</label>
       <textarea id="template" class="tpl" spellcheck="false"></textarea>
       <div class="note quiet">Placeholders: {{title}} {{date}} {{time}} {{attendees}}. First line must start with "Subject:".</div>
+    </div>
+
+    <div class="card">
+      <h2>Update source</h2>
+      <p class="hint">
+        Only needed while the GitHub repo is private: a fine-grained personal
+        access token with read-only <em>Contents</em> permission on the
+        Meeting-Master repo, so this server can fetch new releases.
+      </p>
+      <label for="githubToken">GitHub token</label>
+      <input id="githubToken" type="password" placeholder="github_pat_…" autocomplete="new-password" />
     </div>
 
     <div class="card">

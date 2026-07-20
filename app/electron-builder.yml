@@ -17,6 +17,16 @@ win:
   target: nsis
   # Generated from assets/icon/icon.svg by scripts/build-icons.js (committed).
   icon: build/icon.ico
+# Auto-update metadata: having a publish config makes electron-builder emit
+# dist/latest.yml (version + installer sha512), which CI attaches to the
+# GitHub Release and the HOME SERVER re-serves at /updates/laptop/ for
+# electron-updater. The URL here is a build-time placeholder — the app sets
+# the real feed (its configured server URL) at runtime in src/main/updater.js.
+# The dist script passes --publish never, so nothing is ever uploaded from a
+# build machine.
+publish:
+  - provider: generic
+    url: "http://127.0.0.1:8080/updates/laptop"
 # A normal double-click installer (no admin, per-user) — not a portable exe.
 nsis:
   oneClick: false

@@ -71,18 +71,26 @@ jobs:
           npm ci
           npm run dist
 
-      # Fail loudly if electron-builder produced no .exe.
+      # Fail loudly if electron-builder produced no .exe or no update metadata
+      # (latest.yml is what the home server re-serves for laptop auto-updates).
       - name: Verify installer exists
         shell: pwsh
         run: |
           $exe = Get-ChildItem app/dist -Filter *.exe -ErrorAction SilentlyContinue
           if (-not $exe) { throw "No .exe found in app/dist — electron-builder did not produce an installer." }
           $exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
+          if (-not (Test-Path app/dist/latest.yml)) { throw "app/dist/latest.yml missing — auto-update metadata was not generated (check the publish config in electron-builder.yml)." }
+          $bm = Get-ChildItem app/dist -Filter *.exe.blockmap -ErrorAction SilentlyContinue
+          if (-not $bm) { throw "No .exe.blockmap found in app/dist — differential-update metadata was not generated (nsis differentialPackage must stay enabled)." }
+          Write-Host "Built: latest.yml + $($bm.Name)"
 
       - uses: actions/upload-artifact@v4
         with:
           name: laptop-installer
-          path: app/dist/*.exe
+          path: |
+            app/dist/*.exe
+            app/dist/*.blockmap
+            app/dist/latest.yml
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -329,6 +337,8 @@ jobs:
           prerelease: true # first test builds; unsigned, fonts not bundled
           files: |
             artifacts/laptop/*.exe
+            artifacts/laptop/*.blockmap
+            artifacts/laptop/latest.yml
             artifacts/server/*.exe
           fail_on_unmatched_files: true
           generate_release_notes: true

@@ -9,6 +9,8 @@ const fs = require('fs');
 const { app, BrowserWindow, Menu, screen } = require('electron');
 const { registerIpcHandlers } = require('./ipc');
 const sseClient = require('./sseClient');
+const paths = require('./paths');
+const updater = require('./updater');
 
 let mainWindow = null;
 
@@ -147,6 +149,9 @@ app.whenReady().then(() => {
   // driven); keep the default menu in dev for DevTools access.
   if (app.isPackaged) Menu.setApplicationMenu(null);
 
+  // Move any bundled/legacy fonts into the update-proof user dir (see paths.js).
+  paths.migrateFonts();
+
   // Handlers need a live window reference for dialogs and progress events,
   // so hand them a getter instead of the (possibly recreated) window itself.
   registerIpcHandlers(() => mainWindow, { setOverlayTheme });
@@ -154,6 +159,9 @@ app.whenReady().then(() => {
 
   // Live server events (SSE) + reachability probing, relayed to the renderer.
   sseClient.start(() => mainWindow);
+
+  // Auto-updates, fetched from the home server (no-op in dev builds).
+  updater.start(() => mainWindow);
 
   app.on('activate', () => {
     // macOS convention; harmless elsewhere.

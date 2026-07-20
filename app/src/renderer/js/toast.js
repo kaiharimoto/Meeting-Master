@@ -14,9 +14,10 @@ const ICONS = {
 
 /**
  * Show a toast. kind: 'info' | 'success' | 'error'.
- * Returns a dismiss function.
+ * Optional `action: {label, onClick}` renders a primary button in the toast
+ * (clicking it dismisses the toast first). Returns a dismiss function.
  */
-export function showToast({ kind = 'info', title = '', message = '', timeoutMs } = {}) {
+export function showToast({ kind = 'info', title = '', message = '', timeoutMs, action } = {}) {
   const region = document.getElementById('toast-region');
   if (!region || !title) return () => {};
 
@@ -46,6 +47,17 @@ export function showToast({ kind = 'info', title = '', message = '', timeoutMs }
     msgEl.className = 'toast-msg';
     msgEl.textContent = message;
     body.append(msgEl);
+  }
+  if (action && action.label && typeof action.onClick === 'function') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-primary btn-small toast-action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      dismiss();
+      action.onClick();
+    });
+    body.append(btn);
   }
   toast.append(body);
 

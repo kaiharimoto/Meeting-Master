@@ -26,6 +26,12 @@ const CHANNELS = Object.freeze({
   SERVER_STATUS_GET: 'server:statusGet',
   JOBS_LIST: 'jobs:list',
   LOGS_TAIL: 'logs:tail',
+  // Auto-update + fonts (v0.2.1)
+  APP_UPDATE: 'app:update', // main -> renderer push (update state changes)
+  UPDATE_STATE_GET: 'update:stateGet',
+  UPDATE_CHECK: 'update:check',
+  UPDATE_INSTALL: 'update:install',
+  FONTS_OPEN: 'fonts:open',
 });
 
 const JOB_STATES = Object.freeze([

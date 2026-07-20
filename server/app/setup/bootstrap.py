@@ -77,6 +77,8 @@ WHISPER_MODEL_URL = (
 
 # The `/setup/install/{component}` names the UI POSTs to, mapped to coroutines.
 # Superset of the required set so the "AI transcription model" row has a target.
+# name -> coroutine-function NAME in this module, or (for components other
+# modules register via register_component) the coroutine function itself.
 _COMPONENTS = {
     "ollama": "install_ollama",
     "model": "pull_model",
@@ -85,6 +87,12 @@ _COMPONENTS = {
     "tailscale-up": "tailscale_up",
     "tailscale-serve": "tailscale_serve",
 }
+
+
+def register_component(name: str, coro_fn) -> None:
+    """Let other modules (app.updates) plug their tasks into the same
+    start()/TASKS machinery the dashboard's install buttons drive."""
+    _COMPONENTS[name] = coro_fn
 
 _PERCENT_RE = re.compile(r"(\d{1,3})\s*%")
 _TSNET_URL_RE = re.compile(r"https://[A-Za-z0-9.\-]+\.ts\.net\S*")
@@ -200,12 +208,19 @@ async def _run(
         return RunResult(124, "", "command timed out", launched=True)
 
 
-async def _download(url: str, dest: Path, task_name: str, *, timeout: float = 900.0) -> None:
-    """Stream ``url`` to ``dest`` with percent progress into the task state."""
+async def _download(
+    url: str, dest: Path, task_name: str, *, timeout: float = 900.0, headers: dict | None = None
+) -> None:
+    """Stream ``url`` to ``dest`` with percent progress into the task state.
+
+    ``headers`` supports authenticated sources (GitHub release assets). httpx
+    drops the Authorization header on cross-origin redirects, which is exactly
+    right for GitHub's API -> S3 asset redirect.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
-        async with client.stream("GET", url) as resp:
+        async with client.stream("GET", url, headers=headers) as resp:
             resp.raise_for_status()
             total = int(resp.headers.get("Content-Length") or 0)
             done = 0
@@ -472,15 +487,15 @@ def start(component: str) -> tuple[bool, dict]:
     Returns ``(started, task_state)``. ``started`` is False if the component is
     unknown or already running.
     """
-    func_name = _COMPONENTS.get(component)
-    if func_name is None:
+    func_ref = _COMPONENTS.get(component)
+    if func_ref is None:
         return False, {"state": "failed", "progress": None, "message": f"Unknown component: {component}"}
 
     current = TASKS.get(component)
     if current and current.get("state") == "running":
         return False, dict(current)
 
-    coro_fn = globals()[func_name]
+    coro_fn = func_ref if callable(func_ref) else globals()[func_ref]
     _set(component, state="running", progress=None, message="Starting…")
 
     async def _runner() -> None:

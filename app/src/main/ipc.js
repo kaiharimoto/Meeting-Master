@@ -10,6 +10,8 @@ const homeClient = require('./homeClient');
 const pdf = require('./pdf');
 const emailer = require('./emailer');
 const sseClient = require('./sseClient');
+const updater = require('./updater');
+const paths = require('./paths');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -155,6 +157,22 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
   handle(CHANNELS.JOBS_LIST, (limit) => homeClient.listJobs(limit));
   handle(CHANNELS.LOGS_TAIL, (lines) => homeClient.getLogTail(lines));
 
+  // ---- Auto-update + fonts ---------------------------------------------------
+
+  handle(CHANNELS.UPDATE_STATE_GET, () => updater.getState());
+  handle(CHANNELS.UPDATE_CHECK, async () => {
+    await updater.checkNow();
+    return updater.getState();
+  });
+  handle(CHANNELS.UPDATE_INSTALL, () => updater.installNow());
+
+  handle(CHANNELS.FONTS_OPEN, async () => {
+    const dir = paths.userFontsDir();
+    const failure = await shell.openPath(dir); // '' on success
+    if (failure) throw new Error(`Could not open the fonts folder: ${failure}`);
+    return { ok: true, path: dir };
+  });
+
   // ---- Config ------------------------------------------------------------------
 
   handle(CHANNELS.CONFIG_GET, () => {
@@ -214,8 +232,9 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     }
 
     config.save(toSave);
-    // New URL/token: reconnect the live event stream against them.
+    // New URL/token: reconnect the live event stream and re-point the updater.
     sseClient.restart();
+    updater.onConfigChanged();
     return safeFull(config.get());
   });
 }

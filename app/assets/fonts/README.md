@@ -1,6 +1,10 @@
 # Fonts (not committed)
 
-Drop your licensed **Neue Haas Grotesk** files here with these exact names:
+This is the DEV/BUILD location. In the **installed app**, use the update-proof
+user folder instead: **Settings → Open fonts folder** (Electron `userData`
+`\fonts` — survives every update; see `docs/FONTS.md`).
+
+Drop your licensed **Neue Haas Grotesk** files with these exact names:
 
 - `NeueHaasGrotesk-Roman.woff2` (or `.otf` / `.ttf`)
 - `NeueHaasGrotesk-Bold.woff2` (or `.otf` / `.ttf`)

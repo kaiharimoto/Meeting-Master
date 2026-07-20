@@ -138,6 +138,7 @@ def test_save_generates_token_and_configures(fresh_home, no_tools):
         "smtpAppPassword": "app-pass-1234",
         "recipients": ["a@example.com", "b@example.com"],
         "emailTemplate": "",
+        "githubToken": "github_pat_test123",
     }
     resp = client.post("/setup/save", json=body)
     assert resp.status_code == 200, resp.text
@@ -162,6 +163,7 @@ def test_save_generates_token_and_configures(fresh_home, no_tools):
     assert env_file.exists()
     env_text = env_file.read_text(encoding="utf-8")
     assert "BEARER_TOKEN=" in env_text
+    assert "GITHUB_TOKEN=github_pat_test123" in env_text
     assert config_mod.get_settings().is_configured is True
 
     recipients = json.loads((home / "recipients.json").read_text(encoding="utf-8"))

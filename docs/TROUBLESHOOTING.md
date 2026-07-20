@@ -17,6 +17,26 @@ After the home-server installer finishes it should open
 - **Port already in use:** if something else owns port 8080, the setup page lets
   you change the port; then browse to `http://127.0.0.1:<new-port>/setup`.
 
+## Updates
+
+Both apps update from the **home server's dashboard** (Overview → Updates):
+
+- The server checks GitHub for new releases automatically (every few hours and
+  on startup). While the repo is private it needs a **GitHub token** — a
+  fine-grained personal access token with read-only *Contents* permission —
+  pasted once into the dashboard's Settings tab. "check failed" with an HTTP
+  401/403/404 usually means the token is missing, expired, or lacks that
+  permission.
+- **Laptop:** updates fully automatically — it downloads new versions from the
+  home server in the background and shows a "Restart to update" toast (it also
+  installs on the next quit). Your licensed fonts are safe: they live in the
+  update-proof fonts folder (Settings → Open fonts folder).
+- **Server:** click **Update & restart server** on the dashboard. The server
+  refuses while a meeting is mid-pipeline; try again when idle. It installs
+  silently and restarts itself — the dashboard reconnects in a few seconds.
+- The laptop only sees an update **after** the home server has cached it, so
+  if the laptop seems behind, run "Check for updates" on the dashboard first.
+
 ## The laptop's server pill is red / "Server unreachable"
 
 The pill in the laptop's sidebar is fed by a live event stream plus a

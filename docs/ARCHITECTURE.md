@@ -239,6 +239,32 @@ dashboard (which therefore works even before first-run setup).
 | `GET /events` | `GET /setup/events` | Server-Sent Events: `hello` snapshot (`serverTime, configured, version, jobs[]`), then `job` (trimmed record on every store change) and `log` (`{line}`) events, `: ping` comments every 15 s, `Last-Event-ID` replay from a 256-event ring. |
 | `GET /logs/tail?lines=200` | `GET /setup/logs` | `{"lines": [...]}` from an in-memory 500-line log ring (`RingLogHandler`). |
 
+### Auto-updates (v0.2.1)
+
+The home server is the update hub. `server/app/updates.py` checks GitHub
+Releases for `UPDATE_REPO` (private repos need `GITHUB_TOKEN` — a fine-grained
+PAT with contents:read, entered on the dashboard's Settings tab) on boot and
+every `UPDATE_CHECK_HOURS`, picking the newest non-draft release (pre-releases
+included) and caching its assets under `<config home>/updates/<tag>/`:
+`latest.yml`, `MeetingMaster-Setup-<ver>.exe`, `MeetingMaster-HomeServer-Setup.exe`.
+
+- **Laptop:** electron-updater (generic provider) points at
+  `GET /updates/laptop/{latest.yml|installer}` on the server (bearer-gated,
+  strict name whitelist) — the laptop never talks to GitHub. Updates download
+  in the background; the user gets a "Restart to update" toast, and the update
+  also applies on the next quit. Feed metadata (`latest.yml`) is produced by
+  electron-builder (publish config) and attached to every GitHub release by CI.
+- **Server:** the dashboard's Updates card shows current vs latest and offers
+  one-click **Update & restart server** (`/setup/install/server-update`): a
+  detached batch waits for the process to exit, runs the cached Inno installer
+  `/VERYSILENT`, and relaunches the exe. Refused while jobs are mid-pipeline.
+- Both long operations run through the setup task machinery
+  (`bootstrap.register_component`), so the dashboard's existing progress bars
+  drive them.
+- **Fonts note:** the laptop's licensed fonts live in the update-proof user
+  folder (`userData/fonts`, see docs/FONTS.md) precisely so updates can be
+  automatic without losing them.
+
 `GET /setup/assets/{name}` serves the dashboard's CSS/JS by strict whitelist
 (deliberately not a `StaticFiles` mount, which would bypass the loopback
 guard). The `EventBroker` (`server/app/events.py`) is wired in `main.py`'s

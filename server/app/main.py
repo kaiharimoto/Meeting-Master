@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from . import updates
 from .config import get_settings
 from .events import EventBroker, RingLogHandler
 from .routes import health, jobs, monitor
@@ -60,15 +61,17 @@ async def lifespan(app: FastAPI):
 
     reset_queue()  # bind the job queue to this event loop (see worker.py)
     worker_task = asyncio.create_task(worker_loop(store))
+    update_task = asyncio.create_task(updates.periodic_check_loop())
     log.info("Home AI server ready (data dir: %s)", settings.data_dir)
     try:
         yield
     finally:
-        worker_task.cancel()
-        try:
-            await worker_task
-        except asyncio.CancelledError:
-            pass
+        for task in (worker_task, update_task):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         store.on_change = None
         logging.getLogger().removeHandler(log_ring)
 
