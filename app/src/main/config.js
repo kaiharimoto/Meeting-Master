@@ -144,10 +144,23 @@ function save(values) {
   const input = values || {};
   const target = writePath();
 
-  // Start from whatever is already on disk so unknown keys survive.
+  // Start from whatever is already on disk so unknown keys survive. When the
+  // userData file doesn't exist yet, seed from whichever file get() currently
+  // reads (a dev laptop.env next to package.json) — otherwise the first save
+  // (e.g. a mode switch) would create a near-empty userData file that
+  // permanently shadows the dev config.
   let existing = {};
   try {
-    if (fs.existsSync(target)) existing = parseEnvFile(fs.readFileSync(target, 'utf8'));
+    if (fs.existsSync(target)) {
+      existing = parseEnvFile(fs.readFileSync(target, 'utf8'));
+    } else {
+      for (const p of candidatePaths()) {
+        if (fs.existsSync(p)) {
+          existing = parseEnvFile(fs.readFileSync(p, 'utf8'));
+          break;
+        }
+      }
+    }
   } catch {
     existing = {};
   }

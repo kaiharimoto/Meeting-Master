@@ -4,12 +4,13 @@
 
 body.standalone {
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 100vh;
 }
 
 .standalone-wrap {
+  /* margin:auto centers like align/justify-center but degrades to scrollable
+     (not top-clipped) when content is taller than the fixed-height window. */
+  margin: auto;
   width: min(760px, calc(100vw - 48px));
   text-align: center;
   padding: 32px 0;

@@ -154,15 +154,37 @@ function start(windowGetter) {
 }
 
 /** Called from IPC / the tray when the user clicks "Restart to update". */
-function installNow() {
+async function installNow() {
   const autoUpdater = autoUpdaterOrNull();
   if (!autoUpdater || !state.downloaded) {
     return { ok: false, error: 'No downloaded update is ready yet.' };
   }
+  const serverMode = config.resolveMode() === 'server';
+  if (serverMode) {
+    // A server we merely adopted (or a conflicting old install) is not ours
+    // to stop — its exe would stay loaded from resources/server and wreck
+    // the silent NSIS upgrade.
+    const sidecar = serverManager.getState().state;
+    if (sidecar === 'external' || sidecar === 'conflict') {
+      return {
+        ok: false,
+        error:
+          'Another server instance is running outside this app — close it (or reboot), then try again.',
+      };
+    }
+    // Mirror the old standalone guard: never yank the server mid-meeting.
+    const busy = await serverManager.activeJobCount();
+    if (busy > 0) {
+      return {
+        ok: false,
+        error: `${busy} job(s) still processing — try again when the pipeline is idle.`,
+      };
+    }
+  }
   setImmediate(async () => {
     // Server mode: stop the sidecar FIRST so the installer never finds its
     // files in use (the NSIS installer only knows how to wait for OUR exe).
-    if (config.resolveMode() === 'server') {
+    if (serverMode) {
       await serverManager.stop();
     }
     // isSilent=true, isForceRunAfter=true: silent NSIS upgrade, relaunch after.

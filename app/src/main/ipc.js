@@ -43,6 +43,29 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     });
   }
 
+  // Like handle(), but only for OUR file:// pages (chooser, boot page,
+  // operator renderer). The server-mode window navigates to the loopback
+  // dashboard with the same preload attached — remote content must never be
+  // able to switch modes or bounce the sidecar.
+  function handleLocal(channel, fn) {
+    ipcMain.handle(channel, async (event, ...args) => {
+      try {
+        let url = '';
+        try {
+          url = (event.senderFrame && event.senderFrame.url) || '';
+        } catch {
+          url = '';
+        }
+        if (!url.startsWith('file:')) {
+          throw new Error('This action is not available from the dashboard page.');
+        }
+        return await fn(...args);
+      } catch (err) {
+        return { error: (err && err.message) || String(err) };
+      }
+    });
+  }
+
   // ---- Jobs ----------------------------------------------------------------
 
   handle(CHANNELS.JOB_UPLOAD, async (meeting, wavFilePath) => {
@@ -176,9 +199,9 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
 
   // ---- App mode + sidecar (v0.3.0) ------------------------------------------
 
-  handle(CHANNELS.MODE_GET, () => ({ mode: config.resolveMode() }));
+  handleLocal(CHANNELS.MODE_GET, () => ({ mode: config.resolveMode() }));
 
-  handle(CHANNELS.MODE_SET, async (mode) => {
+  handleLocal(CHANNELS.MODE_SET, async (mode) => {
     const next = String(mode) === 'server' ? 'server' : 'operator';
     config.save({ mode: next });
     // A mode is a different app: stop whatever this one was doing, then
@@ -192,14 +215,14 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return { ok: true, mode: next };
   });
 
-  handle(CHANNELS.SIDECAR_STATE_GET, () => serverManager.getState());
+  handleLocal(CHANNELS.SIDECAR_STATE_GET, () => serverManager.getState());
 
-  handle(CHANNELS.SIDECAR_RETRY, async () => {
+  handleLocal(CHANNELS.SIDECAR_RETRY, async () => {
     await serverManager.retry();
     return serverManager.getState();
   });
 
-  handle(CHANNELS.SIDECAR_OPEN_LOG, async () => {
+  handleLocal(CHANNELS.SIDECAR_OPEN_LOG, async () => {
     const logPath = serverManager.serverLogPath();
     const failure = await shell.openPath(logPath); // '' on success
     if (failure) {

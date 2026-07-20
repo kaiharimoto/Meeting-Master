@@ -38,6 +38,12 @@ let child = null;
 let stopping = false;
 let restarts = 0;
 let restartTimer = null;
+let externalTimer = null;
+let retrying = false;
+// Bumped by every start()/stop()/kill(): async work from an older generation
+// must abandon itself after each await, so a stop can never lose the race to
+// a spawn that was mid-flight (probe → spawn window) and leak an orphan.
+let generation = 0;
 let state = { state: 'stopped', message: '', port: 8080, url: '', version: null };
 const listeners = new Set();
 
@@ -164,9 +170,14 @@ function launchSpec() {
 // ---- Lifecycle --------------------------------------------------------------
 
 async function start() {
+  const gen = ++generation;
   if (restartTimer) {
     clearTimeout(restartTimer);
     restartTimer = null;
+  }
+  if (externalTimer) {
+    clearTimeout(externalTimer);
+    externalTimer = null;
   }
   stopping = false;
   const port = serverPort();
@@ -176,9 +187,11 @@ async function start() {
   // own version (a dev server — use it) or an older standalone install that
   // must be removed (two servers fighting over one port helps nobody).
   const existing = await probeHealth(port);
+  if (gen !== generation) return; // a stop()/kill()/newer start superseded us
   if (existing) {
     if (existing.version === app.getVersion()) {
       setState({ state: 'external', message: 'Using the already-running home server.', version: existing.version });
+      superviseExternal(port, gen);
       return;
     }
     setState({
@@ -257,12 +270,14 @@ async function start() {
     }
   });
 
-  // Wait for /health. The spawn can die mid-wait; the exit handler above owns
-  // that transition, so just stop waiting when the child changes under us.
+  // Wait for /health. The spawn can die mid-wait (exit handler owns that
+  // transition) and a stop() can land mid-probe — re-check both after every
+  // await so a stale success can never stamp 'running' over 'stopped'.
   const deadline = Date.now() + START_DEADLINE_MS;
   while (Date.now() < deadline) {
-    if (child !== spawned) return; // crashed/replaced — exit handler took over
+    if (gen !== generation || child !== spawned) return;
     const health = await probeHealth(port);
+    if (gen !== generation || child !== spawned) return;
     if (health) {
       restarts = 0;
       setState({ state: 'running', message: '', version: health.version });
@@ -270,7 +285,7 @@ async function start() {
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  if (child === spawned) {
+  if (gen === generation && child === spawned) {
     setState({
       state: 'failed',
       message:
@@ -280,26 +295,77 @@ async function start() {
   }
 }
 
-/** Operator clicked Retry on the boot page: reset the crash budget and start over. */
+/** An adopted external server is not our child — no exit event will tell us
+ *  it died. Re-probe periodically; if it goes away, take over with our own. */
+function superviseExternal(port, gen) {
+  externalTimer = setTimeout(async () => {
+    externalTimer = null;
+    if (gen !== generation || state.state !== 'external') return;
+    const health = await probeHealth(port);
+    if (gen !== generation || state.state !== 'external') return;
+    if (health) {
+      superviseExternal(port, gen);
+    } else {
+      setState({ state: 'starting', message: 'The running server went away — starting our own…' });
+      start();
+    }
+  }, 10000);
+}
+
+/** Operator clicked Retry on the boot page: reset the crash budget and start
+ *  over. Single-flight — a second retry while one is in progress is a no-op. */
 async function retry() {
-  restarts = 0;
-  await stop();
-  await start();
+  if (retrying) return;
+  retrying = true;
+  try {
+    restarts = 0;
+    await stop();
+    await start();
+  } finally {
+    retrying = false;
+  }
+}
+
+/** Kill the sidecar AND its process tree. On Windows, child.kill() is
+ *  TerminateProcess on the direct child only — mid-job ffmpeg/whisper
+ *  grandchildren would survive, holding locks on exes inside
+ *  resources/server that would then break the NSIS upgrade. */
+function killTree(proc) {
+  try {
+    if (process.platform === 'win32') {
+      const tk = spawn('taskkill', ['/PID', String(proc.pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      tk.on('error', () => {
+        try {
+          proc.kill();
+        } catch {
+          // Already gone.
+        }
+      });
+    } else {
+      proc.kill();
+    }
+  } catch {
+    // Already gone.
+  }
 }
 
 /** Fire-and-forget kill for quit paths that cannot await (before-quit). */
 function kill() {
+  generation += 1; // abort any in-flight start() at its next await
   stopping = true;
   if (restartTimer) {
     clearTimeout(restartTimer);
     restartTimer = null;
   }
+  if (externalTimer) {
+    clearTimeout(externalTimer);
+    externalTimer = null;
+  }
   if (child) {
-    try {
-      child.kill();
-    } catch {
-      // Already gone.
-    }
+    killTree(child);
   }
 }
 
@@ -314,12 +380,48 @@ function stop() {
       resolve();
       return;
     }
-    const timer = setTimeout(resolve, 5000);
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        resolve();
+      }
+    };
+    const timer = setTimeout(() => {
+      // Non-Windows dev: SIGTERM can be ignored mid-shutdown — escalate.
+      try {
+        current.kill('SIGKILL');
+      } catch {
+        // Already gone.
+      }
+      setTimeout(finish, 1000);
+    }, 5000);
     current.once('exit', () => {
       clearTimeout(timer);
-      resolve();
+      finish();
     });
   });
+}
+
+/** Non-terminal jobs on the sidecar (loopback /setup/jobs). Used to refuse a
+ *  "restart to update" while a meeting is mid-pipeline. Errors count as 0 —
+ *  updates must never be blocked by a probe failure. */
+async function activeJobCount() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`http://127.0.0.1:${serverPort()}/setup/jobs?limit=50`, {
+      signal: controller.signal,
+    });
+    if (!resp.ok) return 0;
+    const body = await resp.json();
+    const terminal = new Set(['ready', 'pdf_received', 'emailed', 'failed']);
+    return (Array.isArray(body.jobs) ? body.jobs : []).filter((j) => !terminal.has(j.state)).length;
+  } catch {
+    return 0;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 module.exports = {
@@ -329,6 +431,7 @@ module.exports = {
   retry,
   getState,
   onState,
+  activeJobCount,
   dashboardUrl,
   serverPort,
   serverBearerToken,

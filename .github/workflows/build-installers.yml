@@ -206,11 +206,14 @@ jobs:
 
       # The whole onedir tree — the app job downloads it into app/sidecar/ and
       # electron-builder ships it as resources/server inside the installer.
+      # include-hidden-files: v4.4+ silently drops dotfiles by default, which
+      # would corrupt the bundle with no CI failure.
       - uses: actions/upload-artifact@v4
         with:
           name: server-sidecar
           path: dist/MeetingMasterServer/**
           if-no-files-found: error
+          include-hidden-files: true
 
   # ---------------------------------------------------------------------------
   # APP installer — the Electron app (both modes) packaged as ONE NSIS setup
@@ -221,6 +224,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The installer/exe/latest.yml version comes from app/package.json, the
+      # release name from the tag, and the sidecar reports config.py's
+      # APP_VERSION (which also drives the app's adopt-vs-conflict check).
+      # A mismatch would publish a release whose feed silently serves the
+      # wrong version — fail fast instead.
+      - name: Verify version consistency
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          $py = (Select-String -Path server/app/config.py -Pattern 'APP_VERSION = "([^"]+)"').Matches[0].Groups[1].Value
+          if ($pkg -ne $py) { throw "Version mismatch: app/package.json=$pkg vs server/app/config.py APP_VERSION=$py" }
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/v',''
+            if ($pkg -ne $tag) { throw "Tag v$tag does not match app/package.json version $pkg" }
+          }
+          Write-Host "Version OK: $pkg"
 
       - uses: actions/setup-node@v4
         with:

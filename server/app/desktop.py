@@ -183,7 +183,9 @@ def main() -> None:
 
     # Sidecar mode: the Meeting Master app spawned this process and owns the
     # whole desktop experience (window, tray, updates) — no tray, no browser.
-    sidecar = bool(os.environ.get("MM_SIDECAR"))
+    # Exactly "1" (what serverManager sets): a stray MM_SIDECAR=0 in the user's
+    # environment must not strip the standalone exe of its tray.
+    sidecar = os.environ.get("MM_SIDECAR") == "1"
     if sidecar:
         log.info("Running as a sidecar of the Meeting Master app.")
 

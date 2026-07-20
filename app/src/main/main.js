@@ -11,7 +11,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, Tray, screen, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, dialog, screen, shell } = require('electron');
 const { CHANNELS } = require('../shared/schema');
 const { registerIpcHandlers } = require('./ipc');
 const config = require('./config');
@@ -205,8 +205,10 @@ function createServerWindow(startHidden) {
   mainWindow.on('move', saveBoundsDebounced);
 
   // Closing the window keeps the server running — the app lives in the tray.
+  // Only when a tray actually exists: without one, a hidden window would be
+  // an invisible, unquittable app, so let the close become a real quit.
   mainWindow.on('close', (event) => {
-    if (!quitting) {
+    if (!quitting && tray) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -214,6 +216,11 @@ function createServerWindow(startHidden) {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // A recreated window (tray → Open after a close) must sync to the CURRENT
+  // sidecar state — no state transition is coming to do it for us.
+  showingDashboard = false;
+  syncServerWindowContent();
 }
 
 // ---- Server mode wiring -----------------------------------------------------
@@ -227,6 +234,13 @@ function showMainWindow() {
   } else {
     mainWindow.show();
     mainWindow.focus();
+  }
+}
+
+async function installFromTray() {
+  const result = await updater.installNow();
+  if (result && !result.ok && result.error) {
+    dialog.showErrorBox('Meeting Master', result.error);
   }
 }
 
@@ -246,7 +260,7 @@ function refreshTray() {
       },
       { type: 'separator' },
       ...(updateReady
-        ? [{ label: `Restart to update (v${updater.getState().downloaded})`, click: () => updater.installNow() }]
+        ? [{ label: `Restart to update (v${updater.getState().downloaded})`, click: installFromTray }]
         : []),
       {
         label: 'Quit',
@@ -275,26 +289,46 @@ function createTray() {
   }
 }
 
-/** Push sidecar state to the boot page and swap window content between the
- *  boot page (starting/failed/conflict) and the live dashboard. */
+/** Swap window content between the boot page (starting/failed/conflict/
+ *  stopped) and the live dashboard, based on the CURRENT sidecar state.
+ *  Driven from state emissions, window (re)creation, and its own retry
+ *  timer — never from emissions alone, so a recreated window or a failed
+ *  dashboard load can always converge instead of wedging on the boot page. */
+let dashboardRetryTimer = null;
+function syncServerWindowContent() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const s = serverManager.getState().state;
+  const up = s === 'running' || s === 'external';
+  if (up && !showingDashboard) {
+    showingDashboard = true;
+    mainWindow.loadURL(serverManager.dashboardUrl()).catch(() => {
+      // Health said yes but the page load failed (transient loopback hiccup):
+      // fall back to the boot page and retry shortly.
+      showingDashboard = false;
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.loadFile(rendererFile('serverBoot.html'));
+      clearTimeout(dashboardRetryTimer);
+      dashboardRetryTimer = setTimeout(syncServerWindowContent, 2000);
+    });
+  } else if (!up && showingDashboard) {
+    showingDashboard = false;
+    mainWindow.loadFile(rendererFile('serverBoot.html'));
+  }
+}
+
+let sidecarWasUp = false;
 function wireSidecarToWindow() {
   serverManager.onState((state) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send(CHANNELS.SIDECAR_STATE, state);
-
-    const up = state.state === 'running' || state.state === 'external';
-    if (up && !showingDashboard) {
-      showingDashboard = true;
-      mainWindow.loadURL(serverManager.dashboardUrl()).catch(() => {
-        showingDashboard = false;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.loadFile(rendererFile('serverBoot.html'));
-        }
-      });
-    } else if (!up && showingDashboard) {
-      showingDashboard = false;
-      mainWindow.loadFile(rendererFile('serverBoot.html'));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(CHANNELS.SIDECAR_STATE, state);
     }
+    syncServerWindowContent();
+
+    // The moment the sidecar first comes up, its update feed (and bearer
+    // token in server.env) exists — don't wait 4 h for the next timer check.
+    const up = state.state === 'running' || state.state === 'external';
+    if (up && !sidecarWasUp) updater.onConfigChanged();
+    sidecarWasUp = up;
   });
 }
 
@@ -374,9 +408,9 @@ app.on('before-quit', () => {
 // Operator/chooser: quit when the last window closes (Windows is the target
 // platform; we use this everywhere, including macOS dev machines).
 // Server mode: the window hides to the tray instead, so this only fires on a
-// real quit.
+// real quit — unless there IS no tray, in which case closing must quit.
 app.on('window-all-closed', () => {
-  if (config.resolveMode() !== 'server' || quitting) {
+  if (config.resolveMode() !== 'server' || quitting || !tray) {
     app.quit();
   }
 });

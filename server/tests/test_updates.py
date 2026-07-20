@@ -168,6 +168,7 @@ def test_apply_refuses_in_sidecar_mode(tmp_path, monkeypatch):
 
 
 def test_snapshot_reports_sidecar_flag(monkeypatch):
+    monkeypatch.delenv("MM_SIDECAR", raising=False)  # ambient env must not skew this
     assert updates.snapshot()["sidecar"] is False
     monkeypatch.setenv("MM_SIDECAR", "1")
     assert updates.snapshot()["sidecar"] is True

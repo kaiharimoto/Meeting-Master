@@ -88,8 +88,9 @@ def laptop_dir() -> Path | None:
 
 def is_sidecar() -> bool:
     """True when the Meeting Master app spawned this server as its sidecar —
-    the app then owns installing updates (electron-updater), not us."""
-    return bool(os.environ.get("MM_SIDECAR"))
+    the app then owns installing updates (electron-updater), not us.
+    Exactly "1", matching what the app's serverManager sets."""
+    return os.environ.get("MM_SIDECAR") == "1"
 
 
 def snapshot() -> dict:

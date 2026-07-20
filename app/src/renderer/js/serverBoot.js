@@ -14,7 +14,7 @@ const switchBtn = document.getElementById('boot-switch');
 
 function render(state) {
   const s = (state && state.state) || 'starting';
-  const busy = s === 'starting' || s === 'running' || s === 'external';
+  const busy = s === 'starting' || s === 'running' || s === 'external' || s === 'stopped';
   spinner.hidden = !busy;
   retryBtn.hidden = busy;
   logBtn.hidden = busy;
@@ -27,6 +27,10 @@ function render(state) {
     title.textContent = 'Starting the home server…';
     message.textContent =
       (state && state.message) || 'The AI server is warming up — the dashboard opens automatically.';
+  } else if (s === 'stopped') {
+    // Normal shutdown (update install / mode switch) — not an error.
+    title.textContent = 'Shutting down…';
+    message.textContent = 'The home server is stopping.';
   } else if (s === 'conflict') {
     title.textContent = 'Another server is already running';
     message.textContent = (state && state.message) || '';

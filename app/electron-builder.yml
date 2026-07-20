@@ -8,6 +8,10 @@ directories:
 files:
   - "src/**/*"
   - "package.json"
+  # Runtime tray/window icon (main.js appIconPath). buildResources content is
+  # NOT packaged by default, so without this line packaged builds have no tray
+  # — and server mode without a tray is invisible and unquittable.
+  - "build/icon.png"
 extraResources:
   - from: assets/fonts
     to: fonts
