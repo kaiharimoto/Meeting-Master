@@ -12,10 +12,12 @@
 #   pyinstaller --noconfirm --clean meeting-master-server.spec
 #
 # Result: installer\server\dist\MeetingMasterServer\MeetingMasterServer.exe
-# (a onedir bundle). The Inno Setup script packages that folder.
+# (a onedir bundle). CI copies that folder into app/sidecar/, and
+# electron-builder ships it as resources/server inside the ONE app installer.
 #
-# The entry point is server/app/desktop.py: it runs uvicorn in a thread, opens
-# the /setup page on first run, and shows a system-tray icon.
+# The entry point is server/app/desktop.py. Standalone it runs uvicorn in a
+# thread, opens /setup on first run and shows a tray icon; spawned by the app
+# with MM_SIDECAR=1 it just serves (the app owns tray/window/updates).
 
 import os
 

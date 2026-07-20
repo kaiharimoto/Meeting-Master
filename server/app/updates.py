@@ -86,9 +86,16 @@ def laptop_dir() -> Path | None:
     return best_dir
 
 
+def is_sidecar() -> bool:
+    """True when the Meeting Master app spawned this server as its sidecar —
+    the app then owns installing updates (electron-updater), not us."""
+    return bool(os.environ.get("MM_SIDECAR"))
+
+
 def snapshot() -> dict:
     """The `updates` object embedded in /setup/state."""
-    return {**_info, "laptopReady": laptop_dir() is not None}
+    return {**_info, "laptopReady": laptop_dir() is not None,
+            "sidecar": is_sidecar()}
 
 
 # ---- GitHub ----------------------------------------------------------------
@@ -253,6 +260,11 @@ def _active_jobs() -> int:
 
 async def apply_server_update() -> None:
     """The `server-update` task: silent-install the cached installer, restart."""
+    if is_sidecar():
+        bootstrap._set(APPLY_TASK, state="failed",
+                       message="This server runs inside the Meeting Master app — "
+                               "the app installs updates itself on restart.")
+        return
     tag = _info.get("tag")
     if not tag:
         bootstrap._set(APPLY_TASK, state="failed",

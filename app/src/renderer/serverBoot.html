@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+  />
+  <title>Meeting Master — home server</title>
+  <script src="js/themeBoot.js"></script>
+  <link rel="stylesheet" href="styles/app.css" />
+  <link rel="stylesheet" href="styles/standalone.css" />
+</head>
+<body class="standalone">
+  <main class="standalone-wrap">
+    <div class="standalone-brand">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span class="brand-name">Meeting Master</span>
+    </div>
+
+    <div class="boot-card">
+      <div id="boot-spinner" class="boot-spinner" aria-hidden="true"></div>
+      <h1 id="boot-title">Starting the home server…</h1>
+      <p id="boot-message" class="standalone-sub">
+        The AI server is warming up — the dashboard opens automatically.
+      </p>
+      <div class="boot-actions">
+        <button id="boot-retry" type="button" hidden>Retry</button>
+        <button id="boot-log" type="button" class="ghost" hidden>Open server log</button>
+        <button id="boot-switch" type="button" class="ghost" hidden>Switch to operator mode…</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="js/serverBoot.js"></script>
+</body>
+</html>

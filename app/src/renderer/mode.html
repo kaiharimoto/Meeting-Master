@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+  />
+  <title>Meeting Master — choose a mode</title>
+  <script src="js/themeBoot.js"></script>
+  <link rel="stylesheet" href="styles/app.css" />
+  <link rel="stylesheet" href="styles/standalone.css" />
+</head>
+<body class="standalone">
+  <main class="standalone-wrap">
+    <div class="standalone-brand">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span class="brand-name">Meeting Master</span>
+    </div>
+
+    <h1>How will this machine be used?</h1>
+    <p class="standalone-sub">
+      One install, two roles. Pick the role for <em>this</em> computer — you can
+      switch later in Settings.
+    </p>
+
+    <div class="mode-cards">
+      <button id="choose-operator" type="button" class="mode-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <span class="mode-card-title">Operator</span>
+        <span class="mode-card-desc">
+          The meeting-room laptop. Capture Q&amp;A during meetings, upload the
+          recording to your home server, and turn the result into a
+          print-perfect PDF.
+        </span>
+        <span class="mode-card-cta">Use operator mode</span>
+      </button>
+
+      <button id="choose-server" type="button" class="mode-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        <span class="mode-card-title">Home server</span>
+        <span class="mode-card-desc">
+          The always-on home PC. Runs the AI pipeline — transcription,
+          summaries, email — plus the dashboard, and serves updates to your
+          operator laptops.
+        </span>
+        <span class="mode-card-cta">Use home server mode</span>
+      </button>
+    </div>
+
+    <p id="mode-status" class="standalone-status" role="status"></p>
+  </main>
+
+  <script type="module" src="js/modeChooser.js"></script>
+</body>
+</html>

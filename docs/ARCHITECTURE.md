@@ -239,29 +239,52 @@ dashboard (which therefore works even before first-run setup).
 | `GET /events` | `GET /setup/events` | Server-Sent Events: `hello` snapshot (`serverTime, configured, version, jobs[]`), then `job` (trimmed record on every store change) and `log` (`{line}`) events, `: ping` comments every 15 s, `Last-Event-ID` replay from a 256-event ring. |
 | `GET /logs/tail?lines=200` | `GET /setup/logs` | `{"lines": [...]}` from an in-memory 500-line log ring (`RingLogHandler`). |
 
-### Auto-updates (v0.2.1)
+### One app, two modes (v0.3.0)
+
+One installer ships everything. The Electron app reads `APP_MODE` from
+`laptop.env` on startup (`src/main/config.js:resolveMode` — a config with a
+server URL + token but no mode is inferred as operator, so v0.2.x laptops
+auto-update seamlessly) and branches in `src/main/main.js`:
+
+- **No mode yet** → a first-run chooser (`mode.html`); the choice persists and
+  the app relaunches into it. Modes can be switched later (operator Settings ↔
+  server boot page/tray) — switching just rewrites `APP_MODE` and relaunches.
+- **Operator** → the meeting-capture UI exactly as before.
+- **Home server** → `src/main/serverManager.js` spawns the bundled PyInstaller
+  server (`resources/server/MeetingMasterServer.exe`, dev fallback:
+  `server/.venv` python) with `MM_SIDECAR=1`, waits on `/health`, and restarts
+  it (bounded backoff) if it crashes. The window shows `serverBoot.html` until
+  the sidecar is healthy, then navigates to the loopback dashboard. The app
+  lives in the tray (close = hide), registers itself as a login item, and owns
+  the whole desktop experience — with `MM_SIDECAR=1` the Python side skips its
+  own tray/browser-open/self-update. If the port is already served by a
+  matching version (dev server) it is adopted; a version mismatch (the old
+  standalone Home Server install) surfaces as a "conflict" screen telling the
+  operator to uninstall it.
+
+### Auto-updates (v0.2.1, unified v0.3.0)
 
 The home server is the update hub. `server/app/updates.py` checks GitHub
 Releases for `UPDATE_REPO` (private repos need `GITHUB_TOKEN` — a fine-grained
 PAT with contents:read, entered on the dashboard's Settings tab) on boot and
 every `UPDATE_CHECK_HOURS`, picking the newest non-draft release (pre-releases
 included) and caching its assets under `<config home>/updates/<tag>/`:
-`latest.yml`, `MeetingMaster-Setup-<ver>.exe`, `MeetingMaster-HomeServer-Setup.exe`.
+`latest.yml`, `MeetingMaster-Setup-<ver>.exe` (+ `.blockmap`).
 
-- **Laptop:** electron-updater (generic provider) points at
-  `GET /updates/laptop/{latest.yml|installer}` on the server (bearer-gated,
-  strict name whitelist) — the laptop never talks to GitHub. Updates download
-  in the background; the user gets a "Restart to update" toast, and the update
-  also applies on the next quit. Feed metadata (`latest.yml`) is produced by
-  electron-builder (publish config) and attached to every GitHub release by CI.
-- **Server:** the dashboard's Updates card shows current vs latest and offers
-  one-click **Update & restart server** (`/setup/install/server-update`): a
-  detached batch waits for the process to exit, runs the cached Inno installer
-  `/VERYSILENT`, and relaunches the exe. Refused while jobs are mid-pipeline.
-- Both long operations run through the setup task machinery
-  (`bootstrap.register_component`), so the dashboard's existing progress bars
-  drive them.
-- **Fonts note:** the laptop's licensed fonts live in the update-proof user
+- **Both modes update via electron-updater** (generic provider) against
+  `GET /updates/laptop/*` (bearer-gated, strict name whitelist). Operator
+  machines point at the home server over Tailscale; the home server machine
+  points at its own sidecar's loopback feed (token read from `server.env`) —
+  nobody's Electron app ever talks to GitHub. Updates download in the
+  background; "Restart to update" (toast in operator mode, tray item in server
+  mode), and they also apply on the next quit. Before installing, server mode
+  stops the sidecar so the installer never hits in-use files; updating the app
+  updates the bundled server with it (one version, always in step).
+- The GitHub check/cache runs through the setup task machinery
+  (`bootstrap.register_component`), so the dashboard's progress bars drive it.
+  The pre-v0.3.0 bat-based server self-update remains only for old standalone
+  installs and refuses to run in sidecar mode.
+- **Fonts note:** the operator's licensed fonts live in the update-proof user
   folder (`userData/fonts`, see docs/FONTS.md) precisely so updates can be
   automatic without losing them.
 

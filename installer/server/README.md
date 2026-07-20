@@ -1,22 +1,26 @@
-# Meeting Master — Home Server installer
+# Meeting Master — bundled home server (sidecar) build
 
-These files turn the FastAPI home server into a double-click Windows installer,
-`MeetingMaster-HomeServer-Setup.exe`. CI runs both steps automatically on a
-Windows runner; the notes below are for reproducing a build by hand.
+These files freeze the FastAPI home server into the PyInstaller onedir app
+that ships INSIDE the unified Meeting Master installer (`resources/server/`).
+Since v0.3.0 there is no separate home-server installer — one NSIS setup exe
+covers both modes, and the Electron app launches this frozen server when the
+machine is in **home server** mode.
+
+CI runs everything automatically on a Windows runner (`sidecar` job in
+`.github/workflows/build-installers.yml`); the notes below are for reproducing
+a build by hand.
 
 ## Files
 
 - `meeting-master-server.spec` — PyInstaller spec. Freezes
   `server/app/desktop.py` into a windowed onedir app, `MeetingMasterServer`,
-  bundling the setup page and the native tools from `bin/`.
-- `meeting-master-server.iss` — Inno Setup script. Wraps the frozen output in a
-  per-user (no-admin) installer with Start Menu + auto-start-at-login shortcuts.
+  bundling the dashboard page and the native tools from `bin/`.
 - `bin/` — CI drops `ffmpeg.exe`, `whisper-cli.exe` and the whisper DLLs here
   before the PyInstaller step (see `bin/README.md`). Only `.gitkeep` is tracked.
+- `icon.ico` — brand icon for the frozen exe (generated from
+  `app/assets/icon/icon.svg` by `app/scripts/build-icons.js`; committed).
 
 ## Build (Windows)
-
-Step 1 — freeze with PyInstaller:
 
 ```bat
 cd installer\server
@@ -27,21 +31,14 @@ python -m pip install -r ..\..\server\requirements.txt ^
 pyinstaller --noconfirm --clean meeting-master-server.spec
 ```
 
-Produces `dist\MeetingMasterServer\MeetingMasterServer.exe`.
+Produces `dist\MeetingMasterServer\MeetingMasterServer.exe`. Copy that whole
+folder's contents into `app/sidecar/` and run `npm run dist` in `app/` to get
+the unified installer.
 
-Step 2 — package with Inno Setup (ISCC):
+## How it runs in production
 
-```bat
-iscc /DMyAppVersion=1.2.3 meeting-master-server.iss
-```
-
-Produces `Output\MeetingMaster-HomeServer-Setup.exe`.
-
-## What the installed app does
-
-`MeetingMasterServer.exe` starts uvicorn on the configured port, and on first
-run (no `BEARER_TOKEN` yet) opens the loopback-only setup wizard at
-`http://127.0.0.1:8080/setup`. From there the user configures email, installs
-Ollama / Tailscale / the AI model with one click each, and copies a connection
-code into the laptop app. A tray icon reopens setup, opens the data folder, or
-quits. Settings live in `%APPDATA%\MeetingMaster` and survive reinstalls.
+The Meeting Master app (home server mode) spawns `MeetingMasterServer.exe`
+with `MM_SIDECAR=1`: the server then skips its own tray icon, browser-opening
+and self-update logic (the app owns all three) and just serves. Settings live
+in `%APPDATA%\MeetingMaster` and survive updates, reinstalls, and migration
+from the old standalone MeetingMaster-HomeServer install.

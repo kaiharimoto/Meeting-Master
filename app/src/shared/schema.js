@@ -32,6 +32,13 @@ const CHANNELS = Object.freeze({
   UPDATE_CHECK: 'update:check',
   UPDATE_INSTALL: 'update:install',
   FONTS_OPEN: 'fonts:open',
+  // One app, two modes (v0.3.0)
+  MODE_GET: 'mode:get',
+  MODE_SET: 'mode:set',
+  SIDECAR_STATE: 'sidecar:state', // main -> renderer push (server-mode boot page)
+  SIDECAR_STATE_GET: 'sidecar:stateGet',
+  SIDECAR_RETRY: 'sidecar:retry',
+  SIDECAR_OPEN_LOG: 'sidecar:openLog',
 });
 
 const JOB_STATES = Object.freeze([

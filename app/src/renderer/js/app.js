@@ -110,6 +110,26 @@ function boot() {
   document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
   document.getElementById('edit-summary-btn').addEventListener('click', () => openSummaryEdit());
 
+  const switchModeBtn = document.getElementById('switch-mode-btn');
+  if (switchModeBtn) {
+    switchModeBtn.addEventListener('click', async () => {
+      if (!ctx.api || typeof ctx.api.setMode !== 'function') {
+        showError('Switching modes needs the desktop app.');
+        return;
+      }
+      const sure = window.confirm(
+        'Switch this machine to home server mode? The app restarts and runs ' +
+          'the AI server + dashboard here instead of the meeting-capture UI.'
+      );
+      if (!sure) return;
+      try {
+        await ctx.api.setMode('server');
+      } catch (err) {
+        showError(err && err.message ? err.message : String(err));
+      }
+    });
+  }
+
   const fontsBtn = document.getElementById('open-fonts-btn');
   if (fontsBtn) {
     fontsBtn.addEventListener('click', async () => {

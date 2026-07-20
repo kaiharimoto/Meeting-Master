@@ -12,6 +12,7 @@ const emailer = require('./emailer');
 const sseClient = require('./sseClient');
 const updater = require('./updater');
 const paths = require('./paths');
+const serverManager = require('./serverManager');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -171,6 +172,42 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     const failure = await shell.openPath(dir); // '' on success
     if (failure) throw new Error(`Could not open the fonts folder: ${failure}`);
     return { ok: true, path: dir };
+  });
+
+  // ---- App mode + sidecar (v0.3.0) ------------------------------------------
+
+  handle(CHANNELS.MODE_GET, () => ({ mode: config.resolveMode() }));
+
+  handle(CHANNELS.MODE_SET, async (mode) => {
+    const next = String(mode) === 'server' ? 'server' : 'operator';
+    config.save({ mode: next });
+    // A mode is a different app: stop whatever this one was doing, then
+    // relaunch cleanly into the new one.
+    serverManager.kill();
+    sseClient.stop();
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 400); // let the renderer paint its "restarting…" feedback first
+    return { ok: true, mode: next };
+  });
+
+  handle(CHANNELS.SIDECAR_STATE_GET, () => serverManager.getState());
+
+  handle(CHANNELS.SIDECAR_RETRY, async () => {
+    await serverManager.retry();
+    return serverManager.getState();
+  });
+
+  handle(CHANNELS.SIDECAR_OPEN_LOG, async () => {
+    const logPath = serverManager.serverLogPath();
+    const failure = await shell.openPath(logPath); // '' on success
+    if (failure) {
+      // No log yet (server never started): fall back to the config folder.
+      const dirFailure = await shell.openPath(serverManager.configHome());
+      if (dirFailure) throw new Error(`Could not open the server log: ${failure}`);
+    }
+    return { ok: true, path: logPath };
   });
 
   // ---- Config ------------------------------------------------------------------

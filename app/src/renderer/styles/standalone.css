@@ -1,0 +1,178 @@
+/* Standalone pages (mode chooser + server-mode boot page). These load AFTER
+   app.css and reuse its design tokens; everything here is scoped to the
+   .standalone body class so it can never leak into the operator shell. */
+
+body.standalone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.standalone-wrap {
+  width: min(760px, calc(100vw - 48px));
+  text-align: center;
+  padding: 32px 0;
+}
+
+.standalone-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.standalone-brand .brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  font-size: 17px;
+  box-shadow: var(--shadow-1);
+}
+
+.standalone-brand .brand-name {
+  font-weight: 650;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+
+body.standalone h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.standalone-sub {
+  margin: 0 auto 26px;
+  max-width: 52ch;
+  color: var(--ink-soft);
+}
+
+.standalone-status {
+  min-height: 1.5em;
+  margin: 18px 0 0;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- Mode chooser cards ---- */
+
+.mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  text-align: left;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.mode-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+
+.mode-card:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.mode-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-2);
+  opacity: 1;
+}
+
+.mode-card svg {
+  width: 30px;
+  height: 30px;
+  color: var(--accent);
+}
+
+.mode-card-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.mode-card-desc {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+  flex: 1;
+}
+
+.mode-card-cta {
+  margin-top: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* ---- Server boot card ---- */
+
+.boot-card {
+  padding: 34px 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.boot-spinner {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  border: 3px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: boot-spin 0.9s linear infinite;
+}
+
+@keyframes boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-spinner {
+    animation-duration: 3s;
+  }
+}
+
+.boot-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 700px) {
+  .mode-cards {
+    grid-template-columns: 1fr;
+  }
+}

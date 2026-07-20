@@ -1,25 +1,45 @@
 # Troubleshooting
 
-Organized by symptom. The first four entries cover first-time install; the rest
-cover the running system. Server-side pipeline problems show up in the job
-record — the app surfaces the error, and `GET /jobs/{id}` puts it in the
-`error` field when `state` is `failed`.
+Organized by symptom. The first entries cover first-time install and
+migration; the rest cover the running system. Server-side pipeline problems
+show up in the job record — the app surfaces the error, and `GET /jobs/{id}`
+puts it in the `error` field when `state` is `failed`.
 
-## The setup page didn't open
+## Migrating from v0.2.x (two installers) to v0.3.0+ (one app)
 
-After the home-server installer finishes it should open
-`http://127.0.0.1:8080/setup` in your browser automatically. If it didn't:
+Since v0.3.0 there is ONE installer for both machines; each machine picks its
+role (Home server / Operator) on first launch.
 
-- **Just browse to it:** open `http://127.0.0.1:8080/setup` yourself.
-- **Server not running?** Look for the Meeting Master **tray icon**. If it's
-  missing, launch Meeting Master Home Server from the Start menu — it starts the
-  service and reopens the setup page. It also auto-starts at every login.
-- **Port already in use:** if something else owns port 8080, the setup page lets
-  you change the port; then browse to `http://127.0.0.1:<new-port>/setup`.
+- **Laptop:** nothing to do — the v0.2.x app auto-updates into the unified one
+  and keeps working in operator mode (your saved server URL + token imply the
+  mode; the chooser never appears).
+- **Home PC:** one manual step. Quit + **uninstall "Meeting Master Home
+  Server"** (Windows Settings → Apps), install `MeetingMaster-Setup-*.exe`,
+  and choose **Home server** mode. All settings, recipients, models, job data
+  and the connection code live in `%APPDATA%\MeetingMaster`, which the
+  uninstaller leaves alone — everything carries over, and the laptops
+  reconnect without any re-pairing.
+- If you launch the new app in server mode **before** uninstalling the old
+  server, it will find the old one still holding port 8080 and show an
+  "Another server is already running" screen — uninstall the old app (or quit
+  its tray icon), then click **Retry**.
+
+## The dashboard didn't open (home server mode)
+
+Launching the app in home server mode starts the bundled AI server and shows
+its dashboard in the app window. If you see an error screen instead:
+
+- **"Another server is already running"** — see the migration entry above.
+- **"The home server could not start"** — click **Open server log** on that
+  screen (it's `%APPDATA%\MeetingMaster\server.log`) for the reason; **Retry**
+  after fixing. A stuck port can be changed later on the dashboard's Settings.
+- The window closing is normal — the server keeps running in the **tray**
+  (click the tray icon to reopen; it also starts at login).
+- You can always browse to `http://127.0.0.1:8080/setup` directly.
 
 ## Updates
 
-Both apps update from the **home server's dashboard** (Overview → Updates):
+Everything updates from the **home server's dashboard** (Overview → Updates):
 
 - The server checks GitHub for new releases automatically (every few hours and
   on startup). While the repo is private it needs a **GitHub token** — a
@@ -27,14 +47,16 @@ Both apps update from the **home server's dashboard** (Overview → Updates):
   pasted once into the dashboard's Settings tab. "check failed" with an HTTP
   401/403/404 usually means the token is missing, expired, or lacks that
   permission.
-- **Laptop:** updates fully automatically — it downloads new versions from the
-  home server in the background and shows a "Restart to update" toast (it also
-  installs on the next quit). Your licensed fonts are safe: they live in the
-  update-proof fonts folder (Settings → Open fonts folder).
-- **Server:** click **Update & restart server** on the dashboard. The server
-  refuses while a meeting is mid-pipeline; try again when idle. It installs
-  silently and restarts itself — the dashboard reconnects in a few seconds.
-- The laptop only sees an update **after** the home server has cached it, so
+- **Operator laptop:** updates fully automatically — it downloads new versions
+  from the home server in the background and shows a "Restart to update" toast
+  (it also installs on the next quit). Your licensed fonts are safe: they live
+  in the update-proof fonts folder (Settings → Open fonts folder).
+- **Home server machine (v0.3.0+):** the app updates itself the same way from
+  its own cached feed — use tray → **"Restart to update"** (or just quit and
+  relaunch) and the bundled server updates with it. Prefer doing this while no
+  meeting is mid-pipeline; a job interrupted by the restart shows as failed
+  and the recording can simply be re-submitted.
+- A laptop only sees an update **after** the home server has cached it, so
   if the laptop seems behind, run "Check for updates" on the dashboard first.
 
 ## The laptop's server pill is red / "Server unreachable"

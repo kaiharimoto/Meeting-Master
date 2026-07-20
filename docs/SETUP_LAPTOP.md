@@ -7,12 +7,14 @@ you'll paste in step 3.
 
 ## 1. Install the app
 
-1. Download **`MeetingMaster-Setup-<version>.exe`** from the
+1. Download **`MeetingMaster-Setup-<version>.exe`** — the ONE Meeting Master
+   installer, same file as the home PC — from the
    [latest release](../../releases/latest). (No release yet? Open the
    **build-installers** run under the repo's **Actions** tab and download the
-   **`laptop-installer`** artifact.)
+   **`app-installer`** artifact.)
 2. Double-click it and click through the installer. It installs per-user — **no
    admin rights required.**
+3. Launch Meeting Master and choose **Operator** mode on the first-run screen.
 
 **SmartScreen note:** the installer is unsigned, so the first launch may show
 "Windows protected your PC". Click **More info → Run anyway**. (Optional fix:
@@ -43,11 +45,11 @@ rejected, regenerate it on the home PC's setup page and paste the new one
 
 ## 4. Fonts (Neue Haas Grotesk)
 
-The PDF is rendered with your licensed **Neue Haas Grotesk** files. Drop them
-into the installed app's fonts folder using the exact filenames in
-[FONTS.md](FONTS.md) — for an installed build that is the
-`resources\fonts\` folder next to the app's executable
+The PDF is rendered with your licensed **Neue Haas Grotesk** files. Open the
+app's fonts folder from **Settings → Open fonts folder** and drop them in
+using the exact filenames in [FONTS.md](FONTS.md)
 (`NeueHaasGrotesk-Roman.woff2`/`.otf`/`.ttf` and `NeueHaasGrotesk-Bold.*`).
+The folder survives app updates.
 
 Without them the app still works — PDFs fall back to Arial and the app shows a
 non-blocking warning.

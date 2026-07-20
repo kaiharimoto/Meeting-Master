@@ -53,6 +53,10 @@ contextBridge.exposeInMainWorld('api', {
   installUpdate: () => call(CHANNELS.UPDATE_INSTALL),
   openFontsFolder: () => call(CHANNELS.FONTS_OPEN),
 
+  // One app, two modes (v0.3.0)
+  getMode: () => call(CHANNELS.MODE_GET),
+  setMode: (mode) => call(CHANNELS.MODE_SET, mode),
+
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
   onJobProgress: (cb) => {
     const listener = (_event, payload) => cb(payload);

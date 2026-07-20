@@ -81,29 +81,35 @@ reopen any of them from the **History** button to review, regenerate, or re-send
 
 **Updates are automatic** (v0.2.1+): the home server watches GitHub for new
 releases (add a read-only GitHub token on its dashboard while the repo is
-private) and updates itself with one click; the laptop app downloads updates
-from the home server in the background and applies them on restart. Licensed
-fonts live in an update-proof folder (laptop **Settings → Open fonts folder**).
+private) and serves them to every machine; the app downloads updates in the
+background and applies them on restart. Licensed fonts live in an update-proof
+folder (operator **Settings → Open fonts folder**).
 
 ## Quickstart
 
-Two installers, one per machine — do the home PC first (it produces the
-**Connection Code** the laptop needs). Download both `.exe` files from the
+**One installer, two modes** (v0.3.0+). Download
+`MeetingMaster-Setup-<version>.exe` from the
 [latest release](../../releases/latest) (or from the **build-installers**
-[Actions](../../actions) run: artifacts `homeserver-installer` and
-`laptop-installer`).
+[Actions](../../actions) run: artifact `app-installer`), run it on **both**
+machines, and pick the machine's role on first launch — do the home PC first
+(it produces the **Connection Code** the laptop needs).
 
-1. **Home PC** — run `MeetingMaster-HomeServer-Setup.exe`. It installs
-   per-user, launches, and opens the **server dashboard** in your browser
-   (Overview · Jobs · Logs · Settings, light/dark). On first run, enter your
-   Gmail App Password + recipients under **Settings**, click **Install** for
-   Ollama / Tailscale / the AI models on **Overview** (wait for green checks),
-   sign in to Tailscale, then **Save & Finish** and copy the **Connection
-   Code**. After setup, launching the app opens the same dashboard for
-   monitoring jobs and logs.
-2. **Laptop** — run `MeetingMaster-Setup-<version>.exe`, install Tailscale and
-   sign in to the **same** account, then open Meeting Master → **Settings** and
+1. **Home PC** — install, launch, choose **Home server** mode. The bundled AI
+   server starts and the app shows the **dashboard** (Overview · Jobs · Logs ·
+   Settings, light/dark). On first run, enter your Gmail App Password +
+   recipients under **Settings**, click **Install** for Ollama / Tailscale /
+   the AI models on **Overview** (wait for green checks), sign in to
+   Tailscale, then **Save & Finish** and copy the **Connection Code**. The app
+   lives in the tray, starts at login, and keeps serving with the window
+   closed.
+2. **Laptop** — install the same exe, choose **Operator** mode, install
+   Tailscale and sign in to the **same** account, then open **Settings** and
    **paste the Connection Code**. Done.
+
+Migrating from v0.2.x? See
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — in short: uninstall the
+old "Meeting Master Home Server" app, install this one, pick Home server mode;
+all settings, models and data carry over automatically.
 
 Full walk-throughs: [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md) and
 [docs/SETUP_LAPTOP.md](docs/SETUP_LAPTOP.md). Also see
@@ -115,20 +121,21 @@ Full walk-throughs: [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md) and
 
 | Path | What it is |
 | --- | --- |
-| `app/` | Electron laptop app (`npm start`; NSIS setup exe via `npm run dist`) |
-| `app/src/main/` | Main process: config, IPC, PDF rendering, home-server client, SMTP |
-| `app/src/preload/` | `contextBridge` — the only bridge to `window.api` |
-| `app/src/renderer/` | UI: sidebar app shell (Meeting · Activity · History · Settings), dark/light themes, live server monitoring + print template |
+| `app/` | The Electron app — BOTH modes (`npm start`; unified NSIS setup exe via `npm run dist`) |
+| `app/src/main/` | Main process: mode selection, sidecar server manager, config, IPC, PDF rendering, home-server client, SMTP |
+| `app/src/preload/` | `contextBridge` — the only bridges to `window.api` |
+| `app/src/renderer/` | Operator UI (sidebar shell: Meeting · Activity · History · Settings), mode chooser + server boot pages, dark/light themes, print template |
 | `app/src/shared/schema.js` | Single source of truth for IPC channel names + job states |
 | `app/assets/fonts/` | Licensed Neue Haas Grotesk files (git-ignored, see `docs/FONTS.md`) |
+| `app/sidecar/` | CI drops the frozen Python server here; ships as `resources/server` |
 | `app/test/e2e/` | Playwright test suite |
 | `server/` | FastAPI home AI server (port 8080; `python -m app.main` in a dev checkout) |
 | `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize + extract Q&A (Ollama) |
-| `server/app/routes/` | `/health`, `/jobs`, and live-monitoring endpoints (`/events` SSE, `/logs/tail`) |
+| `server/app/routes/` | `/health`, `/jobs`, live monitoring (`/events` SSE, `/logs/tail`), update feed (`/updates/laptop/*`) |
 | `server/app/mailer/` | Gmail SMTP sender |
 | `server/tests/` | pytest suite (with fake ffmpeg/whisper stubs) |
-| `installer/` | Home-server packaging: PyInstaller spec, Inno Setup script, bundled `bin/` |
-| `.github/workflows/` | `build-installers.yml` — builds both Windows installers, publishes releases |
+| `installer/` | Sidecar packaging: PyInstaller spec + bundled `bin/` (ffmpeg, whisper) |
+| `.github/workflows/` | `build-installers.yml` — sidecar → unified installer → release |
 | `config/` | `*.example` configuration templates (dev/reference only) |
 | `docs/` | Setup, architecture, fonts, troubleshooting |
 | `scripts/` | Dev helpers (`laptop/dev.ps1`, `homepc/build_whisper_vulkan.md`) — not needed for install |
@@ -156,7 +163,9 @@ document the keys the setup page manages:
 Everything runs on Linux/macOS too for development; Windows is the deployment
 target.
 
-**Laptop app** (Electron):
+**The app** (Electron — shows the mode chooser on first dev run; pick
+Operator, or set `APP_MODE=operator` in `app/laptop.env`. Server mode in dev
+spawns the repo's Python server via `server/.venv`):
 
 ```bash
 cd app

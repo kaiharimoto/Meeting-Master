@@ -14,6 +14,7 @@ const path = require('path');
 const { app } = require('electron');
 
 const KEYS = [
+  'APP_MODE',
   'HOME_SERVER_URL',
   'BEARER_TOKEN',
   'EMAIL_MODE',
@@ -56,6 +57,7 @@ function writePath() {
 // `undefined` in a save() call are left untouched (their existing value is
 // preserved); an explicit empty string clears the key.
 const FIELD_TO_KEY = Object.freeze({
+  mode: 'APP_MODE',
   serverUrl: 'HOME_SERVER_URL',
   token: 'BEARER_TOKEN',
   emailMode: 'EMAIL_MODE',
@@ -99,8 +101,11 @@ function get() {
 
   const emailMode = val('EMAIL_MODE').toLowerCase() === 'laptop' ? 'laptop' : 'home';
   const pageSize = val('PAGE_SIZE').toLowerCase() === 'a4' ? 'A4' : 'Letter';
+  const rawMode = val('APP_MODE').toLowerCase();
+  const mode = rawMode === 'server' || rawMode === 'operator' ? rawMode : '';
 
   return {
+    mode,
     serverUrl: val('HOME_SERVER_URL').replace(/\/+$/, ''),
     bearerToken: val('BEARER_TOKEN'),
     emailMode,
@@ -109,6 +114,19 @@ function get() {
     smtpAppPassword: val('SMTP_APP_PASSWORD'),
     configPath: loadedPath || candidates[0],
   };
+}
+
+/**
+ * The effective app mode: 'server' | 'operator' | null (= not chosen yet,
+ * show the first-run chooser). Installs that predate modes (v0.2.x laptops
+ * have a server URL + token but no APP_MODE) are inferred as operator so an
+ * auto-update never lands an existing user on the chooser.
+ */
+function resolveMode(cfg) {
+  const c = cfg || get();
+  if (c.mode) return c.mode;
+  if (c.serverUrl && c.bearerToken) return 'operator';
+  return null;
 }
 
 /**
@@ -197,4 +215,4 @@ function applyConnectionCode(code) {
   return { serverUrl, token };
 }
 
-module.exports = { get, save, applyConnectionCode, parseEnvFile, KEYS };
+module.exports = { get, save, applyConnectionCode, parseEnvFile, resolveMode, KEYS };

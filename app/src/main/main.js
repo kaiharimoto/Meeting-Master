@@ -1,27 +1,37 @@
 'use strict';
 
 // Meeting Master — main process entry point.
-// Creates the single app window (frameless with native controls overlay on
-// Windows), restores its last bounds, and registers all IPC handlers.
+//
+// ONE app, TWO modes (chosen on first run, stored as APP_MODE in laptop.env):
+//   operator – the meeting-capture UI (frameless shell, SSE monitoring, PDF)
+//   server   – runs the bundled Python home server as a sidecar and shows its
+//              dashboard; lives in the tray and starts at login
+// No mode chosen yet → a small chooser window (mode.html) asks, then the app
+// relaunches into the choice.
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, screen, shell } = require('electron');
+const { CHANNELS } = require('../shared/schema');
 const { registerIpcHandlers } = require('./ipc');
+const config = require('./config');
 const sseClient = require('./sseClient');
+const serverManager = require('./serverManager');
 const paths = require('./paths');
 const updater = require('./updater');
 
 let mainWindow = null;
+let tray = null;
 
 // ---- Single instance --------------------------------------------------------
-// A second launch focuses the existing window instead of opening a duplicate.
+// A second launch focuses (and un-hides, for the tray case) the existing window.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
     if (mainWindow) {
+      mainWindow.show();
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
@@ -74,10 +84,10 @@ function saveBoundsDebounced() {
   }, 400);
 }
 
-// ---- Titlebar overlay (Windows) --------------------------------------------
-// The renderer is frameless with a CSS drag strip; Windows draws its native
-// window controls as an overlay whose colors we keep in sync with the theme.
-// MM_NATIVE_FRAME=1 restores the stock frame (escape hatch).
+// ---- Titlebar overlay (Windows, operator mode) ------------------------------
+// The operator renderer is frameless with a CSS drag strip; Windows draws its
+// native window controls as an overlay whose colors we keep in sync with the
+// theme. MM_NATIVE_FRAME=1 restores the stock frame (escape hatch).
 
 const useOverlay = process.platform === 'win32' && process.env.MM_NATIVE_FRAME !== '1';
 
@@ -100,7 +110,7 @@ function setOverlayTheme(theme) {
   }
 }
 
-// ---- Window ----------------------------------------------------------------
+// ---- Windows ----------------------------------------------------------------
 
 function appIconPath() {
   // Packaged builds get the icon from the executable itself; this path serves
@@ -109,7 +119,12 @@ function appIconPath() {
   return fs.existsSync(candidate) ? candidate : undefined;
 }
 
-function createWindow() {
+function rendererFile(name) {
+  return path.join(__dirname, '..', 'renderer', name);
+}
+
+/** Operator mode: the full meeting-capture app (unchanged from v0.2.x). */
+function createOperatorWindow() {
   const saved = loadBounds();
   mainWindow = new BrowserWindow({
     width: saved ? saved.width : 1150,
@@ -134,7 +149,7 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  mainWindow.loadFile(rendererFile('index.html'));
 
   mainWindow.on('resize', saveBoundsDebounced);
   mainWindow.on('move', saveBoundsDebounced);
@@ -143,6 +158,177 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+/** Options shared by the chooser and server windows (native frame — those
+ *  pages have no CSS drag strip). */
+function plainWindowOptions(extra) {
+  return {
+    backgroundColor: '#eef1f6',
+    icon: appIconPath(),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'serverPreload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false, // serverPreload require()s ../shared/schema.js
+    },
+    ...extra,
+  };
+}
+
+/** First run: the mode chooser. The choice relaunches the app (see ipc.js). */
+function createChooserWindow() {
+  mainWindow = new BrowserWindow(
+    plainWindowOptions({ width: 860, height: 620, resizable: false })
+  );
+  mainWindow.loadFile(rendererFile('mode.html'));
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+/** Server mode: boot page while the sidecar starts, then the dashboard. */
+function createServerWindow(startHidden) {
+  const saved = loadBounds();
+  mainWindow = new BrowserWindow(
+    plainWindowOptions({
+      width: saved ? saved.width : 1150,
+      height: saved ? saved.height : 820,
+      minWidth: 800,
+      minHeight: 600,
+      show: !startHidden,
+    })
+  );
+
+  mainWindow.loadFile(rendererFile('serverBoot.html'));
+  mainWindow.on('resize', saveBoundsDebounced);
+  mainWindow.on('move', saveBoundsDebounced);
+
+  // Closing the window keeps the server running — the app lives in the tray.
+  mainWindow.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+// ---- Server mode wiring -----------------------------------------------------
+
+let quitting = false;
+let showingDashboard = false;
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createServerWindow(false);
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+function refreshTray() {
+  if (!tray) return;
+  const updateReady = Boolean(updater.getState().downloaded);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Meeting Master', click: showMainWindow },
+      {
+        label: 'Open dashboard in browser',
+        click: () => shell.openExternal(serverManager.dashboardUrl()),
+      },
+      {
+        label: 'Open data & settings folder',
+        click: () => shell.openPath(serverManager.configHome()),
+      },
+      { type: 'separator' },
+      ...(updateReady
+        ? [{ label: `Restart to update (v${updater.getState().downloaded})`, click: () => updater.installNow() }]
+        : []),
+      {
+        label: 'Quit',
+        click: () => {
+          quitting = true;
+          app.quit();
+        },
+      },
+    ])
+  );
+  tray.setToolTip(
+    updateReady ? 'Meeting Master — update ready (restart to apply)' : 'Meeting Master — home server'
+  );
+}
+
+function createTray() {
+  const icon = appIconPath();
+  if (!icon) return; // packaged builds always have it; dev without icons skips the tray
+  try {
+    tray = new Tray(icon);
+    tray.on('click', showMainWindow);
+    refreshTray();
+    updater.subscribe(refreshTray);
+  } catch {
+    tray = null; // headless/dev environments without a tray — window still works
+  }
+}
+
+/** Push sidecar state to the boot page and swap window content between the
+ *  boot page (starting/failed/conflict) and the live dashboard. */
+function wireSidecarToWindow() {
+  serverManager.onState((state) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(CHANNELS.SIDECAR_STATE, state);
+
+    const up = state.state === 'running' || state.state === 'external';
+    if (up && !showingDashboard) {
+      showingDashboard = true;
+      mainWindow.loadURL(serverManager.dashboardUrl()).catch(() => {
+        showingDashboard = false;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.loadFile(rendererFile('serverBoot.html'));
+        }
+      });
+    } else if (!up && showingDashboard) {
+      showingDashboard = false;
+      mainWindow.loadFile(rendererFile('serverBoot.html'));
+    }
+  });
+}
+
+function startServerMode(startHidden) {
+  createServerWindow(startHidden);
+  createTray();
+  wireSidecarToWindow();
+  serverManager.start();
+
+  // Updates come from the sidecar's own loopback feed; the tray offers the
+  // restart, and quitting installs automatically (autoInstallOnAppQuit).
+  updater.start(() => mainWindow);
+
+  if (app.isPackaged) {
+    // An always-on home server should survive reboots without a manual launch.
+    app.setLoginItemSettings({ openAtLogin: true, args: ['--tray-start'] });
+  }
+}
+
+function startOperatorMode() {
+  createOperatorWindow();
+
+  // Live server events (SSE) + reachability probing, relayed to the renderer.
+  sseClient.start(() => mainWindow);
+
+  // Auto-updates, fetched from the home server (no-op in dev builds).
+  updater.start(() => mainWindow);
+
+  if (app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: false });
+  }
+}
+
+// ---- App lifecycle ----------------------------------------------------------
 
 app.whenReady().then(() => {
   // No application menu in packaged builds (the app is fully mouse/keyboard
@@ -155,26 +341,42 @@ app.whenReady().then(() => {
   // Handlers need a live window reference for dialogs and progress events,
   // so hand them a getter instead of the (possibly recreated) window itself.
   registerIpcHandlers(() => mainWindow, { setOverlayTheme });
-  createWindow();
 
-  // Live server events (SSE) + reachability probing, relayed to the renderer.
-  sseClient.start(() => mainWindow);
-
-  // Auto-updates, fetched from the home server (no-op in dev builds).
-  updater.start(() => mainWindow);
+  const resolved = config.resolveMode();
+  if (resolved === 'server') {
+    startServerMode(process.argv.includes('--tray-start'));
+  } else if (resolved === 'operator') {
+    startOperatorMode();
+  } else {
+    createChooserWindow();
+  }
 
   app.on('activate', () => {
     // macOS convention; harmless elsewhere.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const m = config.resolveMode();
+      if (m === 'server') createServerWindow(false);
+      else if (m === 'operator') createOperatorWindow();
+      else createChooserWindow();
+    }
   });
 });
 
 app.on('before-quit', () => {
+  quitting = true;
   sseClient.stop();
+  // Fire-and-forget: TerminateProcess is effectively instant, and the NSIS
+  // installer (autoInstallOnAppQuit) takes seconds to initialize — the
+  // explicit "Restart to update" path awaits a full stop() first anyway.
+  serverManager.kill();
 });
 
-// Windows is the target platform: quit when the last window closes.
-// We deliberately use this behavior everywhere (including macOS dev machines).
+// Operator/chooser: quit when the last window closes (Windows is the target
+// platform; we use this everywhere, including macOS dev machines).
+// Server mode: the window hides to the tray instead, so this only fires on a
+// real quit.
 app.on('window-all-closed', () => {
-  app.quit();
+  if (config.resolveMode() !== 'server' || quitting) {
+    app.quit();
+  }
 });

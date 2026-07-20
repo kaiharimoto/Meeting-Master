@@ -213,10 +213,17 @@
       status.style.color = "var(--ink-faint)";
       status.title = "";
     }
-    $("#up-apply-row").hidden = !up.serverReady;
-    $("#up-laptop-note").textContent = up.laptopReady
-      ? "Laptop update feed ready — the laptop app fetches updates from this server automatically."
-      : "";
+    // In sidecar mode the Meeting Master app installs updates itself
+    // (electron-updater), so the server-side install button is hidden.
+    $("#up-apply-row").hidden = !up.serverReady || up.sidecar;
+    var upNotes = [];
+    if (up.sidecar)
+      upNotes.push("This server runs inside the Meeting Master app — updates " +
+                   "download in the background and install when the app restarts.");
+    if (up.laptopReady)
+      upNotes.push("Update feed ready — operator laptops fetch updates from " +
+                   "this server automatically.");
+    $("#up-laptop-note").textContent = upNotes.join(" ");
     if (state.githubTokenSet)
       $("#githubToken").placeholder = "•••••••• (saved — leave blank to keep)";
 

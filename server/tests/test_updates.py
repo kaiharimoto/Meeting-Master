@@ -150,6 +150,29 @@ def test_apply_refuses_outside_frozen_build(tmp_path, monkeypatch):
     assert "installed Windows build" in task["message"]
 
 
+def test_apply_refuses_in_sidecar_mode(tmp_path, monkeypatch):
+    """When the Meeting Master app runs the server as its sidecar, the app owns
+    installing updates — the bat-file self-update path must refuse."""
+    monkeypatch.setenv("MEETING_MASTER_HOME", str(tmp_path))
+    monkeypatch.setenv("MM_SIDECAR", "1")
+    updates._info["tag"] = "v99.0.0"
+    dest = updates._tag_dir("v99.0.0")
+    dest.mkdir(parents=True)
+    (dest / updates.SERVER_ASSET).write_bytes(b"fake")
+
+    asyncio.run(updates.apply_server_update())
+
+    task = bootstrap.task_state(updates.APPLY_TASK)
+    assert task["state"] == "failed"
+    assert "Meeting Master app" in task["message"]
+
+
+def test_snapshot_reports_sidecar_flag(monkeypatch):
+    assert updates.snapshot()["sidecar"] is False
+    monkeypatch.setenv("MM_SIDECAR", "1")
+    assert updates.snapshot()["sidecar"] is True
+
+
 # ---- Laptop feed endpoints --------------------------------------------------
 
 def test_update_feed_requires_bearer(client):

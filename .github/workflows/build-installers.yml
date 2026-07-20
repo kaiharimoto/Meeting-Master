@@ -1,13 +1,17 @@
-# Build both Windows installers and (on a tag) publish them to a GitHub Release.
+# Build the ONE Meeting Master installer and (on a tag) publish it to a
+# GitHub Release.
 #
-#   * laptop    -> app/dist/MeetingMaster-Setup-<version>.exe   (electron-builder nsis)
-#   * server    -> MeetingMaster-HomeServer-Setup.exe           (PyInstaller + Inno Setup)
+#   * sidecar -> dist/MeetingMasterServer/  (PyInstaller onedir of the Python
+#                home server, incl. bundled ffmpeg + whisper.cpp Vulkan)
+#   * app     -> app/dist/MeetingMaster-Setup-<version>.exe (electron-builder
+#                NSIS; ships the sidecar under resources/server — the single
+#                installer covers BOTH modes, operator and home server)
 #
 # This is Windows-only CI that CANNOT be run from the dev checkout used to
 # author it, so every step is written to be explicit and to FAIL FAST with a
 # clear message rather than produce a silently-broken installer. The whisper.cpp
 # Vulkan compile is the riskiest step (it builds native GPU code from upstream
-# source) — see the comments on the `server` job.
+# source) — see the comments on the `sidecar` job.
 name: build-installers
 
 on:
@@ -47,57 +51,10 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # LAPTOP installer — the Electron app packaged as an NSIS setup .exe.
+  # SIDECAR — bundle native tools and freeze the FastAPI home server with
+  # PyInstaller. The onedir output ships INSIDE the app installer (below).
   # ---------------------------------------------------------------------------
-  laptop:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      # `npm run dist` is `electron-builder --win nsis`, which reads the version
-      # from app/package.json and emits app/dist/MeetingMaster-Setup-<version>.exe.
-      # NOTE: the licensed Neue Haas Grotesk fonts are git-ignored, so a CI build
-      # ships without them and PDFs fall back to Arial until fonts are supplied
-      # (see docs/FONTS.md). This is expected for the public installer.
-      - name: Build laptop installer
-        working-directory: app
-        run: |
-          npm ci
-          npm run dist
-
-      # Fail loudly if electron-builder produced no .exe or no update metadata
-      # (latest.yml is what the home server re-serves for laptop auto-updates).
-      - name: Verify installer exists
-        shell: pwsh
-        run: |
-          $exe = Get-ChildItem app/dist -Filter *.exe -ErrorAction SilentlyContinue
-          if (-not $exe) { throw "No .exe found in app/dist — electron-builder did not produce an installer." }
-          $exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
-          if (-not (Test-Path app/dist/latest.yml)) { throw "app/dist/latest.yml missing — auto-update metadata was not generated (check the publish config in electron-builder.yml)." }
-          $bm = Get-ChildItem app/dist -Filter *.exe.blockmap -ErrorAction SilentlyContinue
-          if (-not $bm) { throw "No .exe.blockmap found in app/dist — differential-update metadata was not generated (nsis differentialPackage must stay enabled)." }
-          Write-Host "Built: latest.yml + $($bm.Name)"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: laptop-installer
-          path: |
-            app/dist/*.exe
-            app/dist/*.blockmap
-            app/dist/latest.yml
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # HOME SERVER installer — bundle native tools, freeze the FastAPI server with
-  # PyInstaller, then wrap it in an Inno Setup installer.
-  # ---------------------------------------------------------------------------
-  server:
+  sidecar:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,21 +63,6 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-
-      # Version for the Inno Setup /DMyAppVersion define: the tag (minus the
-      # leading v) on a tag build, else app/package.json's version.
-      - name: Resolve version
-        id: version
-        shell: pwsh
-        run: |
-          if ($env:GITHUB_REF -like 'refs/tags/v*') {
-            $v = $env:GITHUB_REF -replace '^refs/tags/v',''
-          } else {
-            $v = (Get-Content app/package.json -Raw | ConvertFrom-Json).version
-          }
-          if (-not $v) { throw "Could not determine version." }
-          Write-Host "Version: $v"
-          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       # Resolve WHISPER_CPP_REF to a concrete commit SHA so the build cache is
       # both correct (busts when upstream changes) and reproducible per run.
@@ -253,50 +195,99 @@ jobs:
           pip install -r server/requirements.txt -r server/requirements-build.txt -r server/requirements-desktop.txt
 
       # Freeze the FastAPI server into dist/MeetingMasterServer/ (onedir). The
-      # spec is owned by the server-installer work; it pulls in installer/server/bin.
+      # spec pulls in installer/server/bin (ffmpeg + whisper) staged above.
       - name: Build server with PyInstaller
         shell: pwsh
         run: |
           pyinstaller installer/server/meeting-master-server.spec
-          if (-not (Test-Path "dist/MeetingMasterServer")) {
-            throw "PyInstaller did not produce dist/MeetingMasterServer/."
+          if (-not (Test-Path "dist/MeetingMasterServer/MeetingMasterServer.exe")) {
+            throw "PyInstaller did not produce dist/MeetingMasterServer/MeetingMasterServer.exe."
           }
 
-      # Inno Setup is preinstalled on windows-latest, but install it explicitly
-      # so the workflow is self-sufficient (choco is a no-op if already present).
-      - name: Ensure Inno Setup
-        shell: pwsh
-        run: choco install innosetup -y --no-progress
-
-      # Compile the installer. /O forces a deterministic output directory so the
-      # upload step below always knows where to look, regardless of the .iss.
-      - name: Compile Inno Setup installer
-        shell: pwsh
-        run: |
-          $out = "$PWD\installer\server\Output"
-          # PyInstaller ran from the repo root, so its onedir output is at
-          # $PWD\dist\MeetingMasterServer — pass that to the .iss explicitly.
-          $dist = "$PWD\dist\MeetingMasterServer"
-          if (-not (Test-Path $dist)) { throw "PyInstaller output not found at $dist" }
-          iscc /DMyAppVersion=${{ steps.version.outputs.version }} /DMyDistDir="$dist" /O"$out" installer\server\meeting-master-server.iss
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed." }
-          $exe = Get-ChildItem $out -Filter *.exe -ErrorAction SilentlyContinue
-          if (-not $exe) { throw "No installer .exe produced in $out." }
-          $exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
-
+      # The whole onedir tree — the app job downloads it into app/sidecar/ and
+      # electron-builder ships it as resources/server inside the installer.
       - uses: actions/upload-artifact@v4
         with:
-          name: homeserver-installer
-          path: installer/server/Output/*.exe
+          name: server-sidecar
+          path: dist/MeetingMasterServer/**
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # RELEASE — attach both installers to a GitHub Release. Runs on a v* tag, or
+  # APP installer — the Electron app (both modes) packaged as ONE NSIS setup
+  # .exe with the sidecar server bundled inside.
+  # ---------------------------------------------------------------------------
+  app:
+    needs: [sidecar]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # The frozen home server, built by the sidecar job. electron-builder.yml
+      # maps app/sidecar -> resources/server.
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-sidecar
+          path: app/sidecar
+
+      - name: Verify sidecar payload
+        shell: pwsh
+        run: |
+          if (-not (Test-Path app/sidecar/MeetingMasterServer.exe)) {
+            throw "app/sidecar/MeetingMasterServer.exe missing — the sidecar artifact did not download where expected."
+          }
+          $size = (Get-ChildItem app/sidecar -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+          Write-Host ("Sidecar payload: {0:N0} MB" -f $size)
+
+      # `npm run dist` is `electron-builder --win nsis`, which reads the version
+      # from app/package.json and emits app/dist/MeetingMaster-Setup-<version>.exe.
+      # NOTE: the licensed Neue Haas Grotesk fonts are git-ignored, so a CI build
+      # ships without them and PDFs fall back to Arial until fonts are supplied
+      # (see docs/FONTS.md). This is expected for the public installer.
+      - name: Build app installer
+        working-directory: app
+        run: |
+          npm ci
+          npm run dist
+
+      # Fail loudly if electron-builder produced no .exe or no update metadata
+      # (latest.yml + blockmap drive auto-updates), or if the installer is so
+      # small the sidecar can't be inside it.
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem app/dist -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) { throw "No .exe found in app/dist — electron-builder did not produce an installer." }
+          $exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
+          $setup = $exe | Where-Object Name -like 'MeetingMaster-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw "MeetingMaster-Setup-*.exe not found in app/dist." }
+          if ($setup.Length -lt 120MB) { throw "Installer is only $([math]::Round($setup.Length/1MB,1)) MB — the bundled server (resources/server) is almost certainly missing." }
+          if (-not (Test-Path app/dist/latest.yml)) { throw "app/dist/latest.yml missing — auto-update metadata was not generated (check the publish config in electron-builder.yml)." }
+          $bm = Get-ChildItem app/dist -Filter *.exe.blockmap -ErrorAction SilentlyContinue
+          if (-not $bm) { throw "No .exe.blockmap found in app/dist — differential-update metadata was not generated (nsis differentialPackage must stay enabled)." }
+          Write-Host "Built: latest.yml + $($bm.Name)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-installer
+          path: |
+            app/dist/*.exe
+            app/dist/*.blockmap
+            app/dist/latest.yml
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # RELEASE — attach the installer to a GitHub Release. Runs on a v* tag, or
   # on a manual dispatch (in which case the version comes from app/package.json
   # and action-gh-release creates the tag at this commit for us).
   # ---------------------------------------------------------------------------
   release:
-    needs: [laptop, server]
+    needs: [app]
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -320,13 +311,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: laptop-installer
-          path: artifacts/laptop
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: homeserver-installer
-          path: artifacts/server
+          name: app-installer
+          path: artifacts/app
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -336,9 +322,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: true # first test builds; unsigned, fonts not bundled
           files: |
-            artifacts/laptop/*.exe
-            artifacts/laptop/*.blockmap
-            artifacts/laptop/latest.yml
-            artifacts/server/*.exe
+            artifacts/app/*.exe
+            artifacts/app/*.blockmap
+            artifacts/app/latest.yml
           fail_on_unmatched_files: true
           generate_release_notes: true

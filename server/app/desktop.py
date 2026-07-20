@@ -181,6 +181,12 @@ def main() -> None:
     log_path = _setup_logging()
     log.info("Meeting Master Home Server starting (log: %s)", log_path)
 
+    # Sidecar mode: the Meeting Master app spawned this process and owns the
+    # whole desktop experience (window, tray, updates) — no tray, no browser.
+    sidecar = bool(os.environ.get("MM_SIDECAR"))
+    if sidecar:
+        log.info("Running as a sidecar of the Meeting Master app.")
+
     server_thread = threading.Thread(target=_serve, daemon=True, name="uvicorn")
     server_thread.start()
 
@@ -190,8 +196,9 @@ def main() -> None:
     # first run gets the setup flow, later runs get the monitoring dashboard.
     port = get_settings().SERVER_PORT
     if _wait_for_port("127.0.0.1", port):
-        log.info("Server running on port %s — opening %s", port, _dashboard_url())
-        _open_dashboard()
+        log.info("Server running on port %s (%s)", port, _dashboard_url())
+        if not sidecar:
+            _open_dashboard()
     else:
         log.error(
             "Server never started listening on port %s — see the log above. "
@@ -199,7 +206,10 @@ def main() -> None:
             port,
         )
 
-    _run_tray()
+    if sidecar:
+        _block_forever()
+    else:
+        _run_tray()
 
 
 if __name__ == "__main__":

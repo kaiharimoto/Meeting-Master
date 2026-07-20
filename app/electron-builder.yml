@@ -13,6 +13,12 @@ extraResources:
     to: fonts
   - from: src/renderer/print
     to: print
+  # The bundled Python home server (PyInstaller onedir). CI drops the built
+  # MeetingMasterServer tree into app/sidecar/ before running electron-builder;
+  # in a dev checkout the folder only holds a README (server mode then falls
+  # back to the repo's python — see src/main/serverManager.js).
+  - from: sidecar
+    to: server
 win:
   target: nsis
   # Generated from assets/icon/icon.svg by scripts/build-icons.js (committed).

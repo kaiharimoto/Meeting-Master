@@ -13,6 +13,10 @@ config/email_template.txt
 app/assets/fonts/*
 !app/assets/fonts/README.md
 
+# Bundled home server (CI drops the PyInstaller build here — see the README)
+app/sidecar/*
+!app/sidecar/README.md
+
 # Server runtime data (audio, transcripts, PDFs, job records)
 server/data/
 
