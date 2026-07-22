@@ -208,6 +208,16 @@ function createServerWindow(startHidden) {
   mainWindow.on('resize', saveBoundsDebounced);
   mainWindow.on('move', saveBoundsDebounced);
 
+  // Dashboard buttons that need the APP (not the server): plain links to
+  // /setup/action/* which we intercept here — the loopback page itself has
+  // no IPC on purpose. A real browser hitting those URLs gets an info page.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (handleDashboardAction(url)) event.preventDefault();
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) =>
+    handleDashboardAction(url) ? { action: 'deny' } : { action: 'allow' }
+  );
+
   // Closing the window keeps the server running — the app lives in the tray.
   // Only when a tray actually exists: without one, a hidden window would be
   // an invisible, unquittable app, so let the close become a real quit.
@@ -279,6 +289,29 @@ async function installFromTray() {
   if (result && !result.ok && result.error) {
     dialog.showErrorBox('Meeting Master', result.error);
   }
+}
+
+/** Dashboard action links (server-mode window only). Returns true when the
+ *  URL was one of ours and the navigation should be swallowed. */
+function handleDashboardAction(url) {
+  let pathname;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== '127.0.0.1') return false;
+    pathname = parsed.pathname;
+  } catch {
+    return false;
+  }
+  if (pathname === '/setup/action/open-notes') {
+    openNotesStudio();
+    return true;
+  }
+  if (pathname === '/setup/action/app-update') {
+    if (updater.getState().downloaded) installFromTray();
+    else checkForUpdatesFromTray();
+    return true;
+  }
+  return false;
 }
 
 let updateCheckRunning = false;

@@ -305,3 +305,18 @@ button.small { padding: 6px 11px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01ms !important; }
 }
+
+/* Link styled as a small button (dashboard actions the APP intercepts). */
+.linkbtn {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.linkbtn:hover { filter: brightness(1.06); }
+.masthead .linkbtn { margin-right: 8px; }

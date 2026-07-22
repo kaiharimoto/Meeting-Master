@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from .. import config
@@ -186,8 +186,41 @@ _NO_CACHE = {"Cache-Control": "no-cache"}
 
 
 @router.get("")
-async def setup_page() -> FileResponse:
-    return FileResponse(_STATIC_DIR / "setup.html", headers=_NO_CACHE)
+async def setup_page() -> HTMLResponse:
+    # Version-stamp the asset URLs so no cache layer (browser OR the app
+    # window's Chromium) can ever pair an old dashboard.js with a new backend.
+    html = (_STATIC_DIR / "setup.html").read_text(encoding="utf-8")
+    for asset in ("dashboard.css", "dashboard.js"):
+        html = html.replace(
+            f"/setup/assets/{asset}", f"/setup/assets/{asset}?v={config.APP_VERSION}"
+        )
+    return HTMLResponse(html, headers=_NO_CACHE)
+
+
+# Dashboard buttons whose ACTION lives in the Electron app (opening the notes
+# window, installing an app update). Inside the app window, Electron
+# intercepts the navigation before it ever reaches us; a plain browser lands
+# here and gets told where the real control is.
+_ACTION_EXPLANATIONS = {
+    "open-notes": "Meeting notes opens as a window of the Meeting Master app",
+    "app-update": "Updates are installed by the Meeting Master app",
+}
+
+
+@router.get("/action/{name}")
+async def setup_action(name: str) -> HTMLResponse:
+    what = _ACTION_EXPLANATIONS.get(name)
+    if what is None:
+        raise HTTPException(status_code=404, detail=f"Unknown action: {name}")
+    return HTMLResponse(
+        "<!doctype html><meta charset='utf-8'><title>Meeting Master</title>"
+        "<body style='font-family:system-ui;max-width:34rem;margin:4rem auto;line-height:1.6'>"
+        f"<h2>Open this from the Meeting Master app</h2><p>{what} — this browser "
+        "tab can't do it. On the home PC, use the Meeting Master window (this "
+        "same dashboard inside the app) or the tray icon by the clock.</p>"
+        "<p><a href='/setup'>Back to the dashboard</a></p></body>",
+        headers=_NO_CACHE,
+    )
 
 
 # Dashboard assets, served by explicit whitelist — deliberately NOT a

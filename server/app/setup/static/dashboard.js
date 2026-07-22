@@ -186,7 +186,7 @@
     // Tasks / progress bars.
     var tasks = state.tasks || {};
     ["ollama", "model", "whisper-model", "tailscale", "tailscale-up",
-     "tailscale-serve", "update-check", "server-update"]
+     "tailscale-serve", "update-check"]
       .forEach(function (n) { renderTask(n, tasks[n]); });
 
     // Updates card. Error first (a failed check must never read "up to date"),
@@ -213,9 +213,13 @@
       status.style.color = "var(--ink-faint)";
       status.title = "";
     }
-    // In sidecar mode the Meeting Master app installs updates itself
-    // (electron-updater), so the server-side install button is hidden.
-    $("#up-apply-row").hidden = !up.serverReady || up.sidecar;
+    // The app (not this server) installs updates. In the app window the
+    // button below is intercepted by Electron and runs the whole chain;
+    // in a plain browser it lands on an explanation page.
+    var appRow = $("#up-app-update-row");
+    if (appRow) appRow.hidden = !(up.sidecar && semverNewer(up.latest, up.current));
+    var notesLink = $("#open-notes-link");
+    if (notesLink) notesLink.hidden = !up.sidecar;
     var upNotes = [];
     if (up.sidecar)
       upNotes.push("This server runs inside the Meeting Master app — updates " +
