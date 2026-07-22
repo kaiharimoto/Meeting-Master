@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.4.3"
 
 
 def config_home() -> Path:
@@ -177,6 +177,12 @@ class Settings(BaseSettings):
 WRITABLE_KEYS = (
     "BEARER_TOKEN",
     "OLLAMA_MODEL",
+    "OLLAMA_URL",
+    "NUM_CTX",
+    "SUMMARY_NUM_PREDICT",
+    "SUMMARY_TEMPERATURE",
+    "EXTRACT_NUM_PREDICT",
+    "EXTRACT_TEMPERATURE",
     "WHISPER_MODEL_DEFAULT",
     "SMTP_USER",
     "SMTP_APP_PASSWORD",

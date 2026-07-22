@@ -151,6 +151,15 @@ async def build_state() -> dict:
         "emailTemplate": _read_template(settings),
         "ollamaModel": settings.OLLAMA_MODEL,
         "whisperModel": settings.WHISPER_MODEL_DEFAULT,
+        # Hands-on AI engine tuning (v0.4.3): shown on the Settings tab.
+        "aiParams": {
+            "ollamaUrl": settings.OLLAMA_URL,
+            "numCtx": settings.NUM_CTX,
+            "summaryNumPredict": settings.SUMMARY_NUM_PREDICT,
+            "summaryTemperature": settings.SUMMARY_TEMPERATURE,
+            "extractNumPredict": settings.EXTRACT_NUM_PREDICT,
+            "extractTemperature": settings.EXTRACT_TEMPERATURE,
+        },
         "deps": await bootstrap.detect(),
         "tasks": bootstrap.all_task_states(),
         "updates": _updates_snapshot(),
@@ -174,6 +183,13 @@ class SaveBody(BaseModel):
     ollamaModel: str | None = None
     whisperModel: str | None = None
     githubToken: str = ""
+    # AI engine tuning — None means "leave as saved".
+    ollamaUrl: str | None = None
+    numCtx: int | None = None
+    summaryNumPredict: int | None = None
+    summaryTemperature: float | None = None
+    extractNumPredict: int | None = None
+    extractTemperature: float | None = None
 
 
 # --- Routes -----------------------------------------------------------------
@@ -284,6 +300,24 @@ async def save(body: SaveBody) -> dict:
         values["OLLAMA_MODEL"] = body.ollamaModel.strip()
     if body.whisperModel and body.whisperModel.strip():
         values["WHISPER_MODEL_DEFAULT"] = body.whisperModel.strip()
+
+    # AI engine tuning — clamped to sane ranges so a typo can't wedge the
+    # pipeline (e.g. a 0-token context). None/blank leaves the saved value.
+    def _clamp(value, lo, hi):
+        return max(lo, min(hi, value))
+
+    if body.ollamaUrl and body.ollamaUrl.strip():
+        values["OLLAMA_URL"] = body.ollamaUrl.strip().rstrip("/")
+    if body.numCtx is not None:
+        values["NUM_CTX"] = _clamp(int(body.numCtx), 2048, 131072)
+    if body.summaryNumPredict is not None:
+        values["SUMMARY_NUM_PREDICT"] = _clamp(int(body.summaryNumPredict), 128, 8192)
+    if body.summaryTemperature is not None:
+        values["SUMMARY_TEMPERATURE"] = _clamp(float(body.summaryTemperature), 0.0, 2.0)
+    if body.extractNumPredict is not None:
+        values["EXTRACT_NUM_PREDICT"] = _clamp(int(body.extractNumPredict), 128, 8192)
+    if body.extractTemperature is not None:
+        values["EXTRACT_TEMPERATURE"] = _clamp(float(body.extractTemperature), 0.0, 2.0)
 
     config.write_env(values)
     log.info("Setup saved (server is now configured=%s)", config.get_settings().is_configured)

@@ -200,3 +200,46 @@ def test_jobs_return_503_when_unconfigured(monkeypatch):
     detail = resp.json()["detail"]
     assert "not set up yet" in detail
     assert "/setup" in detail
+
+
+def test_save_ai_params_persists_and_clamps(client, tmp_path, monkeypatch):
+    """The hands-on AI tuning fields round-trip through save -> state, and
+    out-of-range values are clamped instead of wedging the pipeline."""
+    from fastapi.testclient import TestClient
+
+    from app.config import get_settings
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40010))
+    before = local.get("/setup/state").json()
+    assert before["aiParams"]["numCtx"] >= 2048
+
+    resp = local.post("/setup/save", json={
+        "recipients": before.get("recipients") or [],
+        "emailTemplate": before.get("emailTemplate") or "",
+        "ollamaUrl": "http://127.0.0.1:12345/",
+        "numCtx": 16384,
+        "summaryNumPredict": 999999,   # clamped to 8192
+        "summaryTemperature": 0.7,
+        "extractNumPredict": 1500,
+        "extractTemperature": 9.5,     # clamped to 2.0
+    })
+    assert resp.status_code == 200, resp.text
+
+    # OLLAMA_URL: the test env var (fake Ollama stub) outranks the file, so
+    # check the persisted file for that one; the numerics come via settings.
+    from app import config as app_config
+
+    env_text = app_config.ENV_FILE.read_text(encoding="utf-8")
+    assert "OLLAMA_URL=http://127.0.0.1:12345" in env_text
+
+    settings = get_settings()
+    assert settings.NUM_CTX == 16384
+    assert settings.SUMMARY_NUM_PREDICT == 8192
+    assert settings.SUMMARY_TEMPERATURE == 0.7
+    assert settings.EXTRACT_TEMPERATURE == 2.0
+
+    after = local.get("/setup/state").json()
+    assert after["aiParams"]["numCtx"] == 16384
+    # (ollamaUrl in state reflects the env-var override the test harness sets,
+    # so the file assertion above is the persistence proof for that field.)

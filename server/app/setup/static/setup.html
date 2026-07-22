@@ -261,6 +261,42 @@
           <input id="whisperModel" type="text" autocomplete="off" placeholder="large-v3-turbo" />
         </div>
       </div>
+      <div class="row2">
+        <div>
+          <label for="ollamaUrl">Ollama URL</label>
+          <input id="ollamaUrl" type="text" autocomplete="off" placeholder="http://127.0.0.1:11434" />
+        </div>
+        <div>
+          <label for="numCtx">Context window (tokens)</label>
+          <input id="numCtx" type="number" min="2048" max="131072" step="1024" placeholder="32768" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="summaryNumPredict">Summary max output tokens</label>
+          <input id="summaryNumPredict" type="number" min="128" max="8192" placeholder="1400" />
+        </div>
+        <div>
+          <label for="summaryTemperature">Summary temperature</label>
+          <input id="summaryTemperature" type="number" min="0" max="2" step="0.1" placeholder="0.3" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="extractNumPredict">Q&amp;A extraction max output tokens</label>
+          <input id="extractNumPredict" type="number" min="128" max="8192" placeholder="1500" />
+        </div>
+        <div>
+          <label for="extractTemperature">Q&amp;A extraction temperature</label>
+          <input id="extractTemperature" type="number" min="0" max="2" step="0.1" placeholder="0.2" />
+        </div>
+      </div>
+      <p class="hint">
+        Hitting context/VRAM errors? LOWER the context window (e.g. 16384) —
+        long meetings are automatically summarized in chunks that fit, so a
+        smaller window is reliable, not lossy. The URL may point at any
+        Ollama-compatible server on this machine or your network.
+      </p>
     </div>
 
     <div class="card savebar">

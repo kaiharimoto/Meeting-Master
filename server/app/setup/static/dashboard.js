@@ -16,6 +16,10 @@
   // has started filling in (the Gmail field losing its text was exactly this).
   var editedTemplate = false, editedRecipients = false, editedUser = false,
       editedFrom = false, editedOllama = false, editedWhisper = false;
+  // AI engine tuning fields share one edited-flag map + numeric parsing.
+  var AI_FIELDS = ["ollamaUrl", "numCtx", "summaryNumPredict",
+                   "summaryTemperature", "extractNumPredict", "extractTemperature"];
+  var editedAi = {};
 
   function toast(msg) {
     var t = $("#toast"); t.textContent = msg; t.classList.add("show");
@@ -166,6 +170,12 @@
     if (!editedRecipients) $("#recipients").value = (state.recipients || []).join("\n");
     if (!editedTemplate) $("#template").value = state.emailTemplate || "";
     if (!editedOllama && document.activeElement !== $("#ollamaModel")) $("#ollamaModel").value = state.ollamaModel || "";
+    var ai = state.aiParams || {};
+    AI_FIELDS.forEach(function (f) {
+      var el = $("#" + f);
+      if (el && !editedAi[f] && document.activeElement !== el)
+        el.value = ai[f] != null ? ai[f] : "";
+    });
     if (!editedWhisper && document.activeElement !== $("#whisperModel")) $("#whisperModel").value = state.whisperModel || "";
 
     // Dependency detection.
@@ -270,6 +280,12 @@
       recipients: $("#recipients").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean),
       emailTemplate: $("#template").value,
       ollamaModel: $("#ollamaModel").value.trim() || null,
+      ollamaUrl: $("#ollamaUrl").value.trim() || null,
+      numCtx: parseInt($("#numCtx").value, 10) || null,
+      summaryNumPredict: parseInt($("#summaryNumPredict").value, 10) || null,
+      summaryTemperature: $("#summaryTemperature").value === "" ? null : parseFloat($("#summaryTemperature").value),
+      extractNumPredict: parseInt($("#extractNumPredict").value, 10) || null,
+      extractTemperature: $("#extractTemperature").value === "" ? null : parseFloat($("#extractTemperature").value),
       whisperModel: $("#whisperModel").value.trim() || null,
       githubToken: $("#githubToken").value
     };
@@ -283,6 +299,7 @@
         $("#githubToken").value = "";
         editedTemplate = editedRecipients = editedUser = editedFrom = false;
         editedOllama = editedWhisper = false;
+        editedAi = {};
         $("#saved-banner").classList.add("show");
         render(state);
         showTab("overview");
@@ -462,6 +479,10 @@
   $("#smtpUser").addEventListener("input", function () { editedUser = true; });
   $("#smtpFrom").addEventListener("input", function () { editedFrom = true; });
   $("#ollamaModel").addEventListener("input", function () { editedOllama = true; });
+  AI_FIELDS.forEach(function (f) {
+    var el = $("#" + f);
+    if (el) el.addEventListener("input", function () { editedAi[f] = true; });
+  });
   $("#whisperModel").addEventListener("input", function () { editedWhisper = true; });
   $("#copy").addEventListener("click", function () {
     var text = $("#code").textContent;

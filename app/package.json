@@ -1,7 +1,7 @@
 {
   "name": "meeting-master-app",
   "productName": "MeetingMaster",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Meeting Master laptop app — capture meeting Q&A, send audio to the home AI server, render print-perfect PDFs, and email them.",
   "main": "src/main/main.js",
   "scripts": {
