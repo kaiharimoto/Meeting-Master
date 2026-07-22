@@ -378,3 +378,10 @@ async def setup_job_prompt(request: Request, job_id: str):
     from ..routes import monitor
 
     return monitor.prompt_response(request, job_id)
+
+
+@router.post("/jobs/{job_id}/summarize")
+async def setup_job_summarize(request: Request, job_id: str):
+    from ..routes import monitor
+
+    return monitor.summarize_retry_response(request, job_id)

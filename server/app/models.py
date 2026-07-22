@@ -146,3 +146,9 @@ class JobRecord(BaseModel):
     progress: int | None = None
     pdf: PdfInfo = Field(default_factory=PdfInfo)
     error: str | None = None
+    # Per-AI-stage failures (v0.5.0). A job can be `ready` (transcript done)
+    # while summarization or question extraction failed — these carry the
+    # reason so clients can SAY so and offer a retry, instead of silently
+    # shipping an empty summary. None = the stage succeeded (or hasn't run).
+    summaryError: str | None = None
+    questionsError: str | None = None

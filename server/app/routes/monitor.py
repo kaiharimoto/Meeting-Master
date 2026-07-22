@@ -86,6 +86,17 @@ def transcript_response(request: Request, job_id: str) -> PlainTextResponse:
     )
 
 
+def summarize_retry_response(request: Request, job_id: str) -> dict:
+    """Queue a summary+Q&A re-run on the stored transcript (the transcript
+    itself is never redone). The job flips back to `summarizing` and lands in
+    `ready` with fresh summary/questions — or fresh per-stage errors."""
+    from .. import worker  # late import — worker pulls the pipeline stack
+
+    record = _job_with_transcript(request, job_id)
+    worker.enqueue(f"summarize:{record.id}")
+    return {"ok": True, "id": record.id, "queued": True}
+
+
 def prompt_response(request: Request, job_id: str) -> PlainTextResponse:
     """The full prompt harness (system prompt + task + this job's transcript),
     ready to paste into any external chatbot; its JSON reply round-trips back
@@ -193,6 +204,11 @@ async def job_transcript(request: Request, job_id: str) -> PlainTextResponse:
 @router.get("/jobs/{job_id}/prompt")
 async def job_prompt(request: Request, job_id: str) -> PlainTextResponse:
     return prompt_response(request, job_id)
+
+
+@router.post("/jobs/{job_id}/summarize")
+async def job_summarize_retry(request: Request, job_id: str) -> dict:
+    return summarize_retry_response(request, job_id)
 
 
 # ---- Laptop auto-update feed ------------------------------------------------

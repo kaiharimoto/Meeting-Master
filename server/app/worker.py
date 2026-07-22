@@ -66,28 +66,61 @@ async def process(store: JobStore, job) -> None:
         store.update(job, transcript=transcript, progress=None)
 
         store.update(job, state=JobState.summarizing, progress=None)
-        # Summary and Q&A extraction both degrade gracefully: a JSON hiccup in
-        # one must not fail the whole job (the operator can still get a PDF and
-        # capture Q&A by hand). Each is a separate best-effort model call.
-        try:
-            summary = await summarize.run(transcript.text, job.meeting, settings)
-        except Exception:
-            log.exception("Job %s: summary generation failed — empty summary", job.id)
-            summary = MeetingSummary()
-        try:
-            questions = await extract.run(transcript.text, job.meeting, settings)
-        except Exception:
-            log.exception("Job %s: question extraction failed — no candidates", job.id)
-            questions = []
-
-        store.update(
-            job, summary=summary, questions=questions,
-            state=JobState.ready, progress=None,
-        )
-        log.info("Job %s ready (%d candidate question(s))", job.id, len(questions))
+        await run_ai_stages(store, job, transcript.text)
+        log.info("Job %s ready (%d candidate question(s))", job.id, len(job.questions))
     except Exception as exc:
         log.exception("Job %s failed", job.id)
         store.update(job, state=JobState.failed, error=str(exc))
+
+
+def _looks_like_context_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(k in text for k in ("context", "out of memory", "oom", "kv cache", "memory"))
+
+
+async def run_ai_stages(store: JobStore, job, transcript_text: str) -> None:
+    """Summarize + extract Q&A on an existing transcript, recording per-stage
+    failures on the job (never silently swallowing them). Used by the normal
+    pipeline AND by the retry endpoint (POST /jobs/{id}/summarize).
+
+    Auto-remedy: a failure that smells like a context/VRAM problem is retried
+    ONCE with half the configured context window before being reported.
+    """
+    settings = get_settings()
+
+    summary, summary_error = None, None
+    try:
+        summary = await summarize.run(transcript_text, job.meeting, settings)
+    except Exception as exc:
+        if _looks_like_context_error(exc):
+            log.warning("Job %s: summary hit a context-like error (%s) — retrying "
+                        "with NUM_CTX %d", job.id, exc, settings.NUM_CTX // 2)
+            try:
+                reduced = settings.model_copy(update={"NUM_CTX": max(2048, settings.NUM_CTX // 2)})
+                summary = await summarize.run(transcript_text, job.meeting, reduced)
+            except Exception as exc2:
+                summary_error = f"{exc2} (also failed after halving the context window)"
+        else:
+            summary_error = str(exc)
+    if summary_error:
+        log.error("Job %s: summary generation failed: %s", job.id, summary_error)
+
+    questions, questions_error = [], None
+    try:
+        questions = await extract.run(transcript_text, job.meeting, settings)
+    except Exception as exc:
+        questions_error = str(exc)
+        log.error("Job %s: question extraction failed: %s", job.id, questions_error)
+
+    store.update(
+        job,
+        summary=summary if summary is not None else MeetingSummary(),
+        questions=questions,
+        summaryError=summary_error,
+        questionsError=questions_error,
+        state=JobState.ready,
+        progress=None,
+    )
 
 
 async def worker_loop(store: JobStore) -> None:
@@ -95,6 +128,22 @@ async def worker_loop(store: JobStore) -> None:
     while True:
         job_id = await queue.get()
         try:
+            # "summarize:<id>" re-runs ONLY the AI stages on the stored
+            # transcript (POST /jobs/{id}/summarize) — transcript generation
+            # and summary generation are separate, retryable steps.
+            if job_id.startswith("summarize:"):
+                job = store.get(job_id.split(":", 1)[1])
+                if job is None or job.transcript is None:
+                    log.warning("Summarize request for unknown/transcript-less job %s", job_id)
+                    continue
+                store.update(job, state=JobState.summarizing, progress=None, error=None)
+                try:
+                    await run_ai_stages(store, job, job.transcript.text)
+                    log.info("Job %s re-summarized", job.id)
+                except Exception as exc:
+                    log.exception("Job %s re-summarize failed", job.id)
+                    store.update(job, state=JobState.ready, summaryError=str(exc))
+                continue
             job = store.get(job_id)
             if job is None:
                 log.warning("Dequeued unknown job id %s — skipping", job_id)

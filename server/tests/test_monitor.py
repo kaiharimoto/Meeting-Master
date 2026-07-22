@@ -290,3 +290,28 @@ def test_transcript_and_prompt_endpoints(client):
     # Unknown job / no transcript -> 404.
     assert client.get("/jobs/nope/transcript", headers=AUTH).status_code == 404
     assert client.get("/jobs/nope/prompt", headers=AUTH).status_code == 404
+
+
+def test_summarize_retry_endpoint(client):
+    """POST /jobs/{id}/summarize re-runs the AI stages on the stored
+    transcript — the separate-stages escape hatch after a summary failure."""
+    job_id = _upload(client)
+    _wait_ready(client, job_id)
+
+    assert client.post(f"/jobs/{job_id}/summarize").status_code == 401
+    resp = client.post(f"/jobs/{job_id}/summarize", headers=AUTH)
+    assert resp.status_code == 200 and resp.json()["queued"] is True
+
+    record = _wait_ready(client, job_id)  # summarizing -> ready again
+    assert record["state"] == "ready"
+    assert record["transcript"]["text"].strip()  # transcript untouched
+
+    # No transcript / unknown id -> 404.
+    assert client.post("/jobs/nope/summarize", headers=AUTH).status_code == 404
+
+    # Loopback twin for the dashboard.
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40003))
+    assert local.post(f"/setup/jobs/{job_id}/summarize").status_code == 200
