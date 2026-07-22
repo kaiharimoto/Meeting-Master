@@ -96,15 +96,38 @@ export function parseAiSummary(rawText) {
     }
     text = text.slice(start, end + 1);
   }
-  let data;
+  let root;
   try {
-    data = JSON.parse(text);
+    root = JSON.parse(text);
   } catch {
     throw new Error('That JSON could not be parsed — copy the model\'s reply exactly.');
   }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+  if (!root || typeof root !== 'object' || Array.isArray(root)) {
     throw new Error('Expected a JSON object with keyTakeaways/decisions/… sections.');
   }
+  // Combined harness shape {summary:{…}, questions:[…]} (v0.5.0) or the
+  // older flat summary object — accept both.
+  const data =
+    root.summary && typeof root.summary === 'object' && !Array.isArray(root.summary)
+      ? root.summary
+      : root;
+  const questions = (Array.isArray(root.questions) ? root.questions : [])
+    .map((q) => {
+      if (!q || typeof q !== 'object') return null;
+      const question = String(q.question || '').trim();
+      if (!question) return null;
+      const answerer = String(q.answerer || '').trim();
+      const confidence =
+        answerer && String(q.confidence || '').trim().toLowerCase() === 'high' ? 'high' : 'low';
+      return {
+        question,
+        answer: String(q.answer || '').trim(),
+        answerer,
+        directedTo: String(q.directedTo || q.directed_to || '').trim(),
+        confidence,
+      };
+    })
+    .filter(Boolean);
   const actionsRaw = Array.isArray(data.actionItems)
     ? data.actionItems
     : Array.isArray(data.action_items) ? data.action_items : [];
@@ -135,14 +158,15 @@ export function parseAiSummary(rawText) {
   };
   if (
     !summary.keyTakeaways.length && !summary.decisions.length &&
-    !summary.actionItems.length && !summary.keyFigures.length && !summary.topics.length
+    !summary.actionItems.length && !summary.keyFigures.length && !summary.topics.length &&
+    !questions.length
   ) {
-    throw new Error('The JSON parsed but contained no summary sections.');
+    throw new Error('The JSON parsed but contained no summary sections or questions.');
   }
-  return summary;
+  return { ...summary, questions };
 }
 
-function applyImport() {
+async function applyImport() {
   if (!importText) return;
   try {
     const s = parseAiSummary(importText.value);
@@ -152,7 +176,17 @@ function applyImport() {
     topicsEl.value = linesToText(s.topics);
     actionsHost.replaceChildren(...s.actionItems.map((item) => buildActionRow(item)));
     importText.value = '';
-    importNote.textContent = 'Imported — review the fields, then Save.';
+    let note = 'Imported — review the fields, then Save.';
+    // Combined harness replies also carry Q&A candidates: feed them into the
+    // same review-and-approve flow the local model uses (never auto-added).
+    if (s.questions && s.questions.length) {
+      const { captureExtracted, renderExtractPrompt } = await import('./extractReview.js');
+      ctx.state.questionsReviewed = false;
+      captureExtracted(s.questions);
+      renderExtractPrompt();
+      note = `Imported — ${s.questions.length} detected question(s) await review in the Q&A panel. Review the fields, then Save.`;
+    }
+    importNote.textContent = note;
   } catch (err) {
     importNote.textContent = err.message || String(err);
   }

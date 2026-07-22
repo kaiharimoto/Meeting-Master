@@ -79,3 +79,24 @@ test('summary editor imports pasted AI JSON (with fences and chatter)', async ({
   await page.locator('#sum-import-btn').click();
   await expect(page.locator('#sum-import-note')).toContainText('No JSON object found');
 });
+
+test('combined harness reply also imports Q&A candidates for review', async ({ page }) => {
+  await page.locator('#edit-summary-btn').click();
+  const combined = {
+    summary: { keyTakeaways: ['One takeaway'], topics: ['Pricing'] },
+    questions: [
+      { question: 'What is the launch date?', answer: 'November 15', answerer: 'Alice', confidence: 'high' },
+      { question: 'Who owns rollout?', answer: 'Bob will drive it', answerer: '', confidence: 'high' }, // no answerer -> low
+    ],
+  };
+  await page.locator('#sum-import-text').fill(JSON.stringify(combined));
+  await page.locator('#sum-import-btn').click();
+
+  await expect(page.locator('#sum-takeaways')).toHaveValue('One takeaway');
+  await expect(page.locator('#sum-import-note')).toContainText('2 detected question(s)');
+
+  // The Q&A review prompt (same flow the local model feeds) is now offered.
+  await page.locator('#sum-cancel-btn').click();
+  await expect(page.locator('#extract-review')).toBeVisible();
+  await expect(page.locator('#extract-review')).toContainText('2');
+});

@@ -77,25 +77,42 @@ _MERGE_SYSTEM_PROMPT = (
 def external_prompt(transcript_text: str, meeting: MeetingMeta) -> str:
     """The exact prompt harness this server sends to its local model, packaged
     for pasting into ANY external chatbot (Claude, ChatGPT, …). Kept as the
-    single source of truth: it embeds the real SYSTEM_PROMPT, so the external
-    model produces the same JSON the app's "Import AI output" button accepts.
-    Served by GET /jobs/{id}/prompt and the dashboard's per-job link."""
+    single source of truth: it embeds the real summarize AND extract system
+    prompts, so the external model produces one combined JSON that the app's
+    "Import AI output" button round-trips — summary sections into the editor,
+    Q&A candidates into the same review-and-approve flow the local model
+    feeds. Served by GET /jobs/{id}/prompt and the dashboard's per-job link."""
+    from . import extract  # sibling stage — its rules travel with the prompt
+
     context = _ollama.meeting_context(meeting)
     return (
         "=== INSTRUCTIONS (system prompt) "
         "==========================================\n\n"
+        "You will produce BOTH a structured meeting summary AND the meeting's "
+        "question-and-answer pairs, as ONE JSON object of this exact shape:\n"
+        "{\n"
+        '  "summary": { …the summary sections described in PART 1… },\n'
+        '  "questions": [ …the Q&A objects described in PART 2… ]\n'
+        "}\n\n"
+        "--- PART 1: rules for the \"summary\" object ---\n\n"
         f"{SYSTEM_PROMPT}\n\n"
+        "--- PART 2: rules for the \"questions\" array ---\n\n"
+        f"{extract.SYSTEM_PROMPT}\n\n"
+        "IMPORTANT: ignore the per-part instructions to respond with only that "
+        "part's object — nest the summary sections under the top-level "
+        '"summary" key and the Q&A array under the top-level "questions" key, '
+        "and respond with ONLY that one combined JSON object.\n\n"
         "=== TASK "
         "==================================================================\n\n"
         f"{context}\n"
-        "Summarize the following meeting transcript into the JSON sections "
-        "described:\n\n"
+        "Produce the combined JSON for the following meeting transcript:\n\n"
         f"{transcript_text}\n\n"
         "=== WHAT TO DO WITH THE REPLY "
         "=============================================\n\n"
         "Copy the model's JSON reply. In Meeting Master, open Edit summary → "
-        "Import AI output, paste it, click Apply import, then Save. Generate "
-        "the PDF as usual."
+        "Import AI output, paste it, click Apply import, then Save. Detected "
+        "questions appear in the Q&A panel's review prompt for approval, and "
+        "the PDF generates as usual."
     )
 
 
