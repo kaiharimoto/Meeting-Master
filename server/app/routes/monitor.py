@@ -88,6 +88,36 @@ def transcript_response(request: Request, job_id: str) -> PlainTextResponse:
     )
 
 
+_DEFAULT_TEMPLATE = (
+    "Subject: Meeting Notes — {{title}} ({{date}})\n\n"
+    "Hello,\n\nAttached are the meeting notes for \"{{title}}\" held on "
+    "{{date}} at {{time}}.\n\nAttendees: {{attendees}}\n\n"
+    "— Sent automatically by Meeting Master."
+)
+
+
+def email_preview_response(request: Request, job_id: str) -> dict:
+    """The exact Subject / recipient list / body the server would email —
+    for manual sending when SMTP is broken (attach the PDF yourself)."""
+    from ..mailer import sender
+
+    record = request.app.state.store.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown job id: {job_id}")
+    settings = get_settings()
+    try:
+        template_text = settings.email_template_path.read_text(encoding="utf-8")
+    except OSError:
+        template_text = _DEFAULT_TEMPLATE
+    subject_tpl, body_tpl = sender.parse_template(template_text)
+    details = record.meeting.details
+    return {
+        "subject": sender.substitute(subject_tpl, details),
+        "recipients": sender.resolve_recipients(record.meeting, settings),
+        "body": sender.substitute(body_tpl, details),
+    }
+
+
 def summarize_retry_response(request: Request, job_id: str) -> dict:
     """Queue a summary+Q&A re-run on the stored transcript (the transcript
     itself is never redone). The job flips back to `summarizing` and lands in
@@ -211,6 +241,11 @@ async def job_prompt(request: Request, job_id: str) -> PlainTextResponse:
 @router.post("/jobs/{job_id}/summarize")
 async def job_summarize_retry(request: Request, job_id: str) -> dict:
     return summarize_retry_response(request, job_id)
+
+
+@router.get("/jobs/{job_id}/email")
+async def job_email_preview(request: Request, job_id: str) -> dict:
+    return email_preview_response(request, job_id)
 
 
 # ---- Laptop auto-update feed ------------------------------------------------

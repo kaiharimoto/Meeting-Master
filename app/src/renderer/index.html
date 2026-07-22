@@ -149,6 +149,10 @@
                     title="Save the transcript as a .txt file">Save transcript</button>
             <button id="copy-ai-prompt-btn" type="button" class="btn btn-secondary" disabled
                     title="Copy a ready-to-paste prompt for an external AI (Claude, ChatGPT, …). Paste its JSON reply back via Edit summary → Import AI output">Copy AI prompt</button>
+            <button id="email-text-btn" type="button" class="btn btn-secondary" disabled
+                    title="Get the Subject, recipient list, and body to send the email yourself (attach the PDF)">Email text</button>
+            <button id="fix-names-btn" type="button" class="btn btn-secondary"
+                    title="Correct or merge misspelled names everywhere in this meeting">Fix names…</button>
           </div>
 
           <div id="status-line" class="status-line" role="status" aria-live="polite">
@@ -202,6 +206,58 @@
         <iframe id="dashboard-frame" title="Server dashboard"></iframe>
       </section>
     </main>
+  </div>
+
+  <!-- ============ Manual email modal (hidden by default) ============ -->
+  <div id="email-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="email-modal-title">
+      <h3 id="email-modal-title">Send the email yourself</h3>
+      <p class="settings-help">
+        Copy these into your mail client and attach the generated PDF —
+        exactly what the server would have sent.
+      </p>
+      <div class="field">
+        <label for="em-recipients">To</label>
+        <div class="settings-code-row">
+          <input id="em-recipients" type="text" readonly />
+          <button id="em-copy-recipients" type="button" class="btn btn-secondary">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="em-subject">Subject</label>
+        <div class="settings-code-row">
+          <input id="em-subject" type="text" readonly />
+          <button id="em-copy-subject" type="button" class="btn btn-secondary">Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="em-body">Body</label>
+        <textarea id="em-body" rows="7" readonly></textarea>
+      </div>
+      <div class="modal-actions">
+        <span id="em-note" class="settings-help" role="status"></span>
+        <button id="em-copy-body" type="button" class="btn btn-secondary">Copy body</button>
+        <button id="em-close" type="button" class="btn btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Fix-names modal (hidden by default) ============ -->
+  <div id="names-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="names-modal-title">
+      <h3 id="names-modal-title">Fix names</h3>
+      <p class="settings-help">
+        Every distinct name found in this meeting (attendees, Q&amp;A cards,
+        detected questions, action-item owners). Correct a spelling in its
+        box; give two entries the SAME name to merge them into one person.
+      </p>
+      <div id="names-rows"></div>
+      <div class="modal-actions">
+        <span id="names-note" class="settings-help" role="status"></span>
+        <button id="names-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="names-apply-btn" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============ Q&A capture modal (hidden by default) ============ -->

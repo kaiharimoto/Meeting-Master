@@ -9,6 +9,8 @@ import { initStatus, setStatus, showError } from './status.js';
 import { initSettings, openSettings } from './settings.js';
 import { initExtractReview, renderExtractPrompt } from './extractReview.js';
 import { initSummaryEdit, openSummaryEdit } from './summaryEdit.js';
+import { initEmailPreview, openEmailPreview } from './emailPreview.js';
+import { initNameFix, openNameFix } from './nameFix.js';
 import { initHistory, saveCurrentToHistory } from './history.js';
 import { initNav } from './nav.js';
 import { initTheme } from './theme.js';
@@ -89,6 +91,17 @@ function boot() {
   initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
   initGenerate(ctx);
   initSummaryEdit(ctx, { onSaved: () => setStatus('Summary updated — it will appear in the next PDF.') });
+  initEmailPreview(ctx);
+  initNameFix(ctx, {
+    onApplied: (count) => {
+      ctx.renderAll();
+      setStatus(`Names updated (${count} correction${count === 1 ? '' : 's'}) across the whole meeting.`);
+    },
+  });
+  const emailTextBtn = document.getElementById('email-text-btn');
+  if (emailTextBtn) emailTextBtn.addEventListener('click', () => openEmailPreview());
+  const fixNamesBtn = document.getElementById('fix-names-btn');
+  if (fixNamesBtn) fixNamesBtn.addEventListener('click', () => openNameFix());
   initHistory(ctx, {
     onOpened: () => {
       ctx.renderAll();

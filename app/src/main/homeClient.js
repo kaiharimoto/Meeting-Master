@@ -181,6 +181,19 @@ async function retrySummary(jobId) {
   return res.json();
 }
 
+/** GET /jobs/{id}/email — the exact Subject/recipients/body the server
+ *  would send, for manual copy-paste emailing when SMTP is down. */
+async function getEmailPreview(jobId) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/jobs/${encodeURIComponent(jobId)}/email`,
+    { headers, signal: AbortSignal.timeout(15000) },
+    'fetching the email text'
+  );
+  if (!res.ok) await throwHttpError(res, 'fetching the email text');
+  return res.json();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -193,4 +206,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview };

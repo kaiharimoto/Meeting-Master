@@ -1693,3 +1693,19 @@ kbd {
   border: 0;
   background: var(--bg);
 }
+
+/* Fix-names modal rows: original name label + corrected-spelling input. */
+.name-fix-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.name-fix-row label {
+  overflow-wrap: anywhere;
+}
+#names-rows {
+  max-height: 46vh;
+  overflow-y: auto;
+}

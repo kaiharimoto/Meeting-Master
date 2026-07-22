@@ -385,3 +385,77 @@ async def setup_job_summarize(request: Request, job_id: str):
     from ..routes import monitor
 
     return monitor.summarize_retry_response(request, job_id)
+
+
+@router.get("/jobs/{job_id}/email")
+async def setup_job_email(request: Request, job_id: str):
+    from ..routes import monitor
+
+    return monitor.email_preview_response(request, job_id)
+
+
+@router.get("/ollama-models")
+async def setup_ollama_models() -> dict:
+    """Installed Ollama models (proxied /api/tags) — feeds the model picker
+    and the parameter-suggestion helper. Empty list when Ollama is down."""
+    import httpx
+
+    settings = config.get_settings()
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
+            resp = await client.get(f"{settings.OLLAMA_URL}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:
+        return {"models": []}
+    models = []
+    for m in data.get("models") or []:
+        details = m.get("details") or {}
+        models.append({
+            "name": m.get("name") or "",
+            "sizeGB": round((m.get("size") or 0) / 1e9, 1),
+            "paramSize": details.get("parameter_size") or "",
+            "quant": details.get("quantization_level") or "",
+        })
+    return {"models": [m for m in models if m["name"]]}
+
+
+class AiTestBody(BaseModel):
+    numCtx: int | None = None
+
+
+@router.post("/ai-test")
+async def setup_ai_test(body: AiTestBody) -> dict:
+    """Live-fire the configured model with the (possibly still-unsaved)
+    context window: a tiny real chat that proves the model + NUM_CTX actually
+    load on this hardware. Never raises — the result IS the diagnosis."""
+    import time
+
+    import httpx
+
+    from ..pipeline import _ollama
+
+    settings = config.get_settings()
+    if body.numCtx:
+        settings = settings.model_copy(
+            update={"NUM_CTX": max(2048, min(131072, int(body.numCtx)))}
+        )
+    start = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=5.0)) as client:
+            await _ollama.chat_json(
+                client, settings,
+                'You are a health check. Respond with ONLY the JSON {"ok": true}.',
+                "Reply now.",
+                num_predict=20, temperature=0.0,
+            )
+        error = None
+    except Exception as exc:
+        error = str(exc)
+    return {
+        "ok": error is None,
+        "latencyMs": int((time.monotonic() - start) * 1000),
+        "model": settings.OLLAMA_MODEL,
+        "numCtx": settings.NUM_CTX,
+        "error": error,
+    }

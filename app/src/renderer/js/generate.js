@@ -380,6 +380,11 @@ export function updateButtons(context) {
     els.copyPrompt.disabled =
       !hasApi || !jobId || !transcriptText || typeof c.api.getJobPrompt !== 'function';
   }
+  const emailBtn = document.getElementById('email-text-btn');
+  if (emailBtn) {
+    const jobId = c.state.job && c.state.job.id;
+    emailBtn.disabled = !hasApi || !jobId || typeof c.api.getEmailPreview !== 'function';
+  }
 }
 
 // ---- Transcript / external-AI escape hatch ----------------------------------

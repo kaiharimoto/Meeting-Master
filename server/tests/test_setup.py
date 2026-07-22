@@ -243,3 +243,21 @@ def test_save_ai_params_persists_and_clamps(client, tmp_path, monkeypatch):
     assert after["aiParams"]["numCtx"] == 16384
     # (ollamaUrl in state reflects the env-var override the test harness sets,
     # so the file assertion above is the persistence proof for that field.)
+
+
+def test_ai_helper_endpoints(client):
+    """ollama-models + ai-test never raise — they report, loopback-only."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40011))
+    models = local.get("/setup/ollama-models")
+    assert models.status_code == 200 and "models" in models.json()
+
+    result = local.post("/setup/ai-test", json={"numCtx": 4096}).json()
+    assert set(result) >= {"ok", "latencyMs", "model", "numCtx", "error"}
+    assert result["numCtx"] == 4096  # the unsaved override was applied
+
+    remote = TestClient(app, client=("203.0.113.9", 40012))
+    assert remote.post("/setup/ai-test", json={}).status_code == 403

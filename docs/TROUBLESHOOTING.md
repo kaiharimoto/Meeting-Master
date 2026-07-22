@@ -85,6 +85,24 @@ fails you also get an error toast with a one-click **Retry summary** — worth
 trying right after lowering the context window (Dashboard tab → Settings →
 AI models).
 
+## Email didn't send — send it yourself
+
+If SMTP fails (blocked port, expired App Password), nothing is lost: click
+**Email text** on the Meeting screen (enabled once the meeting has a job).
+It shows the exact **To / Subject / Body** the server would have sent, with
+copy buttons — paste into any mail client and attach the generated PDF (the
+modal shows its path). Fix the App Password later on the dashboard's
+Settings tab.
+
+## A name is misspelled (or spelled three different ways)
+
+Whisper and the AI guess names from audio, so "Kai" can arrive as "Ky" and
+"Kye". Click **Fix names…** on the Meeting screen: every distinct name in
+the meeting is listed (attendees, Q&A cards, detected questions, action-item
+owners). Correct a spelling in its box — or give several entries the same
+name to MERGE them into one person — and Apply rewrites it everywhere,
+deduplicating the attendee list.
+
 ## The laptop's server pill is red / "Server unreachable"
 
 The pill in the laptop's sidebar is fed by a live event stream plus a

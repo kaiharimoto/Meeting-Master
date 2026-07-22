@@ -254,7 +254,8 @@
       <div class="row2">
         <div>
           <label for="ollamaModel">Summary model (Ollama)</label>
-          <input id="ollamaModel" type="text" autocomplete="off" placeholder="gemma4:26b" />
+          <input id="ollamaModel" type="text" autocomplete="off" placeholder="gemma4:26b" list="ollama-model-list" />
+          <datalist id="ollama-model-list"></datalist>
         </div>
         <div>
           <label for="whisperModel">Transcription model (Whisper)</label>
@@ -297,6 +298,13 @@
         smaller window is reliable, not lossy. The URL may point at any
         Ollama-compatible server on this machine or your network.
       </p>
+      <div class="sub">
+        <button class="ghost small" id="ai-suggest" type="button"
+                title="Pick a context window sized to the selected model">Suggest settings</button>
+        <button class="ghost small" id="ai-test" type="button"
+                title="Run a tiny real request through the model with the context window above">Test AI now</button>
+      </div>
+      <div class="taskmsg" id="ai-test-result"></div>
     </div>
 
     <div class="card savebar">

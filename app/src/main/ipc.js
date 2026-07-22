@@ -105,6 +105,11 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return homeClient.retrySummary(jobId);
   });
 
+  handle(CHANNELS.JOB_EMAIL_PREVIEW, async (jobId) => {
+    if (!jobId) throw new Error('No job to build the email for.');
+    return homeClient.getEmailPreview(jobId);
+  });
+
   handle(CHANNELS.JOB_PROMPT, async (jobId) => {
     if (!jobId) throw new Error('No job to fetch a prompt for.');
     return { text: await homeClient.getJobPrompt(jobId) };

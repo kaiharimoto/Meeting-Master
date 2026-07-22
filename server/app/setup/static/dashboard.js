@@ -496,6 +496,76 @@
     var el = $("#" + f);
     if (el) el.addEventListener("input", function () { editedAi[f] = true; });
   });
+
+  // ---- AI helpers: installed-model picker, suggested context, live test ----
+  var ollamaModels = [];
+  function loadOllamaModels() {
+    fetch("/setup/ollama-models").then(function (r) { return r.json(); })
+      .then(function (p) {
+        ollamaModels = p.models || [];
+        var dl = $("#ollama-model-list");
+        if (!dl) return;
+        dl.textContent = "";
+        ollamaModels.forEach(function (m) {
+          var o = document.createElement("option");
+          o.value = m.name;
+          o.label = m.paramSize ? (m.paramSize + ", " + m.sizeGB + " GB") : "";
+          dl.appendChild(o);
+        });
+      }).catch(function () {});
+  }
+  loadOllamaModels();
+
+  function paramBillions(p) {
+    var m = /([0-9.]+)\s*B/i.exec(p || "");
+    return m ? parseFloat(m[1]) : null;
+  }
+  function aiResult(text, color) {
+    var el = $("#ai-test-result");
+    el.textContent = text;
+    el.style.color = color || "var(--ink-soft)";
+  }
+  var suggestBtn = $("#ai-suggest");
+  if (suggestBtn) suggestBtn.addEventListener("click", function () {
+    var name = $("#ollamaModel").value.trim();
+    var info = null;
+    ollamaModels.forEach(function (m) { if (m.name === name) info = m; });
+    var b = info ? paramBillions(info.paramSize) : null;
+    // Bigger model => smaller safe context (the KV cache shares VRAM with the
+    // weights). Long meetings chunk automatically, so smaller is safe.
+    var ctx = b == null ? 16384 : b >= 20 ? 16384 : b >= 10 ? 24576 : b >= 4 ? 32768 : 65536;
+    $("#numCtx").value = ctx;
+    editedAi.numCtx = true;
+    aiResult((info ? name + " (" + info.paramSize + ", " + info.sizeGB + " GB): " :
+              "Model not in Ollama's installed list — conservative ") +
+             "suggested context " + ctx + ". Click 'Test AI now' to prove it loads, then Save.");
+  });
+  var testBtn = $("#ai-test");
+  if (testBtn) testBtn.addEventListener("click", function () {
+    aiResult("Testing — first load of a big model can take a minute…");
+    testBtn.disabled = true;
+    fetch("/setup/ai-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numCtx: parseInt($("#numCtx").value, 10) || null }),
+    }).then(function (r) { return r.json(); })
+      .then(function (p) {
+        testBtn.disabled = false;
+        if (p.ok) {
+          aiResult("\u2713 " + p.model + " answered in " + (p.latencyMs / 1000).toFixed(1) +
+                   "s with context " + p.numCtx + " — these settings work. Save to keep them.",
+                   "var(--success)");
+        } else {
+          aiResult("\u2717 Failed with context " + p.numCtx + ": " + (p.error || "unknown error") +
+                   " — try a lower context window or a smaller model, then test again.",
+                   "var(--danger)");
+        }
+      })
+      .catch(function () {
+        testBtn.disabled = false;
+        aiResult("Test request failed — is the server still running?", "var(--danger)");
+      });
+  });
   $("#whisperModel").addEventListener("input", function () { editedWhisper = true; });
   $("#copy").addEventListener("click", function () {
     var text = $("#code").textContent;

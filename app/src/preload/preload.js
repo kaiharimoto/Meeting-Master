@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('api', {
   // External-AI escape hatch (v0.4.0)
   getJobPrompt: (jobId) => call(CHANNELS.JOB_PROMPT, jobId),
   retrySummary: (jobId) => call(CHANNELS.JOB_SUMMARIZE_RETRY, jobId),
+  getEmailPreview: (jobId) => call(CHANNELS.JOB_EMAIL_PREVIEW, jobId),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
 
   // Server-mode window pages (boot page + Dashboard tab in the one window)

@@ -42,6 +42,7 @@ const CHANNELS = Object.freeze({
   // External-AI escape hatch (v0.4.0)
   JOB_PROMPT: 'job:prompt',
   JOB_SUMMARIZE_RETRY: 'job:summarizeRetry',
+  JOB_EMAIL_PREVIEW: 'job:emailPreview',
   FILE_SAVE_TEXT: 'file:saveText',
 });
 
