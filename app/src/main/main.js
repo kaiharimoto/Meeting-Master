@@ -21,6 +21,7 @@ const paths = require('./paths');
 const updater = require('./updater');
 
 let mainWindow = null;
+let notesWindow = null; // server mode's "notes studio" — the operator UI against the local server
 let tray = null;
 
 // ---- Single instance --------------------------------------------------------
@@ -102,11 +103,14 @@ function overlayForTheme(theme) {
 
 /** Called from IPC when the renderer's theme changes. */
 function setOverlayTheme(theme) {
-  if (!useOverlay || !mainWindow || mainWindow.isDestroyed()) return;
-  try {
-    mainWindow.setTitleBarOverlay(overlayForTheme(theme));
-  } catch {
-    // Not fatal — the overlay just keeps its previous colors.
+  if (!useOverlay) return;
+  for (const win of [mainWindow, notesWindow]) {
+    if (!win || win.isDestroyed()) continue;
+    try {
+      win.setTitleBarOverlay(overlayForTheme(theme));
+    } catch {
+      // Windows without an overlay (dashboard window) — not fatal.
+    }
   }
 }
 
@@ -237,6 +241,39 @@ function showMainWindow() {
   }
 }
 
+/** Server mode's notes studio: the FULL operator UI in a second window,
+ *  talking to the local sidecar (config.get() falls back to localhost + the
+ *  server.env token in server mode). This is how the home PC gets transcripts,
+ *  imports an external AI's summary, and produces/emails PDFs itself. */
+function openNotesStudio() {
+  if (notesWindow && !notesWindow.isDestroyed()) {
+    notesWindow.show();
+    notesWindow.focus();
+    return;
+  }
+  notesWindow = new BrowserWindow({
+    width: 1150,
+    height: 820,
+    minWidth: 900,
+    minHeight: 650,
+    backgroundColor: '#eef1f6',
+    icon: appIconPath(),
+    ...(useOverlay
+      ? { titleBarStyle: 'hidden', titleBarOverlay: overlayForTheme('light') }
+      : {}),
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false, // same constraint as the operator window (preload require)
+    },
+  });
+  notesWindow.loadFile(rendererFile('index.html'));
+  notesWindow.on('closed', () => {
+    notesWindow = null;
+  });
+}
+
 async function installFromTray() {
   const result = await updater.installNow();
   if (result && !result.ok && result.error) {
@@ -250,6 +287,7 @@ function refreshTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Meeting Master', click: showMainWindow },
+      { label: 'Open meeting notes (create PDFs)', click: openNotesStudio },
       {
         label: 'Open dashboard in browser',
         click: () => shell.openExternal(serverManager.dashboardUrl()),
@@ -338,6 +376,10 @@ function startServerMode(startHidden) {
   wireSidecarToWindow();
   serverManager.start();
 
+  // Live events for the notes studio (config.get() resolves the local
+  // sidecar's URL/token in server mode, so this streams from ourselves).
+  sseClient.start(activeWindow);
+
   // Updates come from the sidecar's own loopback feed; the tray offers the
   // restart, and quitting installs automatically (autoInstallOnAppQuit).
   updater.start(() => mainWindow);
@@ -346,6 +388,12 @@ function startServerMode(startHidden) {
     // An always-on home server should survive reboots without a manual launch.
     app.setLoginItemSettings({ openAtLogin: true, args: ['--tray-start'] });
   }
+}
+
+/** The window renderer-facing IPC should talk to: the notes studio when it
+ *  is open (server mode), else the main window. */
+function activeWindow() {
+  return notesWindow && !notesWindow.isDestroyed() ? notesWindow : mainWindow;
 }
 
 function startOperatorMode() {
@@ -374,7 +422,8 @@ app.whenReady().then(() => {
 
   // Handlers need a live window reference for dialogs and progress events,
   // so hand them a getter instead of the (possibly recreated) window itself.
-  registerIpcHandlers(() => mainWindow, { setOverlayTheme });
+  // activeWindow prefers the notes studio when it is open (server mode).
+  registerIpcHandlers(activeWindow, { setOverlayTheme });
 
   const resolved = config.resolveMode();
   if (resolved === 'server') {

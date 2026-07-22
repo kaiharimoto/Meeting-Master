@@ -7,7 +7,7 @@ let ctx = null;
 let onSaved = null;
 
 let backdrop, takeawaysEl, decisionsEl, actionsHost, figuresEl, topicsEl,
-  ownerOptions, addActionBtn, saveBtn, cancelBtn;
+  ownerOptions, addActionBtn, saveBtn, cancelBtn, importText, importBtn, importNote;
 
 const PRIORITIES = ['high', 'normal', 'low'];
 
@@ -26,9 +26,14 @@ export function initSummaryEdit(context, opts) {
   saveBtn = document.getElementById('sum-save-btn');
   cancelBtn = document.getElementById('sum-cancel-btn');
 
+  importText = document.getElementById('sum-import-text');
+  importBtn = document.getElementById('sum-import-btn');
+  importNote = document.getElementById('sum-import-note');
+
   addActionBtn.addEventListener('click', () => actionsHost.append(buildActionRow({})));
   saveBtn.addEventListener('click', save);
   cancelBtn.addEventListener('click', close);
+  if (importBtn) importBtn.addEventListener('click', applyImport);
   backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
   backdrop.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); close(); }
@@ -59,7 +64,103 @@ function textToLines(text) {
     .filter(Boolean);
 }
 
+// ---- Import AI output --------------------------------------------------------
+// Accepts the JSON an external model produced from the "Copy AI prompt"
+// harness (renderer-side mirror of the server's summarize._coerce — kept
+// intentionally forgiving: markdown fences, chatter around the JSON, string
+// action items, snake_case keys).
+
+function stringList(data, keys) {
+  for (const key of keys) {
+    const raw = data[key];
+    if (Array.isArray(raw)) {
+      return raw
+        .map((item) => String(item ?? '').replace(/^[-•*]\s*/, '').trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+}
+
+export function parseAiSummary(rawText) {
+  let text = String(rawText || '').trim();
+  if (!text) throw new Error('Paste the AI reply first.');
+  // Strip a ```json fence, or dig the outermost {...} out of surrounding prose.
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) text = fenced[1].trim();
+  if (!text.startsWith('{')) {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end <= start) {
+      throw new Error('No JSON object found — paste the model\'s full JSON reply.');
+    }
+    text = text.slice(start, end + 1);
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('That JSON could not be parsed — copy the model\'s reply exactly.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Expected a JSON object with keyTakeaways/decisions/… sections.');
+  }
+  const actionsRaw = Array.isArray(data.actionItems)
+    ? data.actionItems
+    : Array.isArray(data.action_items) ? data.action_items : [];
+  const actionItems = actionsRaw
+    .map((item) => {
+      if (typeof item === 'string') {
+        const task = item.replace(/^[-•*]\s*/, '').trim();
+        return task ? { task, owner: '', due: '', priority: 'normal' } : null;
+      }
+      if (!item || typeof item !== 'object') return null;
+      const task = String(item.task || item.action || '').trim();
+      if (!task) return null;
+      const priority = String(item.priority || 'normal').trim().toLowerCase();
+      return {
+        task,
+        owner: String(item.owner || item.assignee || '').trim(),
+        due: String(item.due || item.dueDate || item.when || '').trim(),
+        priority: ['high', 'normal', 'low'].includes(priority) ? priority : 'normal',
+      };
+    })
+    .filter(Boolean);
+  const summary = {
+    keyTakeaways: stringList(data, ['keyTakeaways', 'key_takeaways']),
+    decisions: stringList(data, ['decisions', 'decisionsMade']),
+    actionItems,
+    keyFigures: stringList(data, ['keyFigures', 'key_figures', 'figures']),
+    topics: stringList(data, ['topics', 'topicsDiscussed']),
+  };
+  if (
+    !summary.keyTakeaways.length && !summary.decisions.length &&
+    !summary.actionItems.length && !summary.keyFigures.length && !summary.topics.length
+  ) {
+    throw new Error('The JSON parsed but contained no summary sections.');
+  }
+  return summary;
+}
+
+function applyImport() {
+  if (!importText) return;
+  try {
+    const s = parseAiSummary(importText.value);
+    takeawaysEl.value = linesToText(s.keyTakeaways);
+    decisionsEl.value = linesToText(s.decisions);
+    figuresEl.value = linesToText(s.keyFigures);
+    topicsEl.value = linesToText(s.topics);
+    actionsHost.replaceChildren(...s.actionItems.map((item) => buildActionRow(item)));
+    importText.value = '';
+    importNote.textContent = 'Imported — review the fields, then Save.';
+  } catch (err) {
+    importNote.textContent = err.message || String(err);
+  }
+}
+
 export function openSummaryEdit() {
+  if (importText) importText.value = '';
+  if (importNote) importNote.textContent = '';
   const s = currentSummary();
   takeawaysEl.value = linesToText(s.keyTakeaways);
   decisionsEl.value = linesToText(s.decisions);

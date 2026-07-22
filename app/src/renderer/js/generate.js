@@ -40,6 +40,16 @@ export function initGenerate(context) {
   els.open.addEventListener('click', () => guarded(onOpenPdf));
   els.send.addEventListener('click', () => guarded(onSendEmail));
 
+  // Transcript escape hatch (v0.4.0): grab the raw transcript / the exact AI
+  // prompt so an EXTERNAL model can write the summary when the local one
+  // can't (context overflow etc.); its JSON reply imports via Edit summary.
+  els.copyTranscript = document.getElementById('copy-transcript-btn');
+  els.saveTranscript = document.getElementById('save-transcript-btn');
+  els.copyPrompt = document.getElementById('copy-ai-prompt-btn');
+  if (els.copyTranscript) els.copyTranscript.addEventListener('click', () => guarded(onCopyTranscript));
+  if (els.saveTranscript) els.saveTranscript.addEventListener('click', () => guarded(onSaveTranscript));
+  if (els.copyPrompt) els.copyPrompt.addEventListener('click', () => guarded(onCopyAiPrompt));
+
   // Dev nicety: Ctrl+Shift+M loads the mock meeting fixture.
   document.addEventListener('keydown', onDevMockShortcut);
 
@@ -337,6 +347,65 @@ export function updateButtons(context) {
   els.generate.disabled = !hasApi; // PDF works even without AI results
   els.open.disabled = !hasApi || !c.state.pdfPath;
   els.send.disabled = !hasApi || !c.state.pdfPath;
+  const transcriptText = c.state.transcript && c.state.transcript.text;
+  if (els.copyTranscript) els.copyTranscript.disabled = !transcriptText;
+  if (els.saveTranscript) {
+    els.saveTranscript.disabled =
+      !transcriptText || !hasApi || typeof c.api.saveTextFile !== 'function';
+  }
+  if (els.copyPrompt) {
+    // The server composes the prompt, so it needs the job to still exist there.
+    const jobId = c.state.job && c.state.job.id;
+    els.copyPrompt.disabled =
+      !hasApi || !jobId || !transcriptText || typeof c.api.getJobPrompt !== 'function';
+  }
+}
+
+// ---- Transcript / external-AI escape hatch ----------------------------------
+
+function transcriptOrExplain() {
+  const text = ctx.state.transcript && ctx.state.transcript.text;
+  if (!text) {
+    showError('No transcript yet — it appears once the AI job has transcribed the audio.');
+    return null;
+  }
+  return text;
+}
+
+async function onCopyTranscript() {
+  const text = transcriptOrExplain();
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  setStatus('Transcript copied to the clipboard.');
+  showToast({ kind: 'success', title: 'Transcript copied', message: 'Paste it anywhere.' });
+}
+
+async function onSaveTranscript() {
+  const text = transcriptOrExplain();
+  if (!text) return;
+  const title = (ctx.state.details && ctx.state.details.title) || 'meeting';
+  const safe = title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'meeting';
+  const { filePath } = await ctx.api.pickSavePath(`${safe}-transcript.txt`);
+  if (!filePath) return;
+  await ctx.api.saveTextFile(filePath, text); // renderer has no fs — main writes it
+  setStatus(`Transcript saved: ${filePath}`);
+}
+
+async function onCopyAiPrompt() {
+  const jobId = ctx.state.job && ctx.state.job.id;
+  if (!jobId) {
+    showError('No AI job for this meeting — upload the recording first (the prompt embeds the transcript held by the server).');
+    return;
+  }
+  setStatus('Fetching the AI prompt…', { busy: true });
+  const { text } = await ctx.api.getJobPrompt(jobId);
+  await navigator.clipboard.writeText(text);
+  setStatus('AI prompt copied — paste it into your model, then import its JSON reply via Edit summary.');
+  showToast({
+    kind: 'success',
+    title: 'AI prompt copied',
+    message: 'Paste into Claude/ChatGPT; import the JSON reply via Edit summary → Import AI output.',
+  });
 }
 
 // ---- Dev shortcut ----------------------------------------------------------------

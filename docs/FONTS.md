@@ -4,21 +4,24 @@ The PDF's typography contract (24pt details and questions, 16pt summary) is
 set in **Neue Haas Grotesk**. The font files are licensed and therefore never
 committed — you supply them.
 
-## Expected filenames
+## Drop each weight into its folder — any file name (v0.4.0+)
 
-Exactly two font bases, in any of three formats (`.woff2` preferred, then
-`.otf`, then `.ttf` — the first extension found wins):
+Open the fonts folder from the app (**Settings → Open fonts folder**). Inside
+are three weight folders; put ONE font file in each — **the file name does not
+matter**, so foundry downloads work as-is:
 
-| Weight | Filename |
+| Folder | Weight it supplies |
 | --- | --- |
-| Roman (400) | `NeueHaasGrotesk-Roman.woff2` / `.otf` / `.ttf` |
-| Bold (700) | `NeueHaasGrotesk-Bold.woff2` / `.otf` / `.ttf` |
-- `NeueHaasGrotesk-Medium.woff2` / `.otf` / `.ttf` — **optional** third weight;
-  gives the PDF's small uppercase labels a true 500 weight instead of a
-  synthesized one. Everything works without it.
+| `roman/` | Roman (400) — body text |
+| `bold/` | Bold (700) — headings |
+| `medium/` | Medium (500) — **optional**; true weight for the small uppercase labels (synthesized without it) |
 
-Any other filename is not picked up. (Lookup logic:
-`app/src/main/paths.js` → `findFont()`.)
+Formats accepted: `.woff2` (preferred), `.woff`, `.otf`, `.ttf`. If a folder
+somehow contains several files, the best format (then alphabetical) wins.
+
+Legacy exact-name files still work as a fallback — `NeueHaasGrotesk-Roman.*`,
+`NeueHaasGrotesk-Bold.*`, `NeueHaasGrotesk-Medium.*` directly in the fonts
+folder. (Lookup logic: `app/src/main/paths.js` → `findFont()`.)
 
 ## Where the files live
 
@@ -37,8 +40,9 @@ Any other filename is not picked up. (Lookup logic:
   (`paths.migrateFonts()`), so pre-0.2.1 installs keep their fonts across
   the next update automatically.
 
-Lookup order per file: user folder then bundled dir, `.woff2` → `.otf` →
-`.ttf` (`app/src/main/paths.js` → `findFont()`).
+Lookup order per weight: the weight folder (`roman/`, `bold/`, `medium/` in
+the user folder, any file name), then exact-name files in the user folder,
+then the bundled dir.
 
 ## How the fonts reach the PDF (runtime injection)
 

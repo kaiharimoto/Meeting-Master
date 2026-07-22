@@ -59,6 +59,29 @@ Everything updates from the **home server's dashboard** (Overview → Updates):
 - A laptop only sees an update **after** the home server has cached it, so
   if the laptop seems behind, run "Check for updates" on the dashboard first.
 
+## Summary is empty or failed (e.g. a model context error) — use your own AI
+
+Transcription and summarization are separate: even when the local model
+chokes (context overflow on a long meeting, Ollama error), the **transcript
+survives** and the job completes with an empty summary. The escape hatch
+(v0.4.0+) lets any external model (Claude, ChatGPT, …) write the summary in
+exactly the format Meeting Master needs:
+
+1. **Get the prompt:** on the Meeting screen click **Copy AI prompt** (or on
+   the dashboard's Jobs tab click **AI prompt**). It contains the full
+   instructions + the transcript, ready to paste into your model. (**Copy
+   transcript** / **Save transcript** / the dashboard's **transcript** link
+   give you the raw text alone.)
+2. **Run it** in your online model and copy its JSON reply.
+3. **Import it:** back in Meeting Master, **Edit summary → Import AI output**,
+   paste, **Apply import**, then **Save**. Generate the PDF and send the email
+   as usual.
+
+On the **home server machine** the same flow lives in the tray → **Open
+meeting notes (create PDFs)** — the full meeting UI against the local server:
+open the job from the Activity screen (**Open in Meeting**), then follow the
+steps above.
+
 ## The laptop's server pill is red / "Server unreachable"
 
 The pill in the laptop's sidebar is fed by a live event stream plus a

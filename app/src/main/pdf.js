@@ -94,19 +94,19 @@ async function renderMeetingPdf({ meeting, transcript, summary, pageSize }) {
       await win.webContents.insertCSS(rules.join('\n'));
       fontUsed = true;
       if (!roman || !bold) {
-        const missing = roman ? 'Bold' : 'Roman';
+        const missing = roman ? 'bold' : 'roman';
         warning =
-          `Only one Neue Haas Grotesk weight was found — the ${missing} weight ` +
-          'is missing, so that weight is synthesized/substituted. ' +
-          'See assets/fonts/README.md.';
+          `Only one Neue Haas Grotesk weight was found — drop the missing one ` +
+          `into the "${missing}" folder (Settings → Open fonts folder; any ` +
+          'file name works) so it is not synthesized/substituted.';
       }
     } else {
       // No brand fonts: skip injection so print.css falls back to Arial.
       warning =
         'Neue Haas Grotesk font files were not found — the PDF uses the Arial ' +
-        `fallback. Drop the font files into ${paths.fontsDir()} ` +
-        '(Settings → Open fonts folder; see docs/FONTS.md). That folder ' +
-        'survives app updates.';
+        'fallback. Drop each weight into its folder ("roman" and "bold", any ' +
+        `file name) under ${paths.fontsDir()} — Settings → Open fonts folder. ` +
+        'That folder survives app updates.';
     }
 
     // ---- Inject the data -------------------------------------------------

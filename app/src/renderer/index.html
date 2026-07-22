@@ -138,6 +138,14 @@
             <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
             <button id="send-email-btn" type="button" class="btn btn-primary" disabled>Send email</button>
           </div>
+          <div class="button-row">
+            <button id="copy-transcript-btn" type="button" class="btn btn-secondary" disabled
+                    title="Copy the meeting transcript to the clipboard">Copy transcript</button>
+            <button id="save-transcript-btn" type="button" class="btn btn-secondary" disabled
+                    title="Save the transcript as a .txt file">Save transcript</button>
+            <button id="copy-ai-prompt-btn" type="button" class="btn btn-secondary" disabled
+                    title="Copy a ready-to-paste prompt for an external AI (Claude, ChatGPT, …). Paste its JSON reply back via Edit summary → Import AI output">Copy AI prompt</button>
+          </div>
 
           <div id="status-line" class="status-line" role="status" aria-live="polite">
             <span id="status-spinner" class="spinner" hidden></span>
@@ -282,6 +290,16 @@
         <textarea id="sum-topics" rows="2" placeholder="One topic per line"></textarea>
       </div>
 
+      <div class="field">
+        <label for="sum-import-text">Import AI output</label>
+        <textarea id="sum-import-text" rows="3"
+                  placeholder="Ran the transcript through your own AI (Copy AI prompt)? Paste its JSON reply here…"></textarea>
+        <div class="settings-code-row">
+          <button id="sum-import-btn" type="button" class="btn btn-secondary">Apply import</button>
+          <span id="sum-import-note" class="settings-help" role="status"></span>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <span class="keyboard-hint">One item per line.</span>
         <button id="sum-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
@@ -369,8 +387,10 @@
           <button id="open-fonts-btn" type="button" class="btn btn-secondary">Open fonts folder</button>
         </div>
         <p class="settings-help">
-          Drop your licensed Neue Haas Grotesk files in this folder — it survives
-          app updates. See docs/FONTS.md for the exact file names.
+          Drop each licensed Neue Haas Grotesk file into its weight folder —
+          <strong>roman</strong>, <strong>bold</strong> (and optionally
+          <strong>medium</strong>). Any file name works, and the folder
+          survives app updates.
         </p>
       </div>
 

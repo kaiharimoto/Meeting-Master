@@ -334,6 +334,26 @@
       when.textContent = friendlyWhen(job.updatedAt);
       row.appendChild(when);
 
+      // Once a transcript can exist, offer it + the external-AI prompt (the
+      // escape hatch for meetings the local model can't summarize).
+      var hasTranscript = ["ready", "pdf_received", "emailed", "summarizing", "failed"]
+        .indexOf(job.state) !== -1;
+      if (hasTranscript && job.id) {
+        var tLink = document.createElement("a");
+        tLink.className = "job-link";
+        tLink.href = "/setup/jobs/" + encodeURIComponent(job.id) + "/transcript";
+        tLink.textContent = "transcript";
+        row.appendChild(tLink);
+
+        var pLink = document.createElement("a");
+        pLink.className = "job-link";
+        pLink.href = "/setup/jobs/" + encodeURIComponent(job.id) + "/prompt";
+        pLink.target = "_blank";
+        pLink.title = "Prompt for an external AI (paste its JSON reply back via Edit summary → Import)";
+        pLink.textContent = "AI prompt";
+        row.appendChild(pLink);
+      }
+
       if (typeof job.progress === "number" && job.progress > 0 && job.state === "transcribing") {
         var barWrap = document.createElement("span");
         barWrap.className = "job-progress";

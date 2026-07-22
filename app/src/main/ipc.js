@@ -100,6 +100,11 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
 
   handle(CHANNELS.JOB_STATUS, (jobId) => homeClient.getJob(jobId));
 
+  handle(CHANNELS.JOB_PROMPT, async (jobId) => {
+    if (!jobId) throw new Error('No job to fetch a prompt for.');
+    return { text: await homeClient.getJobPrompt(jobId) };
+  });
+
   // ---- PDF -------------------------------------------------------------------
 
   handle(CHANNELS.PDF_RENDER, (meeting, transcript, summary) => {
@@ -159,6 +164,14 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       defaultPath: defaultName || undefined,
     });
     return { filePath: !canceled && filePath ? filePath : null };
+  });
+
+  // Write plain text to a path the user just picked via FILE_PICK_SAVE (the
+  // renderer has no filesystem access). Used for transcript export.
+  handle(CHANNELS.FILE_SAVE_TEXT, async (filePath, text) => {
+    if (!filePath) throw new Error('No file path to save to.');
+    require('fs').writeFileSync(filePath, String(text ?? ''), 'utf8');
+    return { ok: true, path: filePath };
   });
 
   // ---- App shell ---------------------------------------------------------------

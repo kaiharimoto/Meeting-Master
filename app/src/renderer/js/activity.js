@@ -217,6 +217,37 @@ function friendlyWhen(iso) {
   }
 }
 
+async function openJobInMeeting(jobId) {
+  if (!ctx.api || typeof ctx.api.getJobStatus !== 'function') return;
+  const sure = window.confirm(
+    'Load this job into the Meeting screen? It replaces whatever the Meeting screen currently shows.'
+  );
+  if (!sure) return;
+  try {
+    const job = await ctx.api.getJobStatus(jobId);
+    const meeting = job.meeting || {};
+    ctx.state.details = meeting.details || { title: '', date: '', time: '', attendees: [] };
+    ctx.state.cards = Array.isArray(meeting.cards) ? meeting.cards : [];
+    ctx.state.recipients = Array.isArray(meeting.recipients) ? meeting.recipients : [];
+    ctx.state.options = meeting.options || ctx.state.options;
+    ctx.state.transcript = job.transcript || null;
+    ctx.state.summary = job.summary || null;
+    ctx.state.extractedQuestions = Array.isArray(job.questions) ? job.questions : [];
+    ctx.state.questionsReviewed = false;
+    ctx.state.job = { id: job.id, state: job.state, progress: job.progress ?? null };
+    ctx.state.pdfPath = null;
+    ctx.persist();
+    ctx.renderAll();
+    // Terminal jobs stop any leftover poll interval; mid-pipeline ones resume.
+    const { maybeResumePolling } = await import('./generate.js');
+    maybeResumePolling();
+    const { showScreen } = await import('./nav.js');
+    showScreen('meeting');
+  } catch (err) {
+    window.alert(`Could not load the job: ${(err && err.message) || err}`);
+  }
+}
+
 function renderJobs() {
   const host = els.jobs;
   host.replaceChildren();
@@ -255,6 +286,19 @@ function renderJobs() {
     when.className = 'job-when';
     when.textContent = friendlyWhen(job.updatedAt);
     row.append(when);
+
+    // Any job with server-side results can be pulled into the Meeting screen
+    // (details + transcript + summary + detected questions) — the way to make
+    // a PDF for a meeting this machine never captured (e.g. on the home
+    // server), or to redo one after a summary failure.
+    if (['ready', 'pdf_received', 'emailed', 'failed'].includes(job.state)) {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'btn btn-secondary btn-small job-open-btn';
+      open.textContent = 'Open in Meeting';
+      open.addEventListener('click', () => openJobInMeeting(job.id));
+      row.append(open);
+    }
 
     list.append(row);
   });

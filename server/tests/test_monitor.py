@@ -254,3 +254,39 @@ def test_event_routes_registered():
 
     paths = set(walk(fastapi_app.routes))
     assert {"/events", "/logs/tail", "/setup/events", "/setup/jobs", "/setup/logs"} <= paths
+
+
+# ---- Transcript + external-AI prompt endpoints ------------------------------
+
+def test_transcript_and_prompt_endpoints(client):
+    job_id = _upload(client)
+    _wait_ready(client, job_id)
+
+    # Bearer-gated transcript download.
+    assert client.get(f"/jobs/{job_id}/transcript").status_code == 401
+    resp = client.get(f"/jobs/{job_id}/transcript", headers=AUTH)
+    assert resp.status_code == 200
+    assert resp.headers["content-disposition"].startswith("attachment")
+    assert resp.text.strip()  # the fake whisper stub produced text
+
+    # The prompt embeds the real system prompt, the meeting context, the
+    # transcript, and the round-trip instructions.
+    prompt = client.get(f"/jobs/{job_id}/prompt", headers=AUTH)
+    assert prompt.status_code == 200
+    assert "keyTakeaways" in prompt.text          # schema the reply must use
+    assert resp.text.strip()[:40] in prompt.text  # transcript embedded
+    assert "Import AI output" in prompt.text      # round-trip instructions
+
+    # Loopback dashboard mirrors (no bearer, loopback-only).
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40001))
+    assert local.get(f"/setup/jobs/{job_id}/transcript").status_code == 200
+    assert local.get(f"/setup/jobs/{job_id}/prompt").status_code == 200
+    remote = TestClient(app, client=("203.0.113.9", 40002))
+    assert remote.get(f"/setup/jobs/{job_id}/transcript").status_code == 403
+
+    # Unknown job / no transcript -> 404.
+    assert client.get("/jobs/nope/transcript", headers=AUTH).status_code == 404
+    assert client.get("/jobs/nope/prompt", headers=AUTH).status_code == 404

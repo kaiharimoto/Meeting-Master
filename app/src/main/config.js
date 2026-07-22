@@ -104,10 +104,25 @@ function get() {
   const rawMode = val('APP_MODE').toLowerCase();
   const mode = rawMode === 'server' || rawMode === 'operator' ? rawMode : '';
 
+  // Server mode: this machine IS the home server, so default the connection
+  // to the local sidecar (its port + bearer token from server.env). This is
+  // what lets the notes studio, SSE and job calls work with no pairing step.
+  let serverUrl = val('HOME_SERVER_URL').replace(/\/+$/, '');
+  let bearerToken = val('BEARER_TOKEN');
+  if (mode === 'server' && (!serverUrl || !bearerToken)) {
+    try {
+      const serverManager = require('./serverManager');
+      if (!serverUrl) serverUrl = `http://127.0.0.1:${serverManager.serverPort()}`;
+      if (!bearerToken) bearerToken = serverManager.serverBearerToken();
+    } catch {
+      // Outside Electron main (tests) — leave as configured.
+    }
+  }
+
   return {
     mode,
-    serverUrl: val('HOME_SERVER_URL').replace(/\/+$/, ''),
-    bearerToken: val('BEARER_TOKEN'),
+    serverUrl,
+    bearerToken,
     emailMode,
     pageSize,
     smtpUser: val('SMTP_USER'),

@@ -74,6 +74,31 @@ _MERGE_SYSTEM_PROMPT = (
 )
 
 
+def external_prompt(transcript_text: str, meeting: MeetingMeta) -> str:
+    """The exact prompt harness this server sends to its local model, packaged
+    for pasting into ANY external chatbot (Claude, ChatGPT, …). Kept as the
+    single source of truth: it embeds the real SYSTEM_PROMPT, so the external
+    model produces the same JSON the app's "Import AI output" button accepts.
+    Served by GET /jobs/{id}/prompt and the dashboard's per-job link."""
+    context = _ollama.meeting_context(meeting)
+    return (
+        "=== INSTRUCTIONS (system prompt) "
+        "==========================================\n\n"
+        f"{SYSTEM_PROMPT}\n\n"
+        "=== TASK "
+        "==================================================================\n\n"
+        f"{context}\n"
+        "Summarize the following meeting transcript into the JSON sections "
+        "described:\n\n"
+        f"{transcript_text}\n\n"
+        "=== WHAT TO DO WITH THE REPLY "
+        "=============================================\n\n"
+        "Copy the model's JSON reply. In Meeting Master, open Edit summary → "
+        "Import AI output, paste it, click Apply import, then Save. Generate "
+        "the PDF as usual."
+    )
+
+
 def _string_list(data: dict, key: str, *aliases: str, limit: int) -> list[str]:
     raw = data.get(key)
     for alias in aliases:

@@ -154,6 +154,20 @@ async function listJobs(limit = 50) {
   return res.json();
 }
 
+/** GET /jobs/{id}/prompt — the external-AI prompt harness for a job's
+ *  transcript (plain text, composed by the server as the single source of
+ *  truth so the format never drifts from what the local model gets). */
+async function getJobPrompt(jobId) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/jobs/${encodeURIComponent(jobId)}/prompt`,
+    { headers, signal: AbortSignal.timeout(30000) },
+    'fetching the AI prompt'
+  );
+  if (!res.ok) await throwHttpError(res, 'fetching the AI prompt');
+  return res.text();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -166,4 +180,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt };

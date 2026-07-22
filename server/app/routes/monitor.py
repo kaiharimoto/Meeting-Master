@@ -19,7 +19,7 @@ import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 
 from .. import updates
 from ..auth import verify_token
@@ -59,6 +59,43 @@ def logs_payload(request: Request, lines: int) -> dict:
     ring = getattr(request.app.state, "log_ring", None)
     lines = max(1, min(int(lines), 1000))
     return {"lines": ring.tail(lines) if ring is not None else []}
+
+
+def _job_with_transcript(request: Request, job_id: str):
+    record = request.app.state.store.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown job id: {job_id}")
+    if record.transcript is None or not (record.transcript.text or "").strip():
+        raise HTTPException(
+            status_code=404,
+            detail="This job has no transcript yet (it may still be transcribing, "
+                   "or it failed before transcription finished).",
+        )
+    return record
+
+
+def transcript_response(request: Request, job_id: str) -> PlainTextResponse:
+    """The raw transcript as a downloadable .txt — the escape hatch for using
+    an external model when local summarization can't handle the meeting."""
+    record = _job_with_transcript(request, job_id)
+    return PlainTextResponse(
+        record.transcript.text,
+        headers={
+            "Content-Disposition": f'attachment; filename="meeting-transcript-{job_id}.txt"'
+        },
+    )
+
+
+def prompt_response(request: Request, job_id: str) -> PlainTextResponse:
+    """The full prompt harness (system prompt + task + this job's transcript),
+    ready to paste into any external chatbot; its JSON reply round-trips back
+    in through the app's summary editor Import button."""
+    from ..pipeline import summarize  # late import — pipeline pulls httpx
+
+    record = _job_with_transcript(request, job_id)
+    return PlainTextResponse(
+        summarize.external_prompt(record.transcript.text, record.meeting)
+    )
 
 
 def _sse(eid: int, event: str, data_json: str) -> str:
@@ -146,6 +183,16 @@ async def events(request: Request) -> StreamingResponse:
 @router.get("/logs/tail")
 async def logs_tail(request: Request, lines: int = Query(200)) -> dict:
     return logs_payload(request, lines)
+
+
+@router.get("/jobs/{job_id}/transcript")
+async def job_transcript(request: Request, job_id: str) -> PlainTextResponse:
+    return transcript_response(request, job_id)
+
+
+@router.get("/jobs/{job_id}/prompt")
+async def job_prompt(request: Request, job_id: str) -> PlainTextResponse:
+    return prompt_response(request, job_id)
 
 
 # ---- Laptop auto-update feed ------------------------------------------------

@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld('api', {
   getMode: () => call(CHANNELS.MODE_GET),
   setMode: (mode) => call(CHANNELS.MODE_SET, mode),
 
+  // External-AI escape hatch (v0.4.0)
+  getJobPrompt: (jobId) => call(CHANNELS.JOB_PROMPT, jobId),
+  saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
+
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
   onJobProgress: (cb) => {
     const listener = (_event, payload) => cb(payload);

@@ -111,6 +111,19 @@ function boot() {
   document.getElementById('edit-summary-btn').addEventListener('click', () => openSummaryEdit());
 
   const switchModeBtn = document.getElementById('switch-mode-btn');
+  // In the server-mode notes studio this UI IS on the home server — hide the
+  // "switch to server mode" field to avoid a confusing self-switch.
+  if (switchModeBtn && ctx.api && typeof ctx.api.getMode === 'function') {
+    ctx.api
+      .getMode()
+      .then((res) => {
+        if (res && res.mode === 'server') {
+          const field = switchModeBtn.closest('.field');
+          if (field) field.hidden = true;
+        }
+      })
+      .catch(() => {});
+  }
   if (switchModeBtn) {
     switchModeBtn.addEventListener('click', async () => {
       if (!ctx.api || typeof ctx.api.setMode !== 'function') {

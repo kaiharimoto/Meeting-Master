@@ -289,3 +289,17 @@ async def setup_logs(request: Request, lines: int = 200) -> dict:
     from ..routes import monitor
 
     return monitor.logs_payload(request, lines)
+
+
+@router.get("/jobs/{job_id}/transcript")
+async def setup_job_transcript(request: Request, job_id: str):
+    from ..routes import monitor
+
+    return monitor.transcript_response(request, job_id)
+
+
+@router.get("/jobs/{job_id}/prompt")
+async def setup_job_prompt(request: Request, job_id: str):
+    from ..routes import monitor
+
+    return monitor.prompt_response(request, job_id)

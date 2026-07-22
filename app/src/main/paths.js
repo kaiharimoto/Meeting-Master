@@ -29,7 +29,16 @@ const FONT_BASES = [
   'NeueHaasGrotesk-Bold',
   'NeueHaasGrotesk-Medium',
 ];
-const FONT_EXTS = ['.woff2', '.otf', '.ttf'];
+const FONT_EXTS = ['.woff2', '.woff', '.otf', '.ttf'];
+
+// Weight subfolders inside the user fonts dir. ANY font file dropped in the
+// right folder is used regardless of its file name — exact-name matching kept
+// tripping people up (v0.3.0 field report), foundry downloads never match.
+const WEIGHT_DIRS = Object.freeze({
+  'NeueHaasGrotesk-Roman': 'roman',
+  'NeueHaasGrotesk-Bold': 'bold',
+  'NeueHaasGrotesk-Medium': 'medium',
+});
 
 /** Update-proof, user-writable font location (created on demand). */
 function userFontsDir() {
@@ -60,11 +69,36 @@ function printHtmlPath() {
     : path.join(appRoot, 'src', 'renderer', 'print', 'print.html');
 }
 
+/** First font file inside a directory (best format first, then name), or null. */
+function firstFontIn(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir).filter((f) => FONT_EXTS.includes(path.extname(f).toLowerCase()));
+  } catch {
+    return null;
+  }
+  if (entries.length === 0) return null;
+  entries.sort(
+    (a, b) =>
+      FONT_EXTS.indexOf(path.extname(a).toLowerCase()) -
+        FONT_EXTS.indexOf(path.extname(b).toLowerCase()) || a.localeCompare(b)
+  );
+  return path.join(dir, entries[0]);
+}
+
 /**
- * Find a font file by base name: the user dir wins, the bundled dir is the
- * fallback. Returns an absolute path or null.
+ * Find a font file for a weight. Checked in order:
+ *   1. The weight subfolder (<userData>/fonts/roman|bold|medium) — any file
+ *      name counts; this is the advertised drop-in location.
+ *   2. Exact base-name files in the user dir, then the bundled dir (legacy).
+ * Returns an absolute path or null.
  */
 function findFont(base) {
+  const sub = WEIGHT_DIRS[base];
+  if (sub) {
+    const hit = firstFontIn(path.join(userFontsDir(), sub));
+    if (hit) return hit;
+  }
   for (const dir of [userFontsDir(), bundledFontsDir()]) {
     for (const ext of FONT_EXTS) {
       const candidate = path.join(dir, base + ext);
@@ -83,6 +117,14 @@ function findFont(base) {
 function migrateFonts() {
   const target = userFontsDir();
   const source = bundledFontsDir();
+  // Make the weight drop-folders exist so "Open fonts folder" shows them.
+  for (const sub of Object.values(WEIGHT_DIRS)) {
+    try {
+      fs.mkdirSync(path.join(target, sub), { recursive: true });
+    } catch {
+      // Best effort.
+    }
+  }
   for (const base of FONT_BASES) {
     for (const ext of FONT_EXTS) {
       const from = path.join(source, base + ext);
