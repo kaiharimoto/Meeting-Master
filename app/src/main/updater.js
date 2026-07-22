@@ -19,6 +19,10 @@ const serverManager = require('./serverManager');
 
 const FIRST_CHECK_DELAY_MS = 20 * 1000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+// Server mode polls its OWN sidecar's loopback feed (a 355-byte yml) — check
+// often, so a release the sidecar just cached installs within minutes, not
+// hours ("it's not updating" field report, v0.3.0).
+const SERVER_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 let getWindow = null;
 let checkTimer = null;
@@ -150,7 +154,9 @@ function start(windowGetter) {
   });
 
   setTimeout(checkNow, FIRST_CHECK_DELAY_MS);
-  checkTimer = setInterval(checkNow, CHECK_INTERVAL_MS);
+  const interval =
+    config.resolveMode() === 'server' ? SERVER_CHECK_INTERVAL_MS : CHECK_INTERVAL_MS;
+  checkTimer = setInterval(checkNow, interval);
 }
 
 /** Called from IPC / the tray when the user clicks "Restart to update". */

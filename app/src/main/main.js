@@ -281,6 +281,46 @@ async function installFromTray() {
   }
 }
 
+let updateCheckRunning = false;
+/** One click, whole chain: make the SIDECAR fetch/cache the newest GitHub
+ *  release, then make the APP check the freshly-updated loopback feed. This
+ *  is the "update NOW" path — without it the two update stages only meet on
+ *  their timers and an eager operator sees "not updating". */
+async function checkForUpdatesFromTray() {
+  if (updateCheckRunning) return;
+  updateCheckRunning = true;
+  try {
+    const base = `http://127.0.0.1:${serverManager.serverPort()}`;
+    try {
+      await fetch(`${base}/setup/install/update-check`, { method: 'POST' });
+      // Wait (bounded) for the sidecar's GitHub check/download to finish.
+      const deadline = Date.now() + 3 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const state = await (await fetch(`${base}/setup/state`)).json();
+        const task = (state.tasks || {})['update-check'];
+        if (!task || task.state !== 'running') break;
+      }
+    } catch {
+      // Sidecar unreachable — the app-side check below still tells the truth.
+    }
+    await updater.checkNow();
+    const s = updater.getState();
+    if (s.downloaded) return; // the tray item + tooltip already offer the restart
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Meeting Master',
+      message: s.available
+        ? `Update v${s.available} found — downloading now. The tray shows "Restart to update" when it's ready.`
+        : s.error
+          ? `Update check failed: ${s.error}`
+          : `You're up to date (v${app.getVersion()}).`,
+    });
+  } finally {
+    updateCheckRunning = false;
+  }
+}
+
 function refreshTray() {
   if (!tray) return;
   const updateReady = Boolean(updater.getState().downloaded);
@@ -297,6 +337,7 @@ function refreshTray() {
         click: () => shell.openPath(serverManager.configHome()),
       },
       { type: 'separator' },
+      { label: 'Check for updates now', click: checkForUpdatesFromTray },
       ...(updateReady
         ? [{ label: `Restart to update (v${updater.getState().downloaded})`, click: installFromTray }]
         : []),

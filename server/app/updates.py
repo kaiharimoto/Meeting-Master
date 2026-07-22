@@ -264,7 +264,9 @@ async def apply_server_update() -> None:
     if is_sidecar():
         bootstrap._set(APPLY_TASK, state="failed",
                        message="This server runs inside the Meeting Master app — "
-                               "the app installs updates itself on restart.")
+                               "use the app's tray icon: 'Check for updates now', "
+                               "then 'Restart to update' (updates also install "
+                               "whenever the app restarts).")
         return
     tag = _info.get("tag")
     if not tag:

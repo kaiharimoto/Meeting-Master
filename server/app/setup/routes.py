@@ -177,9 +177,17 @@ class SaveBody(BaseModel):
 
 
 # --- Routes -----------------------------------------------------------------
+
+# Dashboards must never run stale JS against a newer backend: a cached
+# pre-update dashboard.js once resurrected a long-hidden install button
+# (field report, v0.3.0). no-cache forces revalidation on every load — the
+# files are tiny and loopback-local, so this costs nothing.
+_NO_CACHE = {"Cache-Control": "no-cache"}
+
+
 @router.get("")
 async def setup_page() -> FileResponse:
-    return FileResponse(_STATIC_DIR / "setup.html")
+    return FileResponse(_STATIC_DIR / "setup.html", headers=_NO_CACHE)
 
 
 # Dashboard assets, served by explicit whitelist — deliberately NOT a
@@ -198,7 +206,7 @@ async def setup_asset(name: str) -> FileResponse:
     # 404 beats FileResponse's 500-with-traceback when diagnosing that.
     if media_type is None or not path.is_file():
         raise HTTPException(status_code=404, detail=f"Unknown asset: {name}")
-    return FileResponse(path, media_type=media_type)
+    return FileResponse(path, media_type=media_type, headers=_NO_CACHE)
 
 
 @router.get("/state")
