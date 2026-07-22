@@ -245,12 +245,33 @@ async function pollOnce() {
     });
   } else if (READY_STATES.includes(job.state)) {
     stopPolling();
-    setStatus(friendlyState(job.state));
-    showToast({
-      kind: 'success',
-      title: 'Summary & Q&A are ready',
-      message: 'Review the detected questions, then generate the PDF.',
-    });
+    // A ready job can still carry per-AI-stage failures (transcript done,
+    // summary and/or Q&A extraction failed) — say so LOUDLY with remedies,
+    // never silently ship an empty summary (v0.4.x field report).
+    if (job.summaryError || job.questionsError) {
+      const failedBits = [
+        job.summaryError ? 'summary' : null,
+        job.questionsError ? 'Q&A detection' : null,
+      ].filter(Boolean).join(' and ');
+      const reason = job.summaryError || job.questionsError;
+      showError(`Transcript is ready, but the AI ${failedBits} failed: ${reason}`);
+      showToast({
+        kind: 'error',
+        title: `AI ${failedBits} failed — transcript is safe`,
+        message:
+          `${reason} — Retry (e.g. after lowering the context window in the ` +
+          'server Settings), or use "Copy AI prompt" with your own model and ' +
+          'import its reply via Edit summary.',
+        action: { label: 'Retry summary', onClick: retrySummaryNow },
+      });
+    } else {
+      setStatus(friendlyState(job.state));
+      showToast({
+        kind: 'success',
+        title: 'Summary & Q&A are ready',
+        message: 'Review the detected questions, then generate the PDF.',
+      });
+    }
   } else {
     // Append a live percentage when the server reports one (transcription).
     let text = friendlyState(job.state);
@@ -362,6 +383,21 @@ export function updateButtons(context) {
 }
 
 // ---- Transcript / external-AI escape hatch ----------------------------------
+
+/** Toast action: queue a summary+Q&A re-run on the server, resume polling. */
+async function retrySummaryNow() {
+  const jobId = ctx.state.job && ctx.state.job.id;
+  if (!jobId || !ctx.api || typeof ctx.api.retrySummary !== 'function') return;
+  try {
+    await ctx.api.retrySummary(jobId);
+    ctx.state.job.state = 'summarizing';
+    ctx.persist();
+    setStatus('Re-running the AI summary on the stored transcript…', { busy: true });
+    maybeResumePolling();
+  } catch (err) {
+    showError(err && err.message ? err.message : String(err));
+  }
+}
 
 function transcriptOrExplain() {
   const text = ctx.state.transcript && ctx.state.transcript.text;

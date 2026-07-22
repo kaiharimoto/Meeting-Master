@@ -168,6 +168,19 @@ async function getJobPrompt(jobId) {
   return res.text();
 }
 
+/** POST /jobs/{id}/summarize — re-run ONLY the AI stages (summary + Q&A)
+ *  on the job's stored transcript. */
+async function retrySummary(jobId) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/jobs/${encodeURIComponent(jobId)}/summarize`,
+    { method: 'POST', headers, signal: AbortSignal.timeout(15000) },
+    'retrying the AI summary'
+  );
+  if (!res.ok) await throwHttpError(res, 'retrying the AI summary');
+  return res.json();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -180,4 +193,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary };

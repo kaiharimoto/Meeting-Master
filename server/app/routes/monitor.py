@@ -43,6 +43,8 @@ def trim_job(record: JobRecord) -> dict:
         "updatedAt": record.updatedAt,
         "title": record.meeting.details.title,
         "error": record.error,
+        "summaryError": record.summaryError,
+        "questionsError": record.questionsError,
         "pdf": {"received": record.pdf.received, "emailed": record.pdf.emailed},
     }
 

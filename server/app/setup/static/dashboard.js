@@ -350,6 +350,16 @@
       chip.textContent = (job.state || "unknown").replace("_", " ");
       row.appendChild(chip);
 
+      // Ready-but-AI-failed: make it visible here too, not just in the logs.
+      if (job.summaryError || job.questionsError) {
+        var warn = document.createElement("span");
+        warn.className = "state-chip";
+        warn.setAttribute("data-state", "failed");
+        warn.title = job.summaryError || job.questionsError;
+        warn.textContent = job.summaryError ? "summary failed" : "Q&A failed";
+        row.appendChild(warn);
+      }
+
       var when = document.createElement("span");
       when.className = "job-when";
       when.textContent = friendlyWhen(job.updatedAt);

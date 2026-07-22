@@ -100,6 +100,11 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
 
   handle(CHANNELS.JOB_STATUS, (jobId) => homeClient.getJob(jobId));
 
+  handle(CHANNELS.JOB_SUMMARIZE_RETRY, async (jobId) => {
+    if (!jobId) throw new Error('No job to re-summarize.');
+    return homeClient.retrySummary(jobId);
+  });
+
   handle(CHANNELS.JOB_PROMPT, async (jobId) => {
     if (!jobId) throw new Error('No job to fetch a prompt for.');
     return { text: await homeClient.getJobPrompt(jobId) };

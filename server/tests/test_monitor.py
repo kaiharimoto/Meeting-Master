@@ -73,7 +73,8 @@ def test_jobs_list_shape_order_and_trimming(client):
     assert entry["title"] == "Monitor Sync"
     assert entry["state"] in ("ready", "failed")
     assert set(entry.keys()) == {
-        "id", "state", "progress", "createdAt", "updatedAt", "title", "error", "pdf",
+        "id", "state", "progress", "createdAt", "updatedAt", "title", "error",
+        "summaryError", "questionsError", "pdf",
     }
     # Trimmed: meeting content must never ride along in list view.
     assert "transcript" not in entry and "summary" not in entry and "questions" not in entry

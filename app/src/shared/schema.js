@@ -41,6 +41,7 @@ const CHANNELS = Object.freeze({
   SIDECAR_OPEN_LOG: 'sidecar:openLog',
   // External-AI escape hatch (v0.4.0)
   JOB_PROMPT: 'job:prompt',
+  JOB_SUMMARIZE_RETRY: 'job:summarizeRetry',
   FILE_SAVE_TEXT: 'file:saveText',
 });
 

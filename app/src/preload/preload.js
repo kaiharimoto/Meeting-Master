@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // External-AI escape hatch (v0.4.0)
   getJobPrompt: (jobId) => call(CHANNELS.JOB_PROMPT, jobId),
+  retrySummary: (jobId) => call(CHANNELS.JOB_SUMMARIZE_RETRY, jobId),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
 
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
