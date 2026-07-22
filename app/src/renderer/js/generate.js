@@ -49,6 +49,8 @@ export function initGenerate(context) {
   if (els.copyTranscript) els.copyTranscript.addEventListener('click', () => guarded(onCopyTranscript));
   if (els.saveTranscript) els.saveTranscript.addEventListener('click', () => guarded(onSaveTranscript));
   if (els.copyPrompt) els.copyPrompt.addEventListener('click', () => guarded(onCopyAiPrompt));
+  els.startAi = document.getElementById('start-ai-btn');
+  if (els.startAi) els.startAi.addEventListener('click', () => guarded(startAi));
 
   // Dev nicety: Ctrl+Shift+M loads the mock meeting fixture.
   document.addEventListener('keydown', onDevMockShortcut);
@@ -95,7 +97,12 @@ function buildMeetingJson() {
     })),
     // Empty => the home server falls back to its preset recipients list.
     recipients: Array.isArray(ctx.state.recipients) ? [...ctx.state.recipients] : [],
-    options: { ...(ctx.state.options || { whisperModel: 'large-v3-turbo', emailMode: 'home' }) },
+    // Two-step flow: the server stops after transcription so names can be
+    // reviewed/fixed BEFORE any AI reads them; "Start AI" runs the rest.
+    options: {
+      ...(ctx.state.options || { whisperModel: 'large-v3-turbo', emailMode: 'home' }),
+      skipAi: true,
+    },
   };
 }
 
@@ -245,6 +252,30 @@ async function pollOnce() {
     });
   } else if (READY_STATES.includes(job.state)) {
     stopPolling();
+    // Two-step checkpoint: transcript done, AI deliberately not run yet
+    // (options.skipAi → summary is null, no questions, no AI errors). An AI
+    // run that produced nothing still stores an EMPTY summary object, so
+    // null summary + no questions is unambiguous.
+    if (
+      job.state === 'ready' && job.summary == null &&
+      !job.summaryError && !job.questionsError &&
+      !(Array.isArray(job.questions) && job.questions.length) &&
+      job.transcript
+    ) {
+      updateButtons(ctx);
+      setStatus('Transcript ready — review the names, then click Start AI.');
+      showToast({
+        kind: 'success',
+        title: 'Transcript ready',
+        message: 'Check the detected names (misspellings get merged), then Start AI.',
+      });
+      if (ctx.state.namesPromptedJobId !== job.id) {
+        ctx.state.namesPromptedJobId = job.id; // auto-open once per job
+        ctx.persist();
+        import('./nameFix.js').then((m) => m.openNameFix()).catch(() => {});
+      }
+      return;
+    }
     // A ready job can still carry per-AI-stage failures (transcript done,
     // summary and/or Q&A extraction failed) — say so LOUDLY with remedies,
     // never silently ship an empty summary (v0.4.x field report).
@@ -262,7 +293,7 @@ async function pollOnce() {
           `${reason} — Retry (e.g. after lowering the context window in the ` +
           'server Settings), or use "Copy AI prompt" with your own model and ' +
           'import its reply via Edit summary.',
-        action: { label: 'Retry summary', onClick: retrySummaryNow },
+        action: { label: 'Retry summary', onClick: startAi },
       });
     } else {
       setStatus(friendlyState(job.state));
@@ -380,6 +411,11 @@ export function updateButtons(context) {
     els.copyPrompt.disabled =
       !hasApi || !jobId || !transcriptText || typeof c.api.getJobPrompt !== 'function';
   }
+  if (els.startAi) {
+    const jobId = c.state.job && c.state.job.id;
+    els.startAi.disabled =
+      !hasApi || !jobId || !transcriptText || typeof c.api.retrySummary !== 'function';
+  }
   const emailBtn = document.getElementById('email-text-btn');
   if (emailBtn) {
     const jobId = c.state.job && c.state.job.id;
@@ -389,15 +425,15 @@ export function updateButtons(context) {
 
 // ---- Transcript / external-AI escape hatch ----------------------------------
 
-/** Toast action: queue a summary+Q&A re-run on the server, resume polling. */
-async function retrySummaryNow() {
+/** Start (or re-run) the AI stages on the server's stored transcript. */
+export async function startAi() {
   const jobId = ctx.state.job && ctx.state.job.id;
   if (!jobId || !ctx.api || typeof ctx.api.retrySummary !== 'function') return;
   try {
     await ctx.api.retrySummary(jobId);
     ctx.state.job.state = 'summarizing';
     ctx.persist();
-    setStatus('Re-running the AI summary on the stored transcript…', { busy: true });
+    setStatus('Running the AI summary + question detection…', { busy: true });
     maybeResumePolling();
   } catch (err) {
     showError(err && err.message ? err.message : String(err));

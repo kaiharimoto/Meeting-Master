@@ -43,6 +43,8 @@ const CHANNELS = Object.freeze({
   JOB_PROMPT: 'job:prompt',
   JOB_SUMMARIZE_RETRY: 'job:summarizeRetry',
   JOB_EMAIL_PREVIEW: 'job:emailPreview',
+  JOB_NAMES_GET: 'job:namesGet',
+  JOB_NAMES_APPLY: 'job:namesApply',
   FILE_SAVE_TEXT: 'file:saveText',
 });
 

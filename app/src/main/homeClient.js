@@ -194,6 +194,36 @@ async function getEmailPreview(jobId) {
   return res.json();
 }
 
+/** GET /jobs/{id}/names — candidate person names in the transcript. */
+async function getJobNames(jobId) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/jobs/${encodeURIComponent(jobId)}/names`,
+    { headers, signal: AbortSignal.timeout(15000) },
+    'scanning the transcript for names'
+  );
+  if (!res.ok) await throwHttpError(res, 'scanning the transcript for names');
+  return res.json();
+}
+
+/** POST /jobs/{id}/names — rewrite the STORED transcript with a
+ *  {wrong: corrected} name mapping so the AI reads the fixed names. */
+async function applyJobNames(jobId, mapping) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/jobs/${encodeURIComponent(jobId)}/names`,
+    {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mapping }),
+      signal: AbortSignal.timeout(20000),
+    },
+    'applying the name corrections'
+  );
+  if (!res.ok) await throwHttpError(res, 'applying the name corrections');
+  return res.json();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -206,4 +236,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames };

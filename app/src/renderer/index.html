@@ -136,7 +136,9 @@
           </h2>
 
           <div class="button-row">
-            <button id="pick-audio-btn" type="button" class="btn btn-primary">Pick audio &amp; start AI</button>
+            <button id="pick-audio-btn" type="button" class="btn btn-primary">Generate transcript</button>
+            <button id="start-ai-btn" type="button" class="btn btn-primary" disabled
+                    title="Run the AI summary + question detection on the (name-corrected) transcript">Start AI</button>
             <button id="edit-summary-btn" type="button" class="btn btn-secondary">Edit summary</button>
             <button id="generate-pdf-btn" type="button" class="btn btn-primary">Generate PDF</button>
             <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
@@ -255,7 +257,8 @@
       <div class="modal-actions">
         <span id="names-note" class="settings-help" role="status"></span>
         <button id="names-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
-        <button id="names-apply-btn" type="button" class="btn btn-primary">Apply</button>
+        <button id="names-apply-btn" type="button" class="btn btn-secondary">Apply</button>
+        <button id="names-apply-ai-btn" type="button" class="btn btn-primary" hidden>Apply &amp; start AI</button>
       </div>
     </div>
   </div>

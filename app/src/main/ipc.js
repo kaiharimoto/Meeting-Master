@@ -110,6 +110,16 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return homeClient.getEmailPreview(jobId);
   });
 
+  handle(CHANNELS.JOB_NAMES_GET, async (jobId) => {
+    if (!jobId) throw new Error('No job to scan for names.');
+    return homeClient.getJobNames(jobId);
+  });
+
+  handle(CHANNELS.JOB_NAMES_APPLY, async (jobId, mapping) => {
+    if (!jobId) throw new Error('No job to apply names to.');
+    return homeClient.applyJobNames(jobId, mapping || {});
+  });
+
   handle(CHANNELS.JOB_PROMPT, async (jobId) => {
     if (!jobId) throw new Error('No job to fetch a prompt for.');
     return { text: await homeClient.getJobPrompt(jobId) };

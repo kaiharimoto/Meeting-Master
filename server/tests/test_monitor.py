@@ -316,3 +316,67 @@ def test_summarize_retry_endpoint(client):
 
     local = TestClient(app, client=("127.0.0.1", 40003))
     assert local.post(f"/setup/jobs/{job_id}/summarize").status_code == 200
+
+
+# ---- Two-step pipeline + transcript name tools ------------------------------
+
+def test_skip_ai_stops_after_transcript_and_names_roundtrip(client):
+    """options.skipAi lands the job in ready with a transcript and NO AI
+    output; the names endpoints harvest candidates and rewrite the stored
+    transcript before Start AI (POST /summarize) runs the AI stages."""
+    import copy as _copy
+    meeting = _copy.deepcopy(MEETING)
+    meeting["details"]["attendees"] = ["Kai", "Alice"]
+    meeting["options"] = {"skipAi": True}
+    resp = client.post(
+        "/jobs",
+        headers=AUTH,
+        data={"meeting": json.dumps(meeting)},
+        files={"file": ("audio.wav", io.BytesIO(b"RIFF" + b"\x00" * 64), "audio/wav")},
+    )
+    assert resp.status_code == 202
+    job_id = resp.json()["id"]
+    record = _wait_ready(client, job_id)
+    assert record["state"] == "ready"
+    assert record["summary"] is None          # AI deferred
+    assert record["questions"] == []
+    assert record["transcript"]["text"].strip()
+
+    # Candidate names include the attendees.
+    names = client.get(f"/jobs/{job_id}/names", headers=AUTH).json()["names"]
+    assert any(n["name"] == "Kai" for n in names)
+    assert any(n["name"] == "Alice" for n in names)
+
+    # Rewrite a word that the fake-whisper transcript definitely contains.
+    word = record["transcript"]["text"].split()[0]
+    resp = client.post(f"/jobs/{job_id}/names", headers=AUTH,
+                       json={"mapping": {word: "Kai"}})
+    assert resp.status_code == 200 and resp.json()["replaced"] >= 1
+    updated = client.get(f"/jobs/{job_id}", headers=AUTH).json()
+    assert word not in updated["transcript"]["text"].split()
+
+    # Bad mapping bodies are rejected.
+    assert client.post(f"/jobs/{job_id}/names", headers=AUTH,
+                       json={"mapping": {}}).status_code == 400
+
+    # Start AI = the existing summarize endpoint; job gains AI output.
+    assert client.post(f"/jobs/{job_id}/summarize", headers=AUTH).status_code == 200
+    record = _wait_ready(client, job_id)
+    assert record["summary"] is not None
+
+
+def test_candidate_names_heuristic():
+    from app.models import MeetingDetails, MeetingMeta
+    from app.pipeline import names as names_mod
+
+    meeting = MeetingMeta(details=MeetingDetails(
+        title="t", date="2026-07-22", time="10:00", attendees=["Kai"]))
+    text = ("Okay so Kai said the budget is fine. Then Kye disagreed with "
+            "Kai. Later Bob asked about Monday. Bob said yes.")
+    names = names_mod.candidate_names(text, meeting)
+    by_name = {n["name"]: n for n in names}
+    assert by_name["Kai"]["count"] == 2
+    assert by_name["Kye"]["suggest"] == "Kai"   # sound-alike -> merge hint
+    assert "Bob" in by_name                      # mid-sentence repeat
+    assert "Monday" not in by_name               # stopword
+    assert "Okay" not in by_name                 # stopword + sentence start

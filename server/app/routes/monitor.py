@@ -118,6 +118,37 @@ def email_preview_response(request: Request, job_id: str) -> dict:
     }
 
 
+def job_names_response(request: Request, job_id: str) -> dict:
+    """Candidate person names in the job's transcript (plus attendees), for
+    the fix-names review that runs BEFORE the AI stages read the text."""
+    from ..pipeline import names as names_mod
+
+    record = _job_with_transcript(request, job_id)
+    return {"names": names_mod.candidate_names(record.transcript.text, record.meeting)}
+
+
+async def apply_names_response(request: Request, job_id: str) -> dict:
+    """Apply a {wrong: corrected} name mapping to the STORED transcript so
+    every later consumer — the AI stages, transcript downloads, the external
+    prompt — sees the corrected names."""
+    from ..pipeline import names as names_mod
+
+    record = _job_with_transcript(request, job_id)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Body must be JSON: {\"mapping\": {...}}")
+    mapping = payload.get("mapping") if isinstance(payload, dict) else None
+    if not isinstance(mapping, dict) or not mapping:
+        raise HTTPException(status_code=400, detail="Provide a non-empty {\"mapping\": {from: to}}")
+    if len(mapping) > 100:
+        raise HTTPException(status_code=400, detail="Mapping too large (max 100 names).")
+
+    new_transcript, replaced = names_mod.apply_mapping(record.transcript, mapping)
+    request.app.state.store.update(record, transcript=new_transcript)
+    return {"ok": True, "replaced": replaced}
+
+
 def summarize_retry_response(request: Request, job_id: str) -> dict:
     """Queue a summary+Q&A re-run on the stored transcript (the transcript
     itself is never redone). The job flips back to `summarizing` and lands in
@@ -246,6 +277,16 @@ async def job_summarize_retry(request: Request, job_id: str) -> dict:
 @router.get("/jobs/{job_id}/email")
 async def job_email_preview(request: Request, job_id: str) -> dict:
     return email_preview_response(request, job_id)
+
+
+@router.get("/jobs/{job_id}/names")
+async def job_names(request: Request, job_id: str) -> dict:
+    return job_names_response(request, job_id)
+
+
+@router.post("/jobs/{job_id}/names")
+async def job_apply_names(request: Request, job_id: str) -> dict:
+    return await apply_names_response(request, job_id)
 
 
 # ---- Laptop auto-update feed ------------------------------------------------

@@ -6,16 +6,21 @@
 
 let ctx = null;
 let onApplied = null;
-let backdrop, rowsHost, noteEl;
+let onStartAi = null;
+let backdrop, rowsHost, noteEl, applyBtn, applyAiBtn;
 
 export function initNameFix(context, opts) {
   ctx = context;
   onApplied = (opts && opts.onApplied) || function () {};
+  onStartAi = (opts && opts.onStartAi) || null;
   backdrop = document.getElementById('names-modal');
   rowsHost = document.getElementById('names-rows');
   noteEl = document.getElementById('names-note');
+  applyBtn = document.getElementById('names-apply-btn');
+  applyAiBtn = document.getElementById('names-apply-ai-btn');
 
-  document.getElementById('names-apply-btn').addEventListener('click', apply);
+  applyBtn.addEventListener('click', () => apply(false));
+  if (applyAiBtn) applyAiBtn.addEventListener('click', () => apply(true));
   document.getElementById('names-cancel-btn').addEventListener('click', close);
   backdrop.addEventListener('mousedown', (e) => {
     if (e.target === backdrop) close();
@@ -54,31 +59,68 @@ export function collectNames(state) {
   return [...seen.values()];
 }
 
-export function openNameFix() {
-  const names = collectNames(ctx.state);
+function buildRow(name, count, suggest) {
+  const row = document.createElement('div');
+  row.className = 'field name-fix-row';
+  const label = document.createElement('label');
+  label.textContent = count > 0 ? `${name} ×${count}` : name;
+  if (suggest) label.textContent += ` → ${suggest}?`;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = suggest || name; // a suggested merge target comes prefilled
+  input.dataset.original = name;
+  row.append(label, input);
+  return row;
+}
+
+export async function openNameFix() {
+  // Local names (attendees, cards, questions, owners) …
+  const seen = new Map(); // casefold -> {name, count, suggest}
+  for (const name of collectNames(ctx.state)) {
+    seen.set(name.toLowerCase(), { name, count: 0, suggest: '' });
+  }
+  // … enriched with candidates harvested from the TRANSCRIPT itself, so
+  // misspellings the AI would otherwise ingest surface for review first.
+  const jobId = ctx.state.job && ctx.state.job.id;
+  if (jobId && ctx.api && typeof ctx.api.getJobNames === 'function') {
+    try {
+      const { names } = await ctx.api.getJobNames(jobId);
+      for (const cand of names || []) {
+        const key = cand.name.toLowerCase();
+        const existing = seen.get(key);
+        if (existing) {
+          existing.count = Math.max(existing.count, cand.count || 0);
+          if (cand.suggest) existing.suggest = existing.suggest || cand.suggest;
+        } else {
+          seen.set(key, { name: cand.name, count: cand.count || 0, suggest: cand.suggest || '' });
+        }
+      }
+    } catch {
+      // Transcript scan is an enrichment — the local list still works.
+    }
+  }
+
   rowsHost.replaceChildren();
   noteEl.textContent = '';
-  if (names.length === 0) {
+  if (seen.size === 0) {
     noteEl.textContent = 'No names found in this meeting yet.';
+  } else {
+    noteEl.textContent = 'Corrections rewrite the transcript before the AI reads it.';
   }
-  for (const name of names) {
-    const row = document.createElement('div');
-    row.className = 'field name-fix-row';
-    const label = document.createElement('label');
-    label.textContent = name;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = name;
-    input.dataset.original = name;
-    row.append(label, input);
-    rowsHost.append(row);
+  for (const entry of seen.values()) {
+    rowsHost.append(buildRow(entry.name, entry.count, entry.suggest));
+  }
+  if (applyAiBtn) {
+    applyAiBtn.hidden = !(
+      jobId && onStartAi && ctx.api && typeof ctx.api.retrySummary === 'function'
+    );
   }
   backdrop.hidden = false;
   const first = rowsHost.querySelector('input');
   if (first) first.focus();
 }
 
-function apply() {
+async function apply(startAiAfter) {
   // original (casefolded) -> corrected spelling. Blank keeps the original.
   const mapping = new Map();
   for (const input of rowsHost.querySelectorAll('input')) {
@@ -88,6 +130,7 @@ function apply() {
   }
   if (mapping.size === 0) {
     close();
+    if (startAiAfter && onStartAi) onStartAi(); // nothing to fix — just run
     return;
   }
   const fix = (name) => {
@@ -119,7 +162,36 @@ function apply() {
     }
   }
 
+  // Mirror the corrections into the local transcript copy, and push the
+  // mapping to the SERVER so the stored transcript (what the AI, prompts and
+  // downloads read) is corrected too.
+  const rawMapping = {};
+  for (const input of rowsHost.querySelectorAll('input')) {
+    const from = input.dataset.original;
+    const to = String(input.value || '').trim();
+    if (to && to !== from) rawMapping[from] = to;
+  }
+  if (state.transcript && state.transcript.text) {
+    let text = state.transcript.text;
+    for (const [from, to] of Object.entries(rawMapping)) {
+      text = text.replace(new RegExp(`\\b${from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), to);
+    }
+    state.transcript = { ...state.transcript, text };
+  }
+  const jobId = state.job && state.job.id;
+  if (jobId && ctx.api && typeof ctx.api.applyJobNames === 'function') {
+    try {
+      await ctx.api.applyJobNames(jobId, rawMapping);
+    } catch (err) {
+      noteEl.textContent = `Saved locally, but the server rewrite failed: ${err.message}`;
+      ctx.persist();
+      onApplied(mapping.size);
+      return; // keep the modal open so the operator sees the warning
+    }
+  }
+
   ctx.persist();
   close();
   onApplied(mapping.size);
+  if (startAiAfter && onStartAi) onStartAi();
 }

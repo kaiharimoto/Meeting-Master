@@ -4,7 +4,7 @@
 import { initDetailsForm, renderDetailsForm } from './detailsForm.js';
 import { initCapture, openCardModal } from './capture.js';
 import { initCardList, renderCards } from './cardList.js';
-import { initGenerate, updateButtons, maybeResumePolling } from './generate.js';
+import { initGenerate, updateButtons, maybeResumePolling, startAi } from './generate.js';
 import { initStatus, setStatus, showError } from './status.js';
 import { initSettings, openSettings } from './settings.js';
 import { initExtractReview, renderExtractPrompt } from './extractReview.js';
@@ -39,6 +39,8 @@ function defaultState() {
     // been reviewed (so the prompt doesn't nag after culling/dismissal).
     extractedQuestions: [],
     questionsReviewed: false,
+    // Which job's transcript-ready checkpoint already auto-opened Fix names.
+    namesPromptedJobId: null,
     pdfPath: null,
   };
 }
@@ -97,6 +99,7 @@ function boot() {
       ctx.renderAll();
       setStatus(`Names updated (${count} correction${count === 1 ? '' : 's'}) across the whole meeting.`);
     },
+    onStartAi: () => startAi(),
   });
   const emailTextBtn = document.getElementById('email-text-btn');
   if (emailTextBtn) emailTextBtn.addEventListener('click', () => openEmailPreview());

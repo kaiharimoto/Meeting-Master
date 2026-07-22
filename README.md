@@ -62,11 +62,15 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 **After the meeting**
 
 6. Stop the recording and note where the WAV was saved.
-7. In Meeting Master, click **Pick audio & start AI** and select the WAV. The
+7. In Meeting Master, click **Generate transcript** and select the WAV. The
    app uploads it to the home server and polls progress
-   (queued → normalizing → transcribing → summarizing → ready).
-8. When the job is **ready**, the AI may surface a **"detected questions"**
-   prompt in the Q&A panel. Click **Review & add** to approve the Q&A pairs it
+   (queued → normalizing → transcribing → transcript ready).
+8. When the transcript is ready, the **Fix names** review opens automatically:
+   every name found in the transcript is listed with its count, sound-alike
+   misspellings come pre-suggested for merging into your attendees, and
+   corrections rewrite the stored transcript BEFORE any AI reads it. Click
+   **Apply & start AI** (or **Start AI** later). When the AI finishes, a
+   **"detected questions"** prompt may appear in the Q&A panel. Click **Review & add** to approve the Q&A pairs it
    found — keep the good ones (low-confidence answerers are flagged), fix the
    answerer, and they become normal cards (nothing is added automatically).
    Optionally click **Edit summary** to tweak the Key Takeaways, Decisions,

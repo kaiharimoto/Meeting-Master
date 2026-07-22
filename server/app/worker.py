@@ -65,6 +65,14 @@ async def process(store: JobStore, job) -> None:
         )
         store.update(job, transcript=transcript, progress=None)
 
+        # Two-step flow (v0.7.0 standard): the upload asks for transcript-only
+        # so the operator can review/fix names BEFORE any AI reads them; the
+        # app's "Start AI" then hits POST /jobs/{id}/summarize.
+        if job.meeting.options.get("skipAi"):
+            store.update(job, state=JobState.ready, progress=None)
+            log.info("Job %s transcript ready (AI deferred to Start AI)", job.id)
+            return
+
         store.update(job, state=JobState.summarizing, progress=None)
         await run_ai_stages(store, job, transcript.text)
         log.info("Job %s ready (%d candidate question(s))", job.id, len(job.questions))

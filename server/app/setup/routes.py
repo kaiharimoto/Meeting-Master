@@ -394,6 +394,20 @@ async def setup_job_email(request: Request, job_id: str):
     return monitor.email_preview_response(request, job_id)
 
 
+@router.get("/jobs/{job_id}/names")
+async def setup_job_names(request: Request, job_id: str):
+    from ..routes import monitor
+
+    return monitor.job_names_response(request, job_id)
+
+
+@router.post("/jobs/{job_id}/names")
+async def setup_job_apply_names(request: Request, job_id: str):
+    from ..routes import monitor
+
+    return await monitor.apply_names_response(request, job_id)
+
+
 @router.get("/ollama-models")
 async def setup_ollama_models() -> dict:
     """Installed Ollama models (proxied /api/tags) — feeds the model picker

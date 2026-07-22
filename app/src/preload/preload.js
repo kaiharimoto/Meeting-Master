@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('api', {
   getJobPrompt: (jobId) => call(CHANNELS.JOB_PROMPT, jobId),
   retrySummary: (jobId) => call(CHANNELS.JOB_SUMMARIZE_RETRY, jobId),
   getEmailPreview: (jobId) => call(CHANNELS.JOB_EMAIL_PREVIEW, jobId),
+  getJobNames: (jobId) => call(CHANNELS.JOB_NAMES_GET, jobId),
+  applyJobNames: (jobId, mapping) => call(CHANNELS.JOB_NAMES_APPLY, jobId, mapping),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
 
   // Server-mode window pages (boot page + Dashboard tab in the one window)

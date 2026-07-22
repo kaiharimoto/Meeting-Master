@@ -96,12 +96,15 @@ Settings tab.
 
 ## A name is misspelled (or spelled three different ways)
 
-Whisper and the AI guess names from audio, so "Kai" can arrive as "Ky" and
-"Kye". Click **Fix names…** on the Meeting screen: every distinct name in
-the meeting is listed (attendees, Q&A cards, detected questions, action-item
-owners). Correct a spelling in its box — or give several entries the same
-name to MERGE them into one person — and Apply rewrites it everywhere,
-deduplicating the attendee list.
+Whisper guesses names from audio, so "Kai" can arrive as "Ky" and "Kye".
+Since v0.7.0 the pipeline stops after transcription and the **Fix names**
+review opens automatically: every candidate name harvested from the
+transcript is listed with how often it appears, sound-alike spellings come
+pre-suggested for merging into your attendee names, and Apply rewrites the
+STORED transcript — so the AI summary and Q&A extraction only ever see the
+corrected names. **Apply & start AI** does both in one click; **Fix names…**
+reopens the review any time (it also fixes names in cards, detected
+questions, and action-item owners).
 
 ## The laptop's server pill is red / "Server unreachable"
 
