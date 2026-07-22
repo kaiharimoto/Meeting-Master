@@ -62,6 +62,16 @@ contextBridge.exposeInMainWorld('api', {
   retrySummary: (jobId) => call(CHANNELS.JOB_SUMMARIZE_RETRY, jobId),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
 
+  // Server-mode window pages (boot page + Dashboard tab in the one window)
+  getSidecarState: () => call(CHANNELS.SIDECAR_STATE_GET),
+  retrySidecar: () => call(CHANNELS.SIDECAR_RETRY),
+  openServerLog: () => call(CHANNELS.SIDECAR_OPEN_LOG),
+  onSidecarState: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.SIDECAR_STATE, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.SIDECAR_STATE, listener);
+  },
+
   // Subscribe to main->renderer progress events; returns an unsubscribe fn.
   onJobProgress: (cb) => {
     const listener = (_event, payload) => cb(payload);

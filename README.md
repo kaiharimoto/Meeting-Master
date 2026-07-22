@@ -79,8 +79,8 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 Past meetings are saved automatically (and via **History → Save current**);
 reopen any of them from the **History** button to review, regenerate, or re-send.
 Any server-side job can also be pulled back in from **Activity → Open in
-Meeting** — including on the home server itself (tray → **Open meeting
-notes**). If the local model can't summarize a meeting, **Copy AI prompt**
+Meeting** — including on the home server itself, where the app window is the
+same meeting UI with the server dashboard as a sidebar tab (v0.5.0+). If the local model can't summarize a meeting, **Copy AI prompt**
 hands the transcript + instructions to any external AI, and **Edit summary →
 Import AI output** brings its JSON reply back for the PDF
 (see docs/TROUBLESHOOTING.md).

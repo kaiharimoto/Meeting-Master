@@ -8,6 +8,9 @@
 //   GET  /setup/events         SSE: hello/job/log (live updates)
 (function () {
   "use strict";
+  // Inside the Meeting Master app's Dashboard tab (iframe): the app itself
+  // owns "open notes" and "update & restart", so hide those links here.
+  if (window.self !== window.top) document.documentElement.classList.add("framed");
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var pollTimer = null;

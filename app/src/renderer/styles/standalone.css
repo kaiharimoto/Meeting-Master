@@ -177,3 +177,15 @@ body.standalone h1 {
     grid-template-columns: 1fr;
   }
 }
+
+/* The standalone pages live in frameless windows on Windows — give them a
+   drag strip along the top (native window controls overlay the top-right). */
+body.standalone::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}

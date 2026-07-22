@@ -120,6 +120,19 @@ function boot() {
         if (res && res.mode === 'server') {
           const field = switchModeBtn.closest('.field');
           if (field) field.hidden = true;
+          // Server mode: reveal the Dashboard tab (the loopback dashboard
+          // embedded in this same window — no second window, no browser).
+          const navDash = document.getElementById('nav-dashboard');
+          if (navDash) navDash.hidden = false;
+          const frame = document.getElementById('dashboard-frame');
+          if (frame && typeof ctx.api.getSidecarState === 'function') {
+            ctx.api
+              .getSidecarState()
+              .then((st) => {
+                if (st && st.url) frame.src = st.url;
+              })
+              .catch(() => {});
+          }
         }
       })
       .catch(() => {});

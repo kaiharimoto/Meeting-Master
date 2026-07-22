@@ -26,8 +26,9 @@ role (Home server / Operator) on first launch.
 
 ## The dashboard didn't open (home server mode)
 
-Launching the app in home server mode starts the bundled AI server and shows
-its dashboard in the app window. If you see an error screen instead:
+Launching the app in home server mode starts the bundled AI server and opens
+the meeting UI (the dashboard is the sidebar's **Dashboard** tab, v0.5.0+).
+If you see an error screen instead:
 
 - **"Another server is already running"** — see the migration entry above.
 - **"The home server could not start"** — click **Open server log** on that
@@ -77,10 +78,12 @@ exactly the format Meeting Master needs:
    paste, **Apply import**, then **Save**. Generate the PDF and send the email
    as usual.
 
-On the **home server machine** the same flow lives in the tray → **Open
-meeting notes (create PDFs)** — the full meeting UI against the local server:
-open the job from the Activity screen (**Open in Meeting**), then follow the
-steps above.
+On the **home server machine** (v0.5.0+) the app window IS the full meeting
+UI (with the dashboard as a sidebar tab): open the job from the Activity
+screen (**Open in Meeting**), then follow the steps above. When a summary
+fails you also get an error toast with a one-click **Retry summary** — worth
+trying right after lowering the context window (Dashboard tab → Settings →
+AI models).
 
 ## The laptop's server pill is red / "Server unreachable"
 

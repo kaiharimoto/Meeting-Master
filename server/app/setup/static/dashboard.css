@@ -320,3 +320,7 @@ button.small { padding: 6px 11px; font-size: 13px; }
 }
 .linkbtn:hover { filter: brightness(1.06); }
 .masthead .linkbtn { margin-right: 8px; }
+
+/* Inside the app's Dashboard tab (iframe) the app owns these actions. */
+.framed #open-notes-link,
+.framed #up-app-update-row { display: none !important; }

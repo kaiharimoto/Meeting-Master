@@ -7,6 +7,7 @@
 const SCREENS = {
   meeting: 'screen-meeting',
   activity: 'screen-activity',
+  dashboard: 'screen-dashboard', // server mode only (nav item hidden otherwise)
 };
 
 let current = 'meeting';
@@ -38,6 +39,7 @@ function updateActive() {
   const states = {
     'nav-meeting': !sheetOpen && current === 'meeting',
     'nav-activity': !sheetOpen && current === 'activity',
+    'nav-dashboard': !sheetOpen && current === 'dashboard',
     'history-btn': sheetOpen === 'history-modal',
     'settings-btn': sheetOpen === 'settings-modal',
   };
@@ -64,6 +66,13 @@ export function initNav() {
     closeSheets();
     showScreen('activity');
   });
+  const dashBtn = document.getElementById('nav-dashboard');
+  if (dashBtn) {
+    dashBtn.addEventListener('click', () => {
+      closeSheets();
+      showScreen('dashboard');
+    });
+  }
 
   // History/Settings open+close entirely inside their own modules; watch the
   // hidden attribute so the sidebar's active state always reflects reality.

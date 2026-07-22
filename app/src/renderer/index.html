@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://127.0.0.1:* http://localhost:*"
   />
   <title>Meeting Master</title>
   <script src="js/themeBoot.js"></script>
@@ -30,6 +30,10 @@
         <button id="nav-activity" type="button" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Activity
+        </button>
+        <button id="nav-dashboard" type="button" class="nav-item" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          Dashboard
         </button>
         <button id="history-btn" type="button" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -191,6 +195,11 @@
           </div>
           <div id="log-view" class="log-view"></div>
         </section>
+      </section>
+
+      <!-- ============ Dashboard screen (server mode only) ============ -->
+      <section id="screen-dashboard" class="screen screen-dashboard" hidden>
+        <iframe id="dashboard-frame" title="Server dashboard"></iframe>
       </section>
     </main>
   </div>

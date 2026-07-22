@@ -21,7 +21,6 @@ const paths = require('./paths');
 const updater = require('./updater');
 
 let mainWindow = null;
-let notesWindow = null; // server mode's "notes studio" — the operator UI against the local server
 let tray = null;
 
 // ---- Single instance --------------------------------------------------------
@@ -103,14 +102,11 @@ function overlayForTheme(theme) {
 
 /** Called from IPC when the renderer's theme changes. */
 function setOverlayTheme(theme) {
-  if (!useOverlay) return;
-  for (const win of [mainWindow, notesWindow]) {
-    if (!win || win.isDestroyed()) continue;
-    try {
-      win.setTitleBarOverlay(overlayForTheme(theme));
-    } catch {
-      // Windows without an overlay (dashboard window) — not fatal.
-    }
+  if (!useOverlay || !mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.setTitleBarOverlay(overlayForTheme(theme));
+  } catch {
+    // Windows without an overlay (boot/chooser edge) — not fatal.
   }
 }
 
@@ -171,10 +167,10 @@ function plainWindowOptions(extra) {
     icon: appIconPath(),
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'serverPreload.js'),
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // serverPreload require()s ../shared/schema.js
+      sandbox: false, // the preload require()s ../shared/schema.js
     },
     ...extra,
   };
@@ -191,18 +187,29 @@ function createChooserWindow() {
   });
 }
 
-/** Server mode: boot page while the sidecar starts, then the dashboard. */
+/** Server mode: boot page while the sidecar starts, then the FULL meeting
+ *  UI (index.html) — the dashboard lives inside it as a sidebar tab. Same
+ *  chrome + preload as the operator window. */
 function createServerWindow(startHidden) {
   const saved = loadBounds();
-  mainWindow = new BrowserWindow(
-    plainWindowOptions({
-      width: saved ? saved.width : 1150,
-      height: saved ? saved.height : 820,
-      minWidth: 800,
-      minHeight: 600,
-      show: !startHidden,
-    })
-  );
+  mainWindow = new BrowserWindow({
+    width: saved ? saved.width : 1150,
+    height: saved ? saved.height : 820,
+    minWidth: 900,
+    minHeight: 650,
+    show: !startHidden,
+    backgroundColor: '#eef1f6',
+    icon: appIconPath(),
+    ...(useOverlay
+      ? { titleBarStyle: 'hidden', titleBarOverlay: overlayForTheme('light') }
+      : {}),
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false, // preload require()s ../shared/schema.js
+    },
+  });
 
   mainWindow.loadFile(rendererFile('serverBoot.html'));
   mainWindow.on('resize', saveBoundsDebounced);
@@ -251,39 +258,6 @@ function showMainWindow() {
   }
 }
 
-/** Server mode's notes studio: the FULL operator UI in a second window,
- *  talking to the local sidecar (config.get() falls back to localhost + the
- *  server.env token in server mode). This is how the home PC gets transcripts,
- *  imports an external AI's summary, and produces/emails PDFs itself. */
-function openNotesStudio() {
-  if (notesWindow && !notesWindow.isDestroyed()) {
-    notesWindow.show();
-    notesWindow.focus();
-    return;
-  }
-  notesWindow = new BrowserWindow({
-    width: 1150,
-    height: 820,
-    minWidth: 900,
-    minHeight: 650,
-    backgroundColor: '#eef1f6',
-    icon: appIconPath(),
-    ...(useOverlay
-      ? { titleBarStyle: 'hidden', titleBarOverlay: overlayForTheme('light') }
-      : {}),
-    webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false, // same constraint as the operator window (preload require)
-    },
-  });
-  notesWindow.loadFile(rendererFile('index.html'));
-  notesWindow.on('closed', () => {
-    notesWindow = null;
-  });
-}
-
 async function installFromTray() {
   const result = await updater.installNow();
   if (result && !result.ok && result.error) {
@@ -303,7 +277,7 @@ function handleDashboardAction(url) {
     return false;
   }
   if (pathname === '/setup/action/open-notes') {
-    openNotesStudio();
+    showMainWindow(); // the meeting UI IS the main window now
     return true;
   }
   if (pathname === '/setup/action/app-update') {
@@ -360,7 +334,6 @@ function refreshTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Meeting Master', click: showMainWindow },
-      { label: 'Open meeting notes (create PDFs)', click: openNotesStudio },
       {
         label: 'Open dashboard in browser',
         click: () => shell.openExternal(serverManager.dashboardUrl()),
@@ -413,15 +386,8 @@ function syncServerWindowContent() {
   const up = s === 'running' || s === 'external';
   if (up && !showingDashboard) {
     showingDashboard = true;
-    mainWindow.loadURL(serverManager.dashboardUrl()).catch(() => {
-      // Health said yes but the page load failed (transient loopback hiccup):
-      // fall back to the boot page and retry shortly.
-      showingDashboard = false;
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.loadFile(rendererFile('serverBoot.html'));
-      clearTimeout(dashboardRetryTimer);
-      dashboardRetryTimer = setTimeout(syncServerWindowContent, 2000);
-    });
+    // The one window: full meeting UI with the dashboard as a sidebar tab.
+    mainWindow.loadFile(rendererFile('index.html'));
   } else if (!up && showingDashboard) {
     showingDashboard = false;
     mainWindow.loadFile(rendererFile('serverBoot.html'));
@@ -464,10 +430,10 @@ function startServerMode(startHidden) {
   }
 }
 
-/** The window renderer-facing IPC should talk to: the notes studio when it
- *  is open (server mode), else the main window. */
+/** The window renderer-facing IPC talks to (kept as a getter — the window
+ *  can be recreated from the tray). */
 function activeWindow() {
-  return notesWindow && !notesWindow.isDestroyed() ? notesWindow : mainWindow;
+  return mainWindow;
 }
 
 function startOperatorMode() {
