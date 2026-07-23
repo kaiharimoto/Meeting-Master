@@ -1,6 +1,8 @@
 // Renders state.cards into #card-list. Click a card to edit it; the small ×
-// deletes it (no confirm — a deleted card is quick to re-add and order of the
-// remaining cards is preserved).
+// deletes it immediately with an Undo toast — faster than a confirm when you
+// meant it, forgiving when you didn't.
+
+import { showToast } from './toast.js';
 
 let ctx = null;
 let onEditCard = null;
@@ -61,9 +63,25 @@ function buildCardEl(card) {
   del.setAttribute('aria-label', `Delete card: ${card.question}`);
   del.addEventListener('click', (e) => {
     e.stopPropagation(); // don't fall through to the edit handler
-    ctx.state.cards = ctx.state.cards.filter((c) => c.id !== card.id);
+    const index = ctx.state.cards.findIndex((c) => c.id === card.id);
+    if (index === -1) return;
+    ctx.state.cards.splice(index, 1);
     ctx.persist();
     renderCards();
+    showToast({
+      kind: 'info',
+      title: 'Question deleted',
+      message: card.question,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          // Restore at the original position so the list order is preserved.
+          ctx.state.cards.splice(Math.min(index, ctx.state.cards.length), 0, card);
+          ctx.persist();
+          renderCards();
+        },
+      },
+    });
   });
   el.append(del);
 

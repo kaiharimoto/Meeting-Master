@@ -30,6 +30,7 @@ const serverManager = require('./serverManager');
 const paths = require('./paths');
 const recorder = require('./recorder');
 const updater = require('./updater');
+const zoom = require('./zoom');
 
 let mainWindow = null;
 let tray = null;
@@ -161,6 +162,7 @@ function createOperatorWindow() {
   });
 
   mainWindow.loadFile(rendererFile('index.html'));
+  zoom.attach(mainWindow);
 
   mainWindow.on('resize', saveBoundsDebounced);
   mainWindow.on('move', saveBoundsDebounced);
@@ -270,6 +272,7 @@ function createServerWindow(startHidden) {
   });
 
   mainWindow.loadFile(rendererFile('serverBoot.html'));
+  zoom.attach(mainWindow);
   mainWindow.on('resize', saveBoundsDebounced);
   mainWindow.on('move', saveBoundsDebounced);
 
@@ -558,6 +561,9 @@ app.whenReady().then(() => {
   // so hand them a getter instead of the (possibly recreated) window itself.
   // activeWindow prefers the notes studio when it is open (server mode).
   registerIpcHandlers(activeWindow, { setOverlayTheme, onRecordingStopped });
+
+  // Smart zoom: auto factor follows display changes (docking, projectors).
+  zoom.init(() => (mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []));
 
   const resolved = config.resolveMode();
   if (resolved === 'server') {

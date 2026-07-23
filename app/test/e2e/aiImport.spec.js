@@ -55,6 +55,9 @@ test('transcript buttons disabled without a transcript, enabled with one', async
 });
 
 test('summary editor imports pasted AI JSON (with fences and chatter)', async ({ page }) => {
+  // A blank meeting starts in the "setup" stage with the Generate panel
+  // collapsed — expand it via its header (the manual stage override).
+  await page.locator('#generate-heading').click();
   await page.locator('#edit-summary-btn').click();
   await expect(page.locator('#summary-modal')).toBeVisible();
 
@@ -81,6 +84,7 @@ test('summary editor imports pasted AI JSON (with fences and chatter)', async ({
 });
 
 test('combined harness reply also imports Q&A candidates for review', async ({ page }) => {
+  await page.locator('#generate-heading').click(); // expand the collapsed panel
   await page.locator('#edit-summary-btn').click();
   const combined = {
     summary: { keyTakeaways: ['One takeaway'], topics: ['Pricing'] },

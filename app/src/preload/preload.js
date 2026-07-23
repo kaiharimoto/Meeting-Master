@@ -99,6 +99,22 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener(CHANNELS.LIVE_MODEL_EVENT, listener);
   },
 
+  // Usability batch (v0.10.0)
+  getPreflight: () => call(CHANNELS.PREFLIGHT_GET),
+  miniOpen: () => call(CHANNELS.MINI_OPEN),
+  miniCmd: (cmd) => call(CHANNELS.MINI_CMD, cmd),
+  miniStatus: (payload) => call(CHANNELS.MINI_STATUS, payload),
+  onMiniCmd: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.MINI_CMD, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.MINI_CMD, listener);
+  },
+  onMiniState: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.MINI_STATE, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.MINI_STATE, listener);
+  },
+
   // Server-mode window pages (boot page + Dashboard tab in the one window)
   getSidecarState: () => call(CHANNELS.SIDECAR_STATE_GET),
   retrySidecar: () => call(CHANNELS.SIDECAR_RETRY),

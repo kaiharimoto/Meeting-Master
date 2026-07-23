@@ -13,6 +13,7 @@
 // into the post-meeting review by captureExtracted() — nothing vanishes.
 
 import { setStatus } from './status.js';
+import { showToast } from './toast.js';
 import { normQ, isDuplicate, makeId } from './extractReview.js';
 import { updateButtons } from './generate.js';
 
@@ -229,6 +230,21 @@ function buildRow(candidate, index) {
     lf.pending.splice(index, 1);
     ctx.persist();
     renderLiveFlags();
+    showToast({
+      kind: 'info',
+      title: 'Suggestion dismissed',
+      message: candidate.question,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          const state = flagsState();
+          state.dismissed = state.dismissed.filter((d) => d !== nq);
+          state.pending.splice(Math.min(index, state.pending.length), 0, candidate);
+          ctx.persist();
+          renderLiveFlags();
+        },
+      },
+    });
   });
 
   actions.append(approve, dismiss);

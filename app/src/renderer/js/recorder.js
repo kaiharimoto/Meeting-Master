@@ -14,6 +14,7 @@
 import { setStatus, showError } from './status.js';
 import { showToast } from './toast.js';
 import { updateButtons } from './generate.js';
+import { openCardModal } from './capture.js';
 
 const TIMESLICE_MS = 5000;
 const AUDIO_BITS_PER_SECOND = 32000; // Opus mono speech: ~14 MB/hour
@@ -63,6 +64,7 @@ let drainPromise = null;
 
 let timerInterval = null;
 let meterRaf = 0;
+let lastRms = 0;
 
 export function initRecorder(context) {
   ctx = context;
@@ -83,6 +85,8 @@ export function initRecorder(context) {
     meter: document.getElementById('rec-meter'),
     meterFill: document.getElementById('rec-meter-fill'),
     note: document.getElementById('rec-note'),
+    guard: document.getElementById('rec-guard'),
+    mini: document.getElementById('rec-mini-btn'),
   };
   if (!els.start) return;
 
@@ -109,6 +113,33 @@ export function initRecorder(context) {
   els.stop.addEventListener('click', () => guarded(() => stopRecording(false)));
   els.discard.addEventListener('click', () => guarded(discardRecording));
   els.device.addEventListener('change', () => guarded(onDeviceChosen));
+  if (els.mini) {
+    els.mini.addEventListener('click', () => {
+      if (typeof ctx.api.miniOpen === 'function') ctx.api.miniOpen().catch(() => {});
+    });
+  }
+
+  // Mini-mode remote control: the compact always-on-top window sends its
+  // button presses here (the MediaRecorder lives in THIS renderer).
+  if (typeof ctx.api.onMiniCmd === 'function') {
+    ctx.api.onMiniCmd((payload) => {
+      const cmd = payload && payload.cmd;
+      if (cmd === 'pause') guarded(pauseRecording);
+      else if (cmd === 'resume') guarded(resumeRecording);
+      else if (cmd === 'stop') guarded(() => stopRecording(false));
+      else if (cmd === 'q') openCardModal(null);
+    });
+  }
+
+  // The taskbar title should be live even when the guard/title change without
+  // a full renderAll (typing in the title field).
+  const titleInput = document.getElementById('meeting-title-input');
+  if (titleInput) {
+    titleInput.addEventListener('input', () => {
+      updateWindowTitle();
+      updateRecordGuard();
+    });
+  }
 
   // Loopback ("also record computer audio") is Windows-only.
   if (els.loopbackField && ctx.api && typeof ctx.api.getAppInfo === 'function') {
@@ -738,6 +769,8 @@ function startTimer() {
   stopTimer();
   timerInterval = setInterval(() => {
     els.timer.textContent = fmtDuration(currentActiveMs());
+    updateWindowTitle();
+    pushMiniStatus();
   }, 500);
   els.timer.textContent = '00:00';
 }
@@ -760,6 +793,7 @@ function startMeter() {
       sum += v * v;
     }
     const rms = Math.sqrt(sum / data.length);
+    lastRms = rms; // sampled by the mini-mode status push (timer cadence)
     // Speech RMS rarely exceeds ~0.3 — scale so normal talk fills the bar.
     els.meterFill.style.width = `${Math.min(100, Math.round(rms * 300))}%`;
     meterRaf = requestAnimationFrame(tick);
@@ -790,9 +824,68 @@ function updateRecUi() {
   els.timer.hidden = !live && status !== 'stopping';
   els.timer.classList.toggle('is-paused', status === 'paused');
   els.meter.hidden = !live;
+  if (els.mini) {
+    els.mini.hidden = !live || typeof ctx.api.miniOpen !== 'function';
+  }
   // The sidebar dot: recording stays visible from any screen.
   const navMeeting = document.getElementById('nav-meeting');
   if (navMeeting) navMeeting.classList.toggle('is-recording', live);
+  updateWindowTitle();
+  updateRecordGuard();
+  pushMiniStatus();
+  // Let the stage shell react to recording transitions.
+  document.dispatchEvent(new CustomEvent('mm:stage'));
+}
+
+/** Taskbar/window title mirrors the meeting + recording state, so even a
+ *  minimized window shows it's rolling. */
+export function updateWindowTitle() {
+  if (!ctx) return;
+  const meetingTitle = ((ctx.state.details && ctx.state.details.title) || '').trim();
+  let title;
+  if (status === 'recording' || status === 'paused') {
+    const mark = status === 'paused' ? '⏸' : '●';
+    title = `${mark} ${fmtDuration(currentActiveMs())} — ${meetingTitle || 'Recording'}`;
+  } else {
+    title = meetingTitle ? `${meetingTitle} — Meeting Master` : 'Meeting Master';
+  }
+  if (document.title !== title) document.title = title;
+}
+
+/** "You're typing but nothing is being captured" — the most expensive
+ *  mistake this app can prevent. Quiet, persistent, gone once you record. */
+export function updateRecordGuard() {
+  if (!ctx || !els || !els.guard) return;
+  const job = ctx.state.job || {};
+  const meaningful = Boolean(
+    ((ctx.state.details && ctx.state.details.title) || '').trim() ||
+      (ctx.state.cards || []).length > 0
+  );
+  const canRecord =
+    Boolean(ctx.api && typeof ctx.api.recStart === 'function') &&
+    els.panel &&
+    !els.panel.hidden;
+  els.guard.hidden = !(
+    status === 'idle' &&
+    canRecord &&
+    meaningful &&
+    !ctx.state.recording &&
+    !job.id &&
+    !ctx.state.transcript
+  );
+}
+
+/** Feed the mini-mode window (if open, main relays; otherwise a cheap no-op). */
+function pushMiniStatus() {
+  if (!ctx || !ctx.api || typeof ctx.api.miniStatus !== 'function') return;
+  ctx.api
+    .miniStatus({
+      status,
+      elapsedMs: currentActiveMs(),
+      rms: lastRms,
+      title: ((ctx.state.details && ctx.state.details.title) || '').trim(),
+    })
+    .catch(() => {});
 }
 
 /** The "Recording attached" line under the controls. */

@@ -25,6 +25,7 @@ const KEYS = [
   'MIC_DEVICE_LABEL',
   'LIVE_TRANSCRIPT_ENABLED',
   'LIVE_MODEL',
+  'UI_ZOOM',
 ];
 
 // Parse simple KEY=VALUE lines. Blank lines and #-comments are ignored.
@@ -76,6 +77,9 @@ const FIELD_TO_KEY = Object.freeze({
   // on; model ∈ {small, base} (validated by whisperLocator's whitelist).
   liveTranscriptEnabled: 'LIVE_TRANSCRIPT_ENABLED',
   liveModel: 'LIVE_MODEL',
+  // UI zoom: '' = auto (chosen from the display's size), else a factor like
+  // '1.1'. Written by Ctrl+=/Ctrl+- and the Settings picker (see zoom.js).
+  uiZoom: 'UI_ZOOM',
 });
 
 /**
@@ -143,6 +147,7 @@ function get() {
     micDeviceLabel: val('MIC_DEVICE_LABEL'),
     liveTranscriptEnabled: val('LIVE_TRANSCRIPT_ENABLED') === '1',
     liveModel: val('LIVE_MODEL').toLowerCase() === 'base' ? 'base' : 'small',
+    uiZoom: val('UI_ZOOM'),
     configPath: loadedPath || candidates[0],
   };
 }

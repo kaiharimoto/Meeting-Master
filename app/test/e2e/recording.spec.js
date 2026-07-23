@@ -104,6 +104,15 @@ test.beforeEach(async ({ page }) => {
 
 async function startRecording(page) {
   await page.goto(INDEX_URL);
+  // Track the meter's PEAK: the fake device's tone is short-lived, so a
+  // point-in-time width check races it — the high-water mark doesn't.
+  await page.evaluate(() => {
+    window.__maxMeter = 0;
+    const fill = document.getElementById('rec-meter-fill');
+    new MutationObserver(() => {
+      window.__maxMeter = Math.max(window.__maxMeter, parseInt(fill.style.width, 10) || 0);
+    }).observe(fill, { attributes: true, attributeFilter: ['style'] });
+  });
   await page.locator('#rec-start-btn').click();
   // acquiring -> recording: the Stop button appears once capture is live.
   await expect(page.locator('#rec-stop-btn')).toBeVisible({ timeout: 10000 });
@@ -122,16 +131,18 @@ test('start → chunks land in order → pause freezes the timer → stop attach
 
   // The timer ticks (fake device time still advances the wall clock).
   await expect(timer).not.toHaveText('00:00', { timeout: 5000 });
-  // The level meter reacts to the fake device's tone.
-  await expect
-    .poll(async () => page.locator('#rec-meter-fill').evaluate((el) => el.style.width))
-    .not.toBe('0%');
 
   // ≥1 append after the 5s timeslice, seq starting at 0, non-empty chunk.
   await expect
     .poll(async () => (await calls()).filter((c) => c.name === 'recAppend').length, {
       timeout: 9000,
     })
+    .toBeGreaterThan(0);
+
+  // The level meter reacted to the fake device's tone at some point (the
+  // tone is brief, so assert the observed peak, not the current width).
+  await expect
+    .poll(() => page.evaluate(() => window.__maxMeter), { timeout: 5000 })
     .toBeGreaterThan(0);
   const firstAppend = (await calls()).find((c) => c.name === 'recAppend');
   expect(firstAppend.args[0]).toBe('rec-test');

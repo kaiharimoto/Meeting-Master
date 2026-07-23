@@ -65,6 +65,12 @@ const CHANNELS = Object.freeze({
   LIVE_PCM: 'live:pcm',
   LIVE_STOP: 'live:stop',
   LIVE_EVENT: 'live:event', // main -> renderer push (segments, lag, flag candidates)
+  // Usability batch (v0.10.0)
+  PREFLIGHT_GET: 'preflight:get',
+  MINI_OPEN: 'mini:open',
+  MINI_CMD: 'mini:cmd', // mini window -> main; relayed to the main renderer as a push
+  MINI_STATUS: 'mini:status', // main renderer -> main; relayed to the mini window
+  MINI_STATE: 'mini:state', // main -> mini window push (timer/level/status)
 });
 
 const JOB_STATES = Object.freeze([

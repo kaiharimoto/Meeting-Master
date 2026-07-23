@@ -1958,3 +1958,164 @@ kbd {
   display: flex;
   gap: 8px;
 }
+
+/* ---- Usability batch: stage shell, pre-flight, guard, problems, checklist -- */
+
+/* Next-step strip: names the single action that matters right now. */
+.next-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border: 1px solid var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--accent-ghost);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* Exactly ONE promoted button per stage. */
+.btn-promoted {
+  box-shadow: 0 0 0 3px var(--accent-ghost), 0 0 0 1px var(--accent);
+}
+
+/* Collapsible panels: header becomes a toggle, body hides, a one-line
+   summary keeps the content reachable and scannable. */
+.panel h2.stage-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.panel h2.stage-toggle::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-faint);
+  transition: transform var(--t-fast);
+}
+.panel.is-collapsed h2.stage-toggle::after {
+  transform: rotate(-90deg);
+}
+.panel .panel-summary {
+  display: none;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.panel.is-collapsed .panel-summary {
+  display: block;
+}
+.panel.is-collapsed > *:not(h2):not(.panel-heading-row):not(.panel-summary) {
+  display: none;
+}
+.panel.is-collapsed {
+  padding-bottom: 14px;
+}
+
+/* Pre-flight readiness chips in the Record panel. */
+.rec-preflight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pf-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.pf-chip.is-ok {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: transparent;
+}
+.pf-chip.is-warn {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: transparent;
+}
+.pf-chip.is-soft {
+  color: var(--ink-soft);
+  background: var(--surface-2);
+}
+
+/* "Not recording" guard — quiet but persistent. */
+.rec-guard {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+}
+
+/* Persistent problem cards with remedies attached. */
+.problem-host {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.problem-card {
+  border: 1px solid var(--danger-soft);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.problem-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.problem-detail {
+  font-size: 13px;
+  color: var(--ink);
+}
+.problem-card .button-row {
+  margin-top: 2px;
+}
+
+/* First-run checklist card. */
+.setup-checklist {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.checklist-row {
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 2px 0;
+}
+button.checklist-row {
+  cursor: pointer;
+  color: var(--accent);
+}
+button.checklist-row:hover {
+  text-decoration: underline;
+}
+.checklist-row.is-done {
+  color: var(--success);
+}

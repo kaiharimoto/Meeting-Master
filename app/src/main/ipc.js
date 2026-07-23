@@ -18,6 +18,7 @@ const whisperLocator = require('./whisperLocator');
 const modelManager = require('./modelManager');
 const liveTranscriber = require('./liveTranscriber');
 const liveFlagger = require('./liveFlagger');
+const miniManager = require('./miniManager');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -273,6 +274,57 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return liveTranscriber.stop();
   });
 
+  // ---- Usability batch (v0.10.0) --------------------------------------------
+
+  // Pre-flight readiness probe for the Record panel's status chips.
+  handleLocal(CHANNELS.PREFLIGHT_GET, async () => {
+    let freeBytes = null;
+    try {
+      const s = require('fs').statfsSync(paths.recordingsDir());
+      freeBytes = Number(s.bavail) * Number(s.bsize);
+    } catch {
+      // Unknown free space — the chip is simply omitted.
+    }
+    const server = { ok: false, error: null };
+    try {
+      await homeClient.health();
+      server.ok = true;
+    } catch (err) {
+      server.error = err.message;
+    }
+    const live = whisperLocator.support();
+    const model = config.get().liveModel || 'small';
+    return {
+      freeBytes,
+      server,
+      live: {
+        supported: live.supported,
+        modelReady: Boolean(live.models[model] && live.models[model].downloaded),
+      },
+    };
+  });
+
+  // Mini mode: the strip window is a remote control for the recording that
+  // lives in the MAIN window's renderer (see miniManager.js).
+  handleLocal(CHANNELS.MINI_OPEN, () => miniManager.open(getMainWindow));
+
+  handleLocal(CHANNELS.MINI_CMD, (cmd) => {
+    const c = String(cmd || '');
+    if (c === 'expand' || c === 'q') {
+      miniManager.close(); // restores + focuses the main window
+    }
+    if (c !== 'expand') {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send(CHANNELS.MINI_CMD, { cmd: c });
+    }
+    return { ok: true };
+  });
+
+  handleLocal(CHANNELS.MINI_STATUS, (payload) => {
+    miniManager.forwardStatus(payload, getMainWindow);
+    return { ok: true };
+  });
+
   // ---- App shell ---------------------------------------------------------------
 
   handle(CHANNELS.APP_INFO, () => ({
@@ -360,6 +412,7 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       micDeviceLabel: cfg.micDeviceLabel,
       liveTranscriptEnabled: cfg.liveTranscriptEnabled,
       liveModel: cfg.liveModel,
+      uiZoom: cfg.uiZoom,
       configPath: cfg.configPath,
     };
   });
@@ -378,6 +431,7 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       micDeviceLabel: cfg.micDeviceLabel,
       liveTranscriptEnabled: cfg.liveTranscriptEnabled,
       liveModel: cfg.liveModel,
+      uiZoom: cfg.uiZoom,
       configPath: cfg.configPath,
     };
   }
@@ -398,6 +452,7 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       micDeviceLabel: input.micDeviceLabel,
       liveTranscriptEnabled: input.liveTranscriptEnabled,
       liveModel: input.liveModel,
+      uiZoom: input.uiZoom,
     };
 
     // A pasted connection code wins over any typed URL/token fields.
@@ -419,6 +474,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     // New URL/token: reconnect the live event stream and re-point the updater.
     sseClient.restart();
     updater.onConfigChanged();
+    // A changed UI-size setting should take effect without a restart.
+    require('./zoom').apply(getMainWindow());
     return safeFull(config.get());
   });
 }

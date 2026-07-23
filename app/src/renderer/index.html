@@ -75,8 +75,14 @@
           <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
         </div>
 
+        <div id="next-step" class="next-step" role="status" hidden>
+          <span id="next-step-text"></span>
+        </div>
+
+        <div id="setup-checklist" class="setup-checklist" hidden></div>
+
         <!-- 1. Meeting details -->
-        <section class="panel" aria-labelledby="details-heading">
+        <section id="panel-details" class="panel" aria-labelledby="details-heading">
           <h2 id="details-heading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Meeting details
@@ -114,7 +120,7 @@
         </section>
 
         <!-- 2. Questions & answers -->
-        <section class="panel" aria-labelledby="qa-heading">
+        <section id="panel-qa" class="panel" aria-labelledby="qa-heading">
           <div class="panel-heading-row">
             <h2 id="qa-heading">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -131,13 +137,18 @@
         </section>
 
         <!-- 3. Record audio -->
-        <section class="panel" aria-labelledby="record-heading">
+        <section id="panel-record" class="panel" aria-labelledby="record-heading">
           <div class="panel-heading-row">
             <h2 id="record-heading">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
               Record audio
             </h2>
             <span class="hint-chip">Saved to disk every 5 s — survives a crash</span>
+          </div>
+
+          <div id="rec-preflight" class="rec-preflight" hidden></div>
+          <div id="rec-guard" class="rec-guard" hidden>
+            Not recording — nothing is being captured yet.
           </div>
 
           <div class="field-grid">
@@ -170,6 +181,8 @@
             <button id="rec-resume-btn" type="button" class="btn btn-primary" hidden>Resume</button>
             <button id="rec-stop-btn" type="button" class="btn btn-primary" hidden>Stop &amp; use recording</button>
             <button id="rec-discard-btn" type="button" class="btn btn-secondary" hidden>Discard</button>
+            <button id="rec-mini-btn" type="button" class="btn btn-secondary" hidden
+                    title="Shrink to a small always-on-top recording strip">Mini mode</button>
             <span id="rec-timer" class="rec-timer" hidden>00:00</span>
           </div>
 
@@ -191,7 +204,7 @@
         </section>
 
         <!-- 4. Generate & send -->
-        <section class="panel" aria-labelledby="generate-heading">
+        <section id="panel-generate" class="panel" aria-labelledby="generate-heading">
           <h2 id="generate-heading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             Generate &amp; send
@@ -220,6 +233,8 @@
             <button id="pick-file-btn" type="button" class="btn btn-secondary"
                     title="Transcribe an audio file from disk instead of the in-app recording">Upload audio file…</button>
           </div>
+
+          <div id="problem-host" class="problem-host" hidden></div>
 
           <div id="status-line" class="status-line" role="status" aria-live="polite">
             <span id="status-spinner" class="spinner" hidden></span>
@@ -552,6 +567,23 @@
         <p class="settings-help">
           Every in-app recording is kept here — nothing is deleted
           automatically.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="settings-zoom-select">UI size</label>
+        <select id="settings-zoom-select">
+          <option value="">Auto — match the display</option>
+          <option value="0.9">90%</option>
+          <option value="1">100%</option>
+          <option value="1.1">110%</option>
+          <option value="1.25">125%</option>
+        </select>
+        <p class="settings-help">
+          Auto picks a comfortable size for the current display (bigger on
+          projectors and large monitors). <kbd>Ctrl</kbd>+<kbd>=</kbd> /
+          <kbd>Ctrl</kbd>+<kbd>-</kbd> adjust any time; <kbd>Ctrl</kbd>+<kbd>0</kbd>
+          returns to Auto.
         </p>
       </div>
 

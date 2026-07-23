@@ -12,9 +12,14 @@ import { initSummaryEdit, openSummaryEdit } from './summaryEdit.js';
 import { initEmailPreview, openEmailPreview } from './emailPreview.js';
 import { initNameFix, openNameFix } from './nameFix.js';
 import { initHistory, saveCurrentToHistory } from './history.js';
-import { initRecorder, renderNote } from './recorder.js';
+import { initRecorder, renderNote, updateWindowTitle, updateRecordGuard } from './recorder.js';
 import { initLiveTranscript, hideLivePane } from './liveTranscript.js';
 import { initLiveFlags, renderLiveFlags } from './liveFlags.js';
+import { initStage, refreshStage } from './stage.js';
+import { initPreflight, refreshPreflight } from './preflight.js';
+import { initChecklist, refreshChecklist } from './checklist.js';
+import { initProblems, clearAllProblems } from './problems.js';
+import { showToast } from './toast.js';
 import { initNav } from './nav.js';
 import { initTheme } from './theme.js';
 import { initServerStatus } from './serverStatus.js';
@@ -27,11 +32,20 @@ function newMeetingId() {
   return `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Local (not UTC) yyyy-mm-dd — a new meeting is on the day it's created.
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+}
+
 function defaultState() {
   return {
     // Stable id so a saved meeting updates its own history entry (not a dup).
     meetingId: newMeetingId(),
-    details: { title: '', date: '', time: '', attendees: [] },
+    // Date defaults to today, time to the usual 11 AM slot — both editable.
+    details: { title: '', date: todayIso(), time: '11:00', attendees: [] },
     cards: [],
     recipients: [],
     options: { whisperModel: 'large-v3-turbo', emailMode: 'home' },
@@ -93,7 +107,11 @@ function boot() {
       renderExtractPrompt();
       updateButtons(ctx);
       renderNote(); // the "Recording attached" line (no-op before initRecorder)
-      renderLiveFlags(); // inline live candidates (no-op before initLiveFlags)
+      renderLiveFlags(); // live candidates rail (no-op before initLiveFlags)
+      updateWindowTitle(); // taskbar title mirrors meeting + recording state
+      updateRecordGuard(); // "not recording" hint
+      refreshStage(); // stage-aware panel emphasis (no-op before initStage)
+      refreshChecklist(); // first-run checklist (no-op before initChecklist)
     },
   };
 
@@ -106,6 +124,10 @@ function boot() {
   initRecorder(ctx); // after initGenerate — it drives the upload buttons' state
   initLiveTranscript(ctx);
   initLiveFlags(ctx, { onCardsChanged: () => renderCards(ctx) });
+  initStage(ctx);
+  initPreflight(ctx);
+  initChecklist(ctx);
+  initProblems();
   initSummaryEdit(ctx, { onSaved: () => setStatus('Summary updated — it will appear in the next PDF.') });
   initEmailPreview(ctx);
   initNameFix(ctx, {
@@ -128,8 +150,15 @@ function boot() {
     },
   });
   // After a successful save, refresh the header connection info (but don't
-  // re-trigger the launch-time auto-open of the Settings modal).
-  initSettings(ctx, { onSaved: () => refreshConfig(ctx) });
+  // re-trigger the launch-time auto-open of the Settings modal). Readiness
+  // surfaces re-check too — a fixed setting should clear its warning at once.
+  initSettings(ctx, {
+    onSaved: () => {
+      refreshConfig(ctx);
+      refreshPreflight();
+      refreshChecklist();
+    },
+  });
   initTheme(ctx);
   initServerStatus(ctx);
   initActivity(ctx);
@@ -206,18 +235,41 @@ function boot() {
       showError('A recording is in progress — stop or discard it before starting a new meeting.');
       return;
     }
-    const ok = confirm('Start a new meeting? This clears the details, Q&A cards, and job state.');
-    if (!ok) return;
-    // Preserve the outgoing meeting in history before clearing it.
+    // Undo instead of a confirm popup: the outgoing meeting is snapshotted to
+    // History anyway, so the action is safe to take immediately and cheap to
+    // reverse — faster when you meant it, forgiving when you didn't.
+    const hadContent = Boolean(
+      ((state.details && state.details.title) || '').trim() ||
+        (state.cards && state.cards.length)
+    );
+    const previous = hadContent ? JSON.parse(JSON.stringify(state)) : null;
     saveCurrentToHistory();
     // Replace contents in place — modules hold a reference to `state`.
     Object.assign(state, defaultState());
     ctx.persist();
     hideLivePane(); // a new meeting starts with a clean live-transcript pane
+    clearAllProblems(); // stale failure cards belong to the previous meeting
     ctx.renderAll();
     // Kill any interval still polling the previous meeting's job.
     maybeResumePolling();
     setStatus('New meeting started.');
+    if (previous) {
+      showToast({
+        kind: 'info',
+        title: 'New meeting started',
+        message: 'The previous meeting was saved to History.',
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            Object.assign(state, previous);
+            ctx.persist();
+            ctx.renderAll();
+            maybeResumePolling();
+            setStatus('Restored the previous meeting.');
+          },
+        },
+      });
+    }
   });
 
   ctx.renderAll();
@@ -285,6 +337,7 @@ async function refreshConfig(ctx, { autoOpen = false } = {}) {
   try {
     const cfg = await ctx.api.getConfig();
     ctx.config = cfg;
+    refreshChecklist(); // config-dependent items (server connected) just resolved
     if (cfg.serverUrl && cfg.hasToken) {
       infoEl.textContent = `Server: ${cfg.serverUrl} · Email: ${cfg.emailMode} · ${cfg.pageSize}`;
       noteEl.hidden = true;

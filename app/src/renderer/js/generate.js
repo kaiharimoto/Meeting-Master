@@ -6,6 +6,8 @@ import { setStatus, showError, friendlyState, isBusyState } from './status.js';
 import { renderExtractPrompt, captureExtracted } from './extractReview.js';
 import { saveCurrentToHistory } from './history.js';
 import { showToast } from './toast.js';
+import { showProblem, clearProblem } from './problems.js';
+import { FIRST_TRANSCRIPT_KEY } from './checklist.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -25,6 +27,15 @@ let els = null;
 let uploading = false;
 let pollInFlight = false;
 let pollGeneration = 0;
+
+// Transcription ETA: wall-clock start of the transcribing state, so progress
+// percent can be projected into "~N min left".
+let transcribeStartedAt = null;
+let lastPolledState = null;
+
+// Jobs whose recipient list the operator has confirmed this session (the
+// preset list lives on the server and is otherwise invisible from here).
+const confirmedSendJobs = new Set();
 
 export function initGenerate(context) {
   ctx = context;
@@ -195,6 +206,9 @@ async function uploadAudio(filePath) {
   const jobRef = ctx.state.job;
   uploading = true;
   updateButtons(ctx);
+  // A fresh upload is a fresh attempt — retire the previous failure cards.
+  clearProblem('pipeline');
+  clearProblem('email');
   setStatus('Uploading the recording to the home server…', { busy: true });
   try {
     const { jobId } = await api.uploadMeeting(buildMeetingJson(), filePath);
@@ -281,7 +295,19 @@ async function pollOnce() {
 
   ctx.state.job.state = job.state;
   ctx.state.job.progress = typeof job.progress === 'number' ? job.progress : null;
-  if (job.transcript) ctx.state.transcript = job.transcript;
+  if (job.state !== lastPolledState) {
+    lastPolledState = job.state;
+    transcribeStartedAt = job.state === 'transcribing' ? Date.now() : null;
+  }
+  if (job.transcript) {
+    ctx.state.transcript = job.transcript;
+    // First-run checklist: the pipeline has produced a transcript once.
+    try {
+      localStorage.setItem(FIRST_TRANSCRIPT_KEY, '1');
+    } catch {
+      // Storage unavailable — the checklist item just stays open.
+    }
+  }
   if (job.summary !== null && job.summary !== undefined) ctx.state.summary = job.summary;
   // Capture AI-detected Q&A candidates once (they are approved, not auto-added),
   // dropping any that duplicate a card the operator already typed. Guard on
@@ -298,10 +324,19 @@ async function pollOnce() {
   if (job.state === 'failed') {
     stopPolling();
     showError(`AI processing failed on the home server${job.error ? `: ${job.error}` : '.'}`);
-    showToast({
-      kind: 'error',
-      title: 'AI processing failed',
-      message: job.error || 'The home server reported a failure.',
+    // Persistent card with the remedies attached — a failed pipeline stage is
+    // not transient, and its fix shouldn't depend on a toast you missed.
+    showProblem({
+      id: 'pipeline',
+      title: 'AI processing failed on the home server',
+      detail: job.error || 'The home server reported a failure.',
+      actions: [
+        { label: 'Retry AI', primary: true, onClick: () => startAi() },
+        {
+          label: 'Copy AI prompt',
+          onClick: () => els.copyPrompt && els.copyPrompt.click(),
+        },
+      ],
     });
   } else if (READY_STATES.includes(job.state)) {
     stopPolling();
@@ -339,16 +374,22 @@ async function pollOnce() {
       ].filter(Boolean).join(' and ');
       const reason = job.summaryError || job.questionsError;
       showError(`Transcript is ready, but the AI ${failedBits} failed: ${reason}`);
-      showToast({
-        kind: 'error',
-        title: `AI ${failedBits} failed — transcript is safe`,
-        message:
-          `${reason} — Retry (e.g. after lowering the context window in the ` +
-          'server Settings), or use "Copy AI prompt" with your own model and ' +
-          'import its reply via Edit summary.',
-        action: { label: 'Retry summary', onClick: startAi },
+      showProblem({
+        id: 'pipeline',
+        title: `AI ${failedBits} failed — the transcript is safe`,
+        detail:
+          `${reason}. Retry (e.g. after lowering the context window in the ` +
+          'server Settings), or hand the transcript to an external AI.',
+        actions: [
+          { label: 'Retry summary', primary: true, onClick: () => startAi() },
+          {
+            label: 'Copy AI prompt',
+            onClick: () => els.copyPrompt && els.copyPrompt.click(),
+          },
+        ],
       });
     } else {
+      clearProblem('pipeline'); // a clean result retires the failure card
       setStatus(friendlyState(job.state));
       showToast({
         kind: 'success',
@@ -357,13 +398,26 @@ async function pollOnce() {
       });
     }
   } else {
-    // Append a live percentage when the server reports one (transcription).
+    // Append a live percentage when the server reports one (transcription),
+    // plus a projected time remaining — waiting with an ETA feels completely
+    // different from waiting without one.
     let text = friendlyState(job.state);
     if (typeof job.progress === 'number' && job.progress > 0) {
       text += ` — ${job.progress}%`;
+      if (job.state === 'transcribing' && transcribeStartedAt && job.progress >= 5) {
+        const elapsed = Date.now() - transcribeStartedAt;
+        const remainMs = (elapsed * (100 - job.progress)) / job.progress;
+        text += ` · ${fmtEta(remainMs)}`;
+      }
     }
     setStatus(text, { busy: isBusyState(job.state) });
   }
+}
+
+function fmtEta(ms) {
+  if (ms < 60000) return 'under a minute left';
+  const min = Math.round(ms / 60000);
+  return `~${min} min left`;
 }
 
 // ---- Generate / open PDF ------------------------------------------------------
@@ -431,14 +485,58 @@ async function onSendEmail() {
     return;
   }
 
+  // The preset recipient list lives on the SERVER and is invisible from this
+  // laptop — confirm who actually gets the email once per meeting, with the
+  // real resolved recipients + subject when the server can tell us.
+  if (!confirmedSendJobs.has(jobId)) {
+    let prompt = 'Send the meeting PDF to the preset recipient list now?';
+    try {
+      if (typeof api.getEmailPreview === 'function') {
+        const preview = await api.getEmailPreview(jobId);
+        const to = Array.isArray(preview.recipients)
+          ? preview.recipients.join(', ')
+          : preview.to || '';
+        prompt =
+          `Send the meeting PDF now?\n\n` +
+          (to ? `To: ${to}\n` : '') +
+          (preview.subject ? `Subject: ${preview.subject}` : '');
+      }
+    } catch {
+      // Preview unavailable — fall back to the generic confirmation.
+    }
+    if (!window.confirm(prompt)) {
+      setStatus('Email not sent.');
+      return;
+    }
+    confirmedSendJobs.add(jobId);
+  }
+
   setStatus('Sending the PDF to the home server for emailing…', { busy: true });
   const result = await api.sendPdfViaHome(jobId, ctx.state.pdfPath);
   if (result && result.emailed) {
+    clearProblem('email');
     setStatus('Email sent by the home server.');
     showToast({ kind: 'success', title: 'Email sent', message: 'Delivered by the home server.' });
   } else {
     const detail = result && result.error ? `: ${result.error}` : '.';
     showError(`The home server stored the PDF but could not send the email${detail}`);
+    showProblem({
+      id: 'email',
+      title: 'The email could not be sent',
+      detail:
+        (result && result.error ? `${result.error}. ` : '') +
+        'The PDF is stored on the home server — retry, or send it yourself.',
+      actions: [
+        { label: 'Retry send', primary: true, onClick: () => els.send && els.send.click() },
+        {
+          label: 'Email text…',
+          onClick: () => {
+            const btn = document.getElementById('email-text-btn');
+            if (btn) btn.click();
+          },
+        },
+      ],
+    });
   }
 }
 

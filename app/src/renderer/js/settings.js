@@ -20,6 +20,7 @@ let backdrop,
   pageSizeEl,
   micSelectEl,
   openRecordingsBtn,
+  zoomEl,
   liveSection,
   liveModelEl,
   liveDefaultEl,
@@ -96,6 +97,7 @@ export function initSettings(context, opts = {}) {
   pageSizeEl = document.getElementById('settings-page-size');
   micSelectEl = document.getElementById('settings-mic-select');
   openRecordingsBtn = document.getElementById('open-recordings-btn');
+  zoomEl = document.getElementById('settings-zoom-select');
   liveSection = document.getElementById('settings-live-section');
   liveModelEl = document.getElementById('settings-live-model');
   liveDefaultEl = document.getElementById('settings-live-default');
@@ -254,6 +256,17 @@ export async function openSettings({ welcome = false } = {}) {
   syncSmtpVisibility();
   await populateMicSelect(cfg);
   await refreshLiveSection(cfg);
+  if (zoomEl) {
+    const saved = cfg.uiZoom || '';
+    // A Ctrl+= nudge can land between the preset steps — surface it honestly.
+    if (saved && ![...zoomEl.options].some((o) => o.value === saved)) {
+      const custom = document.createElement('option');
+      custom.value = saved;
+      custom.textContent = `${Math.round(Number(saved) * 100)}% (custom)`;
+      zoomEl.append(custom);
+    }
+    zoomEl.value = saved;
+  }
 
   backdrop.hidden = false;
   codeInput.focus();
@@ -348,6 +361,8 @@ async function onSave() {
     payload.liveModel = liveModelEl.value === 'base' ? 'base' : 'small';
     payload.liveTranscriptEnabled = liveDefaultEl.checked ? '1' : '';
   }
+
+  if (zoomEl) payload.uiZoom = zoomEl.value;
 
   // A blank secret means "keep what's saved" (omit) only when one exists;
   // otherwise send '' so the field stays explicitly empty.
