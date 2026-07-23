@@ -1,8 +1,8 @@
 'use strict';
 
-// Inline live question candidates in the Q&A panel: approve → card,
-// dismiss → per-meeting memory, duplicate filtering. No recording needed —
-// candidates are pushed through the captured onLiveEvent callbacks.
+// Live question suggestions rail: peripheral, monitorable while typing.
+// Candidates are pushed through the captured onLiveEvent callbacks — no
+// recording or fake device needed.
 
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -75,14 +75,28 @@ test.beforeEach(async ({ page }) => {
   await page.goto(INDEX_URL);
 });
 
-test('candidates render inline; Approve makes a card; Dismiss is remembered', async ({ page }) => {
-  const host = page.locator('#live-flags');
-  await expect(host).toBeHidden();
+test('the rail shows a listening state on live start, before any candidates', async ({ page }) => {
+  const rail = page.locator('#live-rail');
+  await expect(rail).toBeHidden();
+
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('mm:live-start')));
+  await expect(rail).toBeVisible();
+  await expect(page.locator('#live-rail-empty')).toBeVisible();
+  await expect(page.locator('#live-rail-count')).toBeHidden();
+
+  // Session ends with nothing pending → the rail retires.
+  await page.evaluate(() => window.__liveCbs.forEach((cb) => cb({ type: 'stopped' })));
+  await expect(rail).toBeHidden();
+});
+
+test('candidates collect in the rail; Approve makes a card; Dismiss is remembered', async ({ page }) => {
+  const rail = page.locator('#live-rail');
 
   await pushCandidates(page, [Q1, Q2]);
-  await expect(host).toBeVisible();
-  await expect(host.locator('.live-flags-heading')).toContainText('2 questions');
-  const rows = host.locator('.live-flag-row');
+  await expect(rail).toBeVisible();
+  await expect(page.locator('#live-rail-count')).toHaveText('2');
+  await expect(page.locator('#live-rail-empty')).toBeHidden();
+  const rows = rail.locator('.live-flag-row');
   await expect(rows).toHaveCount(2);
 
   // Low-confidence candidate carries the "check answerer" flag.
@@ -95,16 +109,15 @@ test('candidates render inline; Approve makes a card; Dismiss is remembered', as
   await expect(page.locator('#card-list .qa-card').first()).toContainText(
     'What is the renewal price?'
   );
-  await expect(host.locator('.live-flag-row')).toHaveCount(1);
+  await expect(rail.locator('.live-flag-row')).toHaveCount(1);
 
   // Dismiss the second, then re-push it — the dismissal memory filters it.
-  await host.locator('.live-flag-row button', { hasText: 'Dismiss' }).click();
-  await expect(host).toBeHidden();
+  await rail.locator('.live-flag-row button', { hasText: 'Dismiss' }).click();
+  await expect(rail).toBeHidden(); // no session, nothing pending
   await pushCandidates(page, [Q2]);
   await page.waitForTimeout(200);
-  await expect(host).toBeHidden();
+  await expect(rail).toBeHidden();
 
-  // Both decisions persisted per meeting.
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('meetingmaster.meeting.v1'))
   );
@@ -113,8 +126,34 @@ test('candidates render inline; Approve makes a card; Dismiss is remembered', as
   expect(saved.cards).toHaveLength(1);
 });
 
+test('arrivals never disturb the capture modal — and the rail stays usable', async ({ page }) => {
+  // Open the manual capture modal and start typing.
+  await page.keyboard.press('q');
+  const question = page.locator('#card-question');
+  await expect(question).toBeFocused();
+  await page.keyboard.type('Manually typed quest');
+
+  // A candidate arrives mid-typing: the rail updates beside the modal…
+  await pushCandidates(page, [Q1]);
+  await expect(page.locator('#live-rail')).toBeVisible();
+  await expect(page.locator('#live-rail .live-flag-row')).toHaveCount(1);
+
+  // …but focus and the draft are untouched.
+  await expect(question).toBeFocused();
+  await expect(question).toHaveValue('Manually typed quest');
+
+  // The rail is mouse-clickable above the modal backdrop: approve now.
+  await page.locator('#live-rail button', { hasText: 'Approve' }).click();
+  await expect(page.locator('#card-list .qa-card')).toHaveCount(1);
+
+  // The modal is still open and the draft still intact — finish it.
+  await question.click();
+  await page.keyboard.type('ion?');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#card-list .qa-card')).toHaveCount(2);
+});
+
 test('a candidate duplicating an existing card is never shown', async ({ page }) => {
-  // Type the question as a card first (via the capture modal).
   await page.keyboard.press('q');
   await page.keyboard.type('What is the renewal price?');
   await page.keyboard.press('Tab');
@@ -124,11 +163,11 @@ test('a candidate duplicating an existing card is never shown', async ({ page })
 
   await pushCandidates(page, [Q1]);
   await page.waitForTimeout(200);
-  await expect(page.locator('#live-flags')).toBeHidden();
+  await expect(page.locator('#live-rail')).toBeHidden();
 });
 
 test('duplicate pushes collapse into one pending row', async ({ page }) => {
   await pushCandidates(page, [Q1]);
   await pushCandidates(page, [Q1]); // e.g. flagger + a later tick overlap
-  await expect(page.locator('#live-flags .live-flag-row')).toHaveCount(1);
+  await expect(page.locator('#live-rail .live-flag-row')).toHaveCount(1);
 });

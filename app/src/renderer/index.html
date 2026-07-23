@@ -68,6 +68,8 @@
     <main class="app-content">
       <!-- ============ Meeting screen ============ -->
       <section id="screen-meeting" class="screen">
+        <div class="meeting-columns">
+        <div class="meeting-main">
         <div class="screen-head">
           <h2 class="screen-title">Meeting</h2>
           <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
@@ -122,8 +124,6 @@
           </div>
 
           <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
-
-          <div id="live-flags" class="live-flags" aria-live="polite" hidden></div>
 
           <div id="card-list" class="card-list" aria-live="polite"></div>
 
@@ -228,6 +228,26 @@
 
           <p id="config-note" class="config-note" hidden></p>
         </section>
+        </div><!-- /.meeting-main -->
+
+        <!-- Live question suggestions: a peripheral rail the operator can
+             monitor while typing questions — it never reflows the main
+             column, and it stays visible above the capture modal's dim. -->
+        <aside id="live-rail" class="live-rail" aria-label="Live question suggestions" hidden>
+          <div class="live-rail-head">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Live suggestions
+              <span id="live-rail-count" class="live-rail-count" hidden>0</span>
+            </h2>
+          </div>
+          <p id="live-rail-empty" class="live-rail-empty" hidden>
+            Listening… questions the AI hears in the conversation will appear
+            here. Approve the good ones whenever you have a moment.
+          </p>
+          <div id="live-rail-list" class="live-rail-list"></div>
+        </aside>
+        </div><!-- /.meeting-columns -->
       </section>
 
       <!-- ============ Activity screen ============ -->

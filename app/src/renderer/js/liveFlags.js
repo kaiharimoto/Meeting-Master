@@ -1,13 +1,16 @@
-// Live question candidates (mid-meeting), rendered INLINE in the Q&A panel.
+// Live question suggestions — the peripheral rail beside the Meeting screen.
 //
-// The home server's live extraction pushes candidates while the meeting runs
-// (LIVE_EVENT {type:'flag-candidates'}); each renders as an approve/dismiss
-// row the operator can act on without leaving the flow — unlike the
-// post-meeting batch modal, this list updates continuously. Approve turns
-// the candidate into an ordinary editable card; Dismiss remembers the
-// question (per meeting) so neither the live loop nor the post-meeting
-// extraction re-surfaces it. Un-actioned candidates are merged into the
-// post-meeting review by captureExtracted() — nothing silently vanishes.
+// Candidates flagged mid-meeting by the home server (LIVE_EVENT
+// {type:'flag-candidates'}) collect in a sticky side rail the operator can
+// MONITOR while typing questions manually: it never reflows the main column,
+// never grabs focus, never announces itself, and stays visible (and mouse-
+// clickable) above the capture modal's backdrop. New arrivals just bump the
+// counter and glide in.
+//
+// Approve turns a suggestion into an ordinary editable card; Dismiss
+// remembers the question (per meeting) so neither the live loop nor the
+// post-meeting extraction re-surfaces it. Un-actioned suggestions are merged
+// into the post-meeting review by captureExtracted() — nothing vanishes.
 
 import { setStatus } from './status.js';
 import { normQ, isDuplicate, makeId } from './extractReview.js';
@@ -15,7 +18,11 @@ import { updateButtons } from './generate.js';
 
 let ctx = null;
 let onCardsChanged = null;
-let host = null;
+let els = null;
+
+// The rail shows while a live session runs (even when empty, so the operator
+// knows it is listening) and whenever suggestions are pending.
+let liveSessionActive = false;
 
 function flagsState() {
   if (!ctx.state.liveFlags || typeof ctx.state.liveFlags !== 'object') {
@@ -30,19 +37,33 @@ function flagsState() {
 export function initLiveFlags(context, opts = {}) {
   ctx = context;
   onCardsChanged = opts.onCardsChanged || function () {};
-  host = document.getElementById('live-flags');
-  if (!host) return;
+  els = {
+    rail: document.getElementById('live-rail'),
+    list: document.getElementById('live-rail-list'),
+    count: document.getElementById('live-rail-count'),
+    empty: document.getElementById('live-rail-empty'),
+    screen: document.getElementById('screen-meeting'),
+  };
+  if (!els.rail || !els.list) return;
 
   if (ctx.api && typeof ctx.api.onLiveEvent === 'function') {
     ctx.api.onLiveEvent((payload) => {
-      if (payload && payload.type === 'flag-candidates') {
-        addCandidates(payload.questions);
+      if (!payload) return;
+      if (payload.type === 'flag-candidates') addCandidates(payload.questions);
+      else if (payload.type === 'stopped') {
+        liveSessionActive = false;
+        renderLiveFlags();
       }
     });
   }
 
+  document.addEventListener('mm:live-start', () => {
+    liveSessionActive = true;
+    renderLiveFlags();
+  });
+
   // captureExtracted() (post-meeting reconciliation) empties pending and
-  // fires this so the inline list clears without an import cycle.
+  // fires this so the rail clears without an import cycle.
   document.addEventListener('mm:liveflags', renderLiveFlags);
 
   renderLiveFlags();
@@ -71,6 +92,7 @@ function addCandidates(questions) {
       answerer: String(q.answerer || ''),
       directedTo: String(q.directedTo || ''),
       confidence: q.confidence === 'high' ? 'high' : 'low',
+      isNew: true, // one-shot arrival animation
     });
     pendingQs.push(nq);
     added += 1;
@@ -78,29 +100,36 @@ function addCandidates(questions) {
   if (added > 0) {
     ctx.persist();
     renderLiveFlags();
+    // The arrival animation is one-shot: clear the marker after render so a
+    // later re-render (approve/dismiss elsewhere) doesn't replay it.
+    lf.pending.forEach((p) => {
+      delete p.isNew;
+    });
   }
 }
 
 export function renderLiveFlags() {
-  if (!host) return;
+  if (!els || !els.rail) return;
   const lf = flagsState();
-  host.replaceChildren();
-  if (lf.pending.length === 0) {
-    host.hidden = true;
+  const n = lf.pending.length;
+
+  const show = liveSessionActive || n > 0;
+  els.rail.hidden = !show;
+  if (els.screen) els.screen.classList.toggle('has-rail', show);
+  if (!show) {
+    els.list.replaceChildren();
     return;
   }
-  host.hidden = false;
 
-  const heading = document.createElement('div');
-  heading.className = 'live-flags-heading';
-  heading.textContent =
-    lf.pending.length === 1
-      ? 'Live: 1 question detected in the conversation'
-      : `Live: ${lf.pending.length} questions detected in the conversation`;
-  host.append(heading);
+  if (els.count) {
+    els.count.hidden = n === 0;
+    els.count.textContent = String(n);
+  }
+  if (els.empty) els.empty.hidden = n !== 0;
 
   refreshDatalist();
-  lf.pending.forEach((candidate, index) => host.append(buildRow(candidate, index)));
+  els.list.replaceChildren();
+  lf.pending.forEach((candidate, index) => els.list.append(buildRow(candidate, index)));
 }
 
 // The shared answerer datalist lives in the extract modal's markup; options
@@ -120,22 +149,20 @@ function refreshDatalist() {
 
 function buildRow(candidate, index) {
   const row = document.createElement('div');
-  row.className = 'extract-row live-flag-row';
+  row.className = 'live-flag-row';
   if (candidate.confidence === 'low') row.classList.add('is-unsure');
-
-  const content = document.createElement('div');
-  content.className = 'extract-content';
+  if (candidate.isNew) row.classList.add('is-new');
 
   const q = document.createElement('div');
-  q.className = 'extract-q';
+  q.className = 'live-flag-q';
   q.textContent = candidate.question;
-  content.append(q);
+  row.append(q);
 
   if (candidate.answer) {
     const a = document.createElement('div');
-    a.className = 'extract-a';
+    a.className = 'live-flag-a';
     a.textContent = candidate.answer;
-    content.append(a);
+    row.append(a);
   }
 
   const meta = document.createElement('div');
@@ -166,7 +193,7 @@ function buildRow(candidate, index) {
     directed.textContent = `directed to ${candidate.directedTo}`;
     meta.append(directed);
   }
-  content.append(meta);
+  row.append(meta);
 
   const actions = document.createElement('div');
   actions.className = 'live-flag-actions';
@@ -205,6 +232,6 @@ function buildRow(candidate, index) {
   });
 
   actions.append(approve, dismiss);
-  row.append(content, actions);
+  row.append(actions);
   return row;
 }

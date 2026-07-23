@@ -1819,37 +1819,142 @@ kbd {
   font-style: italic;
 }
 
-/* Inline live question candidates in the Q&A panel. */
-.live-flags {
+/* Live question suggestions: the peripheral rail beside the Meeting screen.
+   Design contract: monitorable while typing — it never reflows the main
+   column (own fixed-width flex slot, own scrollbar) and it stays visible
+   above the capture modal's dim (z-index 60 > backdrop's 50, opaque bg). */
+
+.meeting-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.meeting-main {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 20px;
 }
-.live-flags-heading {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-  display: inline-flex;
+/* The rail ADDS width instead of squeezing the main column. */
+#screen-meeting.has-rail {
+  max-width: 1300px;
+}
+
+.live-rail {
+  flex: 0 0 300px;
+  position: sticky;
+  top: 12px;
+  z-index: 60; /* above .modal-backdrop (50): glanceable during capture */
+  max-height: calc(100vh - var(--titlebar-h, 40px) - 40px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 12px);
+  padding: 14px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (max-width: 1180px) {
+  .live-rail {
+    flex-basis: 250px;
+  }
+}
+
+.live-rail-head h2 {
+  display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
 }
-.live-flags-heading::before {
+.live-rail-head svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.live-rail-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.live-rail-empty {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  display: flex;
+  gap: 8px;
+}
+.live-rail-empty::before {
   content: "";
+  flex-shrink: 0;
+  margin-top: 4px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
   animation: rec-pulse 1.6s ease-in-out infinite;
 }
+.live-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Compact suggestion card, stacked for the narrow rail. */
 .live-flag-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.live-flag-row.is-unsure {
+  border-color: var(--warn-border);
+}
+.live-flag-row.is-new {
+  animation: live-flag-in 500ms ease;
+}
+@keyframes live-flag-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-flag-row.is-new { animation: none; }
+}
+.live-flag-q {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.live-flag-a {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  /* Peripheral view: clamp long answers — the full text lands on the card. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.live-flag-row .extract-answerer {
+  width: 100%;
 }
 .live-flag-actions {
   display: flex;
   gap: 8px;
-  flex-shrink: 0;
 }
