@@ -21,6 +21,8 @@ const KEYS = [
   'PAGE_SIZE',
   'SMTP_USER',
   'SMTP_APP_PASSWORD',
+  'MIC_DEVICE_ID',
+  'MIC_DEVICE_LABEL',
 ];
 
 // Parse simple KEY=VALUE lines. Blank lines and #-comments are ignored.
@@ -64,6 +66,10 @@ const FIELD_TO_KEY = Object.freeze({
   pageSize: 'PAGE_SIZE',
   smtpUser: 'SMTP_USER',
   smtpPassword: 'SMTP_APP_PASSWORD',
+  // Default input device for in-app recording. The label is stored too so a
+  // Windows reinstall (which reshuffles device ids) can re-match by name.
+  micDeviceId: 'MIC_DEVICE_ID',
+  micDeviceLabel: 'MIC_DEVICE_LABEL',
 });
 
 /**
@@ -127,6 +133,8 @@ function get() {
     pageSize,
     smtpUser: val('SMTP_USER'),
     smtpAppPassword: val('SMTP_APP_PASSWORD'),
+    micDeviceId: val('MIC_DEVICE_ID'),
+    micDeviceLabel: val('MIC_DEVICE_LABEL'),
     configPath: loadedPath || candidates[0],
   };
 }

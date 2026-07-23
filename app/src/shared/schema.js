@@ -46,6 +46,16 @@ const CHANNELS = Object.freeze({
   JOB_NAMES_GET: 'job:namesGet',
   JOB_NAMES_APPLY: 'job:namesApply',
   FILE_SAVE_TEXT: 'file:saveText',
+  // In-app recording (v0.8.0)
+  REC_START: 'rec:start',
+  REC_APPEND: 'rec:append',
+  REC_STOP: 'rec:stop',
+  REC_DISCARD: 'rec:discard',
+  REC_ORPHANS: 'rec:orphans',
+  REC_ORPHAN_RESOLVE: 'rec:orphanResolve',
+  REC_STAT: 'rec:stat',
+  REC_OPEN_FOLDER: 'rec:openFolder',
+  REC_EVENT: 'rec:event', // main -> renderer push (force-stop on window close)
 });
 
 const JOB_STATES = Object.freeze([

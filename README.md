@@ -2,8 +2,12 @@
 
 Meeting Master is a two-machine, self-hosted meeting-notes pipeline. In the
 meeting room, a portable Electron app on the work laptop captures meeting
-details and keyboard-driven Q&A cards while Vibe/OBS records the audio. After
-the meeting, the app uploads the WAV over Tailscale to an always-on home PC,
+details, keyboard-driven Q&A cards, and the audio itself — the built-in
+**Record audio** panel captures the microphone (crash-proof: audio is flushed
+to disk every 5 seconds, and an interrupted session is offered for recovery on
+the next launch). An external recorder (Vibe/OBS) still works via **Upload
+audio file…** if you prefer. After the meeting, the app uploads the recording
+over Tailscale to an always-on home PC,
 where a FastAPI job service normalizes the audio with ffmpeg, transcribes it
 with whisper.cpp (Vulkan build on an AMD RX 7900 XTX), and with a local Ollama
 model (`gemma4:26b`) both writes a structured summary (Key Takeaways /
@@ -46,9 +50,11 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Before the meeting**
 
-1. Start the Vibe/OBS audio recording.
-2. Open Meeting Master and fill in the meeting details: title, date, time,
-   attendees.
+1. Open Meeting Master, pick your microphone in the **Record audio** panel and
+   click **Start recording** (or start an external Vibe/OBS recording if you
+   prefer). The elapsed timer, level meter, and a red dot on the sidebar show
+   it is rolling; everything captured is already safe on disk every 5 seconds.
+2. Fill in the meeting details: title, date, time, attendees.
 
 **During the meeting**
 
@@ -61,9 +67,10 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **After the meeting**
 
-6. Stop the recording and note where the WAV was saved.
-7. In Meeting Master, click **Generate transcript** and select the WAV. The
-   app uploads it to the home server and polls progress
+6. Click **Stop & use recording** — the recording attaches to the meeting.
+   (External recording instead? Click **Upload audio file…** and pick the WAV.)
+7. Click **Generate transcript**. The app uploads the attached recording to
+   the home server and polls progress
    (queued → normalizing → transcribing → transcript ready).
 8. When the transcript is ready, the **Fix names** review opens automatically:
    every name found in the transcript is listed with its count, sound-alike

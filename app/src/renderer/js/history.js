@@ -2,6 +2,8 @@
 // (to review, regenerate the PDF, or re-send). Stored in localStorage,
 // separate from the single "current meeting" state.
 
+import { showError } from './status.js';
+
 const HISTORY_KEY = 'meetingmaster.history.v1';
 const MAX_SNAPSHOTS = 60;
 
@@ -9,7 +11,7 @@ const MAX_SNAPSHOTS = 60;
 const SNAPSHOT_FIELDS = [
   'meetingId', 'details', 'cards', 'recipients', 'options', 'summary',
   'questions', 'extractedQuestions', 'questionsReviewed', 'transcript',
-  'pdfPath', 'job',
+  'pdfPath', 'job', 'recording',
 ];
 
 let ctx = null;
@@ -155,6 +157,10 @@ function renderList() {
 }
 
 function openSnapshot(snap) {
+  if (typeof ctx.recActive === 'function' && ctx.recActive()) {
+    showError('A recording is in progress — stop or discard it before opening a saved meeting.');
+    return;
+  }
   const cur = ctx.state;
   const dirty = hasContent() && (!cur.meetingId || cur.meetingId !== snap.meetingId);
   if (dirty && !confirm(
@@ -169,6 +175,9 @@ function openSnapshot(snap) {
   SNAPSHOT_FIELDS.forEach((f) => {
     if (snap[f] !== undefined) ctx.state[f] = snap[f];
   });
+  // Legacy snapshots predate audio attachments — never leave another
+  // meeting's recording attached to the one just opened.
+  if (snap.recording === undefined) ctx.state.recording = null;
   ctx.persist();
   close();
   onOpened();

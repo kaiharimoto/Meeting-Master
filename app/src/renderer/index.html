@@ -128,7 +128,45 @@
           <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
         </section>
 
-        <!-- 3. Generate & send -->
+        <!-- 3. Record audio -->
+        <section class="panel" aria-labelledby="record-heading">
+          <div class="panel-heading-row">
+            <h2 id="record-heading">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              Record audio
+            </h2>
+            <span class="hint-chip">Saved to disk every 5 s — survives a crash</span>
+          </div>
+
+          <div class="field-grid">
+            <div class="field field-wide">
+              <label for="rec-device-select">Microphone</label>
+              <select id="rec-device-select"></select>
+            </div>
+            <!-- Windows-only (loopback capture) — revealed by recorder.js -->
+            <div class="field field-wide" id="rec-loopback-field" hidden>
+              <label class="rec-loopback">
+                <input id="rec-loopback-check" type="checkbox" />
+                Also record computer audio (for remote calls)
+              </label>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="rec-start-btn" type="button" class="btn btn-primary">Start recording</button>
+            <button id="rec-pause-btn" type="button" class="btn btn-secondary" hidden>Pause</button>
+            <button id="rec-resume-btn" type="button" class="btn btn-primary" hidden>Resume</button>
+            <button id="rec-stop-btn" type="button" class="btn btn-primary" hidden>Stop &amp; use recording</button>
+            <button id="rec-discard-btn" type="button" class="btn btn-secondary" hidden>Discard</button>
+            <span id="rec-timer" class="rec-timer" hidden>00:00</span>
+          </div>
+
+          <div id="rec-meter" class="rec-meter" hidden><div id="rec-meter-fill" class="rec-meter-fill"></div></div>
+
+          <div id="rec-note" class="rec-note" role="status" aria-live="polite" hidden></div>
+        </section>
+
+        <!-- 4. Generate & send -->
         <section class="panel" aria-labelledby="generate-heading">
           <h2 id="generate-heading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -155,6 +193,8 @@
                     title="Get the Subject, recipient list, and body to send the email yourself (attach the PDF)">Email text</button>
             <button id="fix-names-btn" type="button" class="btn btn-secondary"
                     title="Correct or merge misspelled names everywhere in this meeting">Fix names…</button>
+            <button id="pick-file-btn" type="button" class="btn btn-secondary"
+                    title="Transcribe an audio file from disk instead of the in-app recording">Upload audio file…</button>
           </div>
 
           <div id="status-line" class="status-line" role="status" aria-live="polite">
@@ -447,6 +487,28 @@
             <option value="A4">A4</option>
           </select>
         </div>
+      </div>
+
+      <div class="field">
+        <label for="settings-mic-select">Default microphone</label>
+        <select id="settings-mic-select">
+          <option value="">System default microphone</option>
+        </select>
+        <p class="settings-help">
+          Used by the in-app "Record audio" panel. You can still pick a
+          different mic right before recording.
+        </p>
+      </div>
+
+      <div class="field">
+        <label>Recordings</label>
+        <div class="settings-code-row">
+          <button id="open-recordings-btn" type="button" class="btn btn-secondary">Open recordings folder</button>
+        </div>
+        <p class="settings-help">
+          Every in-app recording is kept here — nothing is deleted
+          automatically.
+        </p>
       </div>
 
       <div class="field">

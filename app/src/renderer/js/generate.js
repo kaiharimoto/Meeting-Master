@@ -40,6 +40,10 @@ export function initGenerate(context) {
   els.open.addEventListener('click', () => guarded(onOpenPdf));
   els.send.addEventListener('click', () => guarded(onSendEmail));
 
+  // Explicit file upload — bypasses any attached in-app recording.
+  els.pickFile = document.getElementById('pick-file-btn');
+  if (els.pickFile) els.pickFile.addEventListener('click', () => guarded(onPickFileExplicit));
+
   // Transcript escape hatch (v0.4.0): grab the raw transcript / the exact AI
   // prompt so an EXTERNAL model can write the summary when the local one
   // can't (context overflow etc.); its JSON reply imports via Edit summary.
@@ -130,12 +134,61 @@ async function onPickAudio() {
     setStatus('An upload is already in progress — wait for it to finish.');
     return;
   }
+
+  // An attached in-app recording wins over the file picker. Verify it still
+  // exists first — a missing file falls back to the picker instead of a
+  // confusing upload error.
+  let filePath = null;
+  const rec = ctx.state.recording;
+  if (rec && rec.filePath && typeof api.recStat === 'function') {
+    let exists = false;
+    try {
+      const s = await api.recStat(rec.filePath);
+      exists = Boolean(s && s.exists);
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      filePath = rec.filePath;
+    } else {
+      ctx.state.recording = null;
+      ctx.persist();
+      showToast({
+        kind: 'error',
+        title: 'The attached recording file is missing',
+        message: 'It may have been deleted from the recordings folder — pick an audio file instead.',
+      });
+    }
+  }
+
+  if (!filePath) {
+    ({ filePath } = await api.pickWavFile());
+    if (!filePath) {
+      setStatus('No audio file picked — nothing was uploaded.');
+      return;
+    }
+  }
+
+  await uploadAudio(filePath);
+}
+
+/** "Upload audio file…": always the picker, even with a recording attached. */
+async function onPickFileExplicit() {
+  const api = requireApi();
+  if (uploading) {
+    setStatus('An upload is already in progress — wait for it to finish.');
+    return;
+  }
   const { filePath } = await api.pickWavFile();
   if (!filePath) {
     setStatus('No audio file picked — nothing was uploaded.');
     return;
   }
+  await uploadAudio(filePath);
+}
 
+async function uploadAudio(filePath) {
+  const api = requireApi();
   // "New meeting" replaces state.job with a fresh object, so holding the
   // reference lets us detect a mid-upload reset and drop this continuation
   // instead of attaching the old meeting's job to the new meeting.
@@ -395,7 +448,10 @@ export function updateButtons(context) {
   if (!els) return;
   const c = context || ctx;
   const hasApi = Boolean(c.api);
-  els.pick.disabled = !hasApi || uploading;
+  // No uploads while a recording is running — the file is still being written.
+  const recBusy = typeof c.recActive === 'function' && c.recActive();
+  els.pick.disabled = !hasApi || uploading || recBusy;
+  if (els.pickFile) els.pickFile.disabled = !hasApi || uploading || recBusy;
   els.generate.disabled = !hasApi; // PDF works even without AI results
   els.open.disabled = !hasApi || !c.state.pdfPath;
   els.send.disabled = !hasApi || !c.state.pdfPath;

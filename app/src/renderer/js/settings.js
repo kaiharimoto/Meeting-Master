@@ -18,6 +18,8 @@ let backdrop,
   tokenNote,
   emailModeEl,
   pageSizeEl,
+  micSelectEl,
+  openRecordingsBtn,
   smtpFields,
   smtpUserEl,
   smtpPasswordEl,
@@ -84,6 +86,8 @@ export function initSettings(context, opts = {}) {
   tokenNote = document.getElementById('settings-token-note');
   emailModeEl = document.getElementById('settings-email-mode');
   pageSizeEl = document.getElementById('settings-page-size');
+  micSelectEl = document.getElementById('settings-mic-select');
+  openRecordingsBtn = document.getElementById('open-recordings-btn');
   smtpFields = document.getElementById('settings-smtp-fields');
   smtpUserEl = document.getElementById('settings-smtp-user');
   smtpPasswordEl = document.getElementById('settings-smtp-password');
@@ -97,6 +101,19 @@ export function initSettings(context, opts = {}) {
   saveBtn.addEventListener('click', onSave);
   cancelBtn.addEventListener('click', closeSettings);
   emailModeEl.addEventListener('change', syncSmtpVisibility);
+  if (openRecordingsBtn) {
+    openRecordingsBtn.addEventListener('click', async () => {
+      if (!ctx.api || typeof ctx.api.recOpenFolder !== 'function') {
+        showError(errorEl, 'Opening the recordings folder needs the desktop app.');
+        return;
+      }
+      try {
+        await ctx.api.recOpenFolder();
+      } catch (err) {
+        showError(errorEl, err.message);
+      }
+    });
+  }
 
   backdrop.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -135,9 +152,55 @@ export async function openSettings({ welcome = false } = {}) {
   smtpPasswordEl.value = '';
   smtpNote.hidden = !cfg.hasSmtpPassword;
   syncSmtpVisibility();
+  await populateMicSelect(cfg);
 
   backdrop.hidden = false;
   codeInput.focus();
+}
+
+// Fill the default-microphone picker. A saved device that is currently
+// unplugged still shows (disabled) so the preference isn't silently lost.
+async function populateMicSelect(cfg) {
+  if (!micSelectEl) return;
+  const savedId = cfg.micDeviceId || '';
+  const savedLabel = cfg.micDeviceLabel || '';
+
+  micSelectEl.innerHTML = '';
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = 'System default microphone';
+  micSelectEl.append(def);
+
+  let mics = [];
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.enumerateDevices === 'function'
+  ) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      mics = devices.filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default');
+    } catch {
+      mics = [];
+    }
+  }
+  for (const mic of mics) {
+    const opt = document.createElement('option');
+    opt.value = mic.deviceId;
+    opt.textContent = mic.label || 'Microphone';
+    micSelectEl.append(opt);
+  }
+
+  if (savedId && [...micSelectEl.options].some((o) => o.value === savedId)) {
+    micSelectEl.value = savedId;
+  } else if (savedId) {
+    const missing = document.createElement('option');
+    missing.value = savedId;
+    missing.textContent = `${savedLabel || 'Saved microphone'} (not connected)`;
+    missing.disabled = true;
+    micSelectEl.append(missing);
+    micSelectEl.value = ''; // record with the default until it returns
+  }
 }
 
 function syncSmtpVisibility() {
@@ -170,6 +233,15 @@ async function onSave() {
     pageSize: pageSizeEl.value,
     smtpUser: smtpUserEl.value.trim(),
   };
+
+  if (micSelectEl) {
+    const chosen = micSelectEl.selectedOptions[0];
+    if (chosen && !chosen.disabled) {
+      payload.micDeviceId = micSelectEl.value;
+      payload.micDeviceLabel = micSelectEl.value ? chosen.textContent : '';
+    }
+    // A disabled "(not connected)" selection keeps the saved preference.
+  }
 
   // A blank secret means "keep what's saved" (omit) only when one exists;
   // otherwise send '' so the field stays explicitly empty.

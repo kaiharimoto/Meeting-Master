@@ -65,6 +65,22 @@ contextBridge.exposeInMainWorld('api', {
   applyJobNames: (jobId, mapping) => call(CHANNELS.JOB_NAMES_APPLY, jobId, mapping),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
 
+  // In-app recording (v0.8.0)
+  recStart: (meta) => call(CHANNELS.REC_START, meta),
+  recAppend: (recId, seq, chunk, elapsedMs) =>
+    call(CHANNELS.REC_APPEND, recId, seq, chunk, elapsedMs),
+  recStop: (recId, info) => call(CHANNELS.REC_STOP, recId, info),
+  recDiscard: (recId) => call(CHANNELS.REC_DISCARD, recId),
+  recListOrphans: () => call(CHANNELS.REC_ORPHANS),
+  recResolveOrphan: (recId, action) => call(CHANNELS.REC_ORPHAN_RESOLVE, recId, action),
+  recStat: (filePath) => call(CHANNELS.REC_STAT, filePath),
+  recOpenFolder: () => call(CHANNELS.REC_OPEN_FOLDER),
+  onRecEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.REC_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.REC_EVENT, listener);
+  },
+
   // Server-mode window pages (boot page + Dashboard tab in the one window)
   getSidecarState: () => call(CHANNELS.SIDECAR_STATE_GET),
   retrySidecar: () => call(CHANNELS.SIDECAR_RETRY),

@@ -11,13 +11,24 @@
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, Tray, dialog, screen, shell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  desktopCapturer,
+  dialog,
+  screen,
+  session,
+  shell,
+} = require('electron');
 const { CHANNELS } = require('../shared/schema');
 const { registerIpcHandlers } = require('./ipc');
 const config = require('./config');
 const sseClient = require('./sseClient');
 const serverManager = require('./serverManager');
 const paths = require('./paths');
+const recorder = require('./recorder');
 const updater = require('./updater');
 
 let mainWindow = null;
@@ -154,9 +165,56 @@ function createOperatorWindow() {
   mainWindow.on('resize', saveBoundsDebounced);
   mainWindow.on('move', saveBoundsDebounced);
 
+  // Closing mid-recording needs an explicit decision: everything captured so
+  // far is already fsynced to disk, but a silent close would still surprise.
+  mainWindow.on('close', (event) => {
+    if (!recorder.isActive() || forceCloseWithRecording) return;
+    event.preventDefault();
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      buttons: ['Keep recording', 'Stop recording and close'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Recording in progress',
+      message: 'A meeting recording is running.',
+      detail: 'Everything captured so far is already saved on disk.',
+    });
+    if (choice === 1) {
+      forceCloseWithRecording = true;
+      // Ask the renderer to run its normal stop path (flush + finalize +
+      // attach); onRecordingStopped() below closes the window once done. If
+      // the renderer never answers, abandon the session — it comes back as a
+      // recoverable orphan on the next launch, nothing is lost.
+      mainWindow.webContents.send(CHANNELS.REC_EVENT, { type: 'force-stop' });
+      forceCloseTimer = setTimeout(() => {
+        recorder.abandonActive();
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+      }, 4000);
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+// ---- Close-while-recording (operator window) --------------------------------
+
+let forceCloseWithRecording = false;
+let forceCloseTimer = null;
+
+/** IPC hook: the renderer finished (or discarded) a recording session. */
+function onRecordingStopped() {
+  if (!forceCloseWithRecording) return;
+  if (forceCloseTimer) {
+    clearTimeout(forceCloseTimer);
+    forceCloseTimer = null;
+  }
+  // Give the renderer a beat to persist the attachment to localStorage —
+  // recStop resolves in the renderer only after this handler returns.
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+  }, 250);
 }
 
 /** Options shared by the chooser and server windows (native frame — those
@@ -460,10 +518,46 @@ app.whenReady().then(() => {
   // Move any bundled/legacy fonts into the update-proof user dir (see paths.js).
   paths.migrateFonts();
 
+  // Microphone access for in-app recording. Electron denies getUserMedia
+  // outright when no handler is registered. Grant media to OUR file:// pages
+  // only — the server-mode window navigates to the http://127.0.0.1 dashboard
+  // with the same session, and remote content must never get the mic. The
+  // check handler matters too: without it enumerateDevices() returns blank
+  // labels and the device picker shows nameless microphones.
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const url = (webContents && webContents.getURL()) || '';
+    callback(permission === 'media' && url.startsWith('file:'));
+  });
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) =>
+    permission === 'media' && String(requestingOrigin || '').startsWith('file:')
+  );
+
+  // System-audio (loopback) capture for the "also record computer audio"
+  // option — Windows-only in Electron/Chromium. getDisplayMedia requires a
+  // video source even for audio-only use; the renderer stops the video track
+  // immediately and mixes only the audio into the recording bus.
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    const url = (request && request.frame && request.frame.url) || '';
+    if (!url.startsWith('file:') || process.platform !== 'win32') {
+      callback(null); // deny — dashboard pages and non-Windows never capture
+      return;
+    }
+    desktopCapturer
+      .getSources({ types: ['screen'] })
+      .then((sources) => {
+        if (!sources.length) {
+          callback(null);
+          return;
+        }
+        callback({ video: sources[0], audio: 'loopback' });
+      })
+      .catch(() => callback(null));
+  });
+
   // Handlers need a live window reference for dialogs and progress events,
   // so hand them a getter instead of the (possibly recreated) window itself.
   // activeWindow prefers the notes studio when it is open (server mode).
-  registerIpcHandlers(activeWindow, { setOverlayTheme });
+  registerIpcHandlers(activeWindow, { setOverlayTheme, onRecordingStopped });
 
   const resolved = config.resolveMode();
   if (resolved === 'server') {
@@ -487,6 +581,9 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   quitting = true;
+  // A still-open recording session becomes a recoverable orphan (finalized
+  // stays false); the next launch offers to attach it.
+  recorder.abandonActive();
   sseClient.stop();
   // Fire-and-forget: TerminateProcess is effectively instant, and the NSIS
   // installer (autoInstallOnAppQuit) takes seconds to initialize — the

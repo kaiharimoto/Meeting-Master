@@ -1709,3 +1709,94 @@ kbd {
   max-height: 46vh;
   overflow-y: auto;
 }
+
+/* ---- In-app recording (Record audio panel) ---------------------------------- */
+
+/* Elapsed time, with a pulsing red dot while live (dimmed when paused). */
+.rec-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.rec-timer::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+.rec-timer.is-paused {
+  color: var(--ink-faint);
+}
+.rec-timer.is-paused::before {
+  background: var(--ink-faint);
+  animation: none;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rec-timer::before { animation: none; }
+}
+
+/* Live input level bar — doubles as "is the mic actually picking me up". */
+.rec-meter {
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.rec-meter-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--success), var(--warn-ink));
+}
+
+/* "Recording attached — 42 min, 19 MB. [Remove]" line under the controls. */
+.rec-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid var(--success-soft);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+}
+
+.rec-loopback {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+/* Sidebar dot: the recording stays visible from any screen. */
+.nav-item.is-recording {
+  position: relative;
+}
+.nav-item.is-recording::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}

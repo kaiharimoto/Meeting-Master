@@ -13,6 +13,7 @@ const sseClient = require('./sseClient');
 const updater = require('./updater');
 const paths = require('./paths');
 const serverManager = require('./serverManager');
+const recorder = require('./recorder');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -194,6 +195,45 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return { ok: true, path: filePath };
   });
 
+  // ---- In-app recording (v0.8.0) --------------------------------------------
+  // handleLocal: the dashboard page shares this preload and must never be able
+  // to start capture or probe the recordings folder.
+
+  handleLocal(CHANNELS.REC_START, (meta) => recorder.start(meta || {}));
+
+  handleLocal(CHANNELS.REC_APPEND, (recId, seq, chunk, elapsedMs) =>
+    recorder.append(recId, seq, chunk, elapsedMs)
+  );
+
+  handleLocal(CHANNELS.REC_STOP, (recId, info) => {
+    const out = recorder.stop(recId, info || {});
+    // "Stop recording and close" (window close guard): main.js waits for the
+    // session to finalize before letting the window actually close.
+    if (typeof hooks.onRecordingStopped === 'function') hooks.onRecordingStopped();
+    return out;
+  });
+
+  handleLocal(CHANNELS.REC_DISCARD, (recId) => {
+    const out = recorder.discard(recId);
+    if (typeof hooks.onRecordingStopped === 'function') hooks.onRecordingStopped();
+    return out;
+  });
+
+  handleLocal(CHANNELS.REC_ORPHANS, () => ({ orphans: recorder.listOrphans() }));
+
+  handleLocal(CHANNELS.REC_ORPHAN_RESOLVE, (recId, action) =>
+    recorder.resolveOrphan(recId, action)
+  );
+
+  handleLocal(CHANNELS.REC_STAT, (filePath) => recorder.stat(filePath));
+
+  handleLocal(CHANNELS.REC_OPEN_FOLDER, async () => {
+    const dir = paths.recordingsDir();
+    const failure = await shell.openPath(dir); // '' on success
+    if (failure) throw new Error(`Could not open the recordings folder: ${failure}`);
+    return { ok: true, path: dir };
+  });
+
   // ---- App shell ---------------------------------------------------------------
 
   handle(CHANNELS.APP_INFO, () => ({
@@ -277,6 +317,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       emailMode: cfg.emailMode,
       pageSize: cfg.pageSize,
       hasToken: Boolean(cfg.bearerToken),
+      micDeviceId: cfg.micDeviceId,
+      micDeviceLabel: cfg.micDeviceLabel,
       configPath: cfg.configPath,
     };
   });
@@ -291,6 +333,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       smtpUser: cfg.smtpUser,
       hasToken: Boolean(cfg.bearerToken),
       hasSmtpPassword: Boolean(cfg.smtpAppPassword),
+      micDeviceId: cfg.micDeviceId,
+      micDeviceLabel: cfg.micDeviceLabel,
       configPath: cfg.configPath,
     };
   }
@@ -307,6 +351,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       pageSize: input.pageSize,
       smtpUser: input.smtpUser,
       smtpPassword: input.smtpPassword,
+      micDeviceId: input.micDeviceId,
+      micDeviceLabel: input.micDeviceLabel,
     };
 
     // A pasted connection code wins over any typed URL/token fields.

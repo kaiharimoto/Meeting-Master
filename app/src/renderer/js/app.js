@@ -12,6 +12,7 @@ import { initSummaryEdit, openSummaryEdit } from './summaryEdit.js';
 import { initEmailPreview, openEmailPreview } from './emailPreview.js';
 import { initNameFix, openNameFix } from './nameFix.js';
 import { initHistory, saveCurrentToHistory } from './history.js';
+import { initRecorder, renderNote } from './recorder.js';
 import { initNav } from './nav.js';
 import { initTheme } from './theme.js';
 import { initServerStatus } from './serverStatus.js';
@@ -42,6 +43,9 @@ function defaultState() {
     // Which job's transcript-ready checkpoint already auto-opened Fix names.
     namesPromptedJobId: null,
     pdfPath: null,
+    // Finished in-app recording attached to this meeting (see recorder.js):
+    // {recId, filePath, durationMs, bytes, finishedAt, source} or null.
+    recording: null,
   };
 }
 
@@ -83,6 +87,7 @@ function boot() {
       renderCards(ctx);
       renderExtractPrompt();
       updateButtons(ctx);
+      renderNote(); // the "Recording attached" line (no-op before initRecorder)
     },
   };
 
@@ -92,6 +97,7 @@ function boot() {
   initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
   initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
   initGenerate(ctx);
+  initRecorder(ctx); // after initGenerate — it drives the upload buttons' state
   initSummaryEdit(ctx, { onSaved: () => setStatus('Summary updated — it will appear in the next PDF.') });
   initEmailPreview(ctx);
   initNameFix(ctx, {
@@ -188,6 +194,10 @@ function boot() {
   }
 
   document.getElementById('new-meeting-btn').addEventListener('click', () => {
+    if (typeof ctx.recActive === 'function' && ctx.recActive()) {
+      showError('A recording is in progress — stop or discard it before starting a new meeting.');
+      return;
+    }
     const ok = confirm('Start a new meeting? This clears the details, Q&A cards, and job state.');
     if (!ok) return;
     // Preserve the outgoing meeting in history before clearing it.
