@@ -56,6 +56,15 @@ const CHANNELS = Object.freeze({
   REC_STAT: 'rec:stat',
   REC_OPEN_FOLDER: 'rec:openFolder',
   REC_EVENT: 'rec:event', // main -> renderer push (force-stop on window close)
+  // Live mid-meeting transcription (v0.9.0)
+  LIVE_SUPPORT_GET: 'live:supportGet',
+  LIVE_MODEL_DOWNLOAD: 'live:modelDownload',
+  LIVE_MODEL_DELETE: 'live:modelDelete',
+  LIVE_MODEL_EVENT: 'live:modelEvent', // main -> renderer push (download progress)
+  LIVE_START: 'live:start',
+  LIVE_PCM: 'live:pcm',
+  LIVE_STOP: 'live:stop',
+  LIVE_EVENT: 'live:event', // main -> renderer push (segments, lag, flag candidates)
 });
 
 const JOB_STATES = Object.freeze([

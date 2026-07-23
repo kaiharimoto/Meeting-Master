@@ -46,6 +46,16 @@ let micStream = null;
 let loopbackStream = null;
 let loopbackSource = null;
 
+// Live-transcription tap (optional; see maybeStartLive). The tap reads the
+// RECORDED mix (destNode.stream) so mic swaps and loopback are invisible to
+// it, and its failures must never disturb the recording itself.
+let tapSource = null;
+let tapNode = null;
+let muteGain = null;
+let liveActive = false;
+let pcmBatch = [];
+let pcmBatchRms = 0;
+
 // Chunk FIFO: ondataavailable pushes, a single drain loop appends over IPC so
 // chunks always land on disk in order and failures surface in one place.
 let queue = [];
@@ -61,6 +71,9 @@ export function initRecorder(context) {
     device: document.getElementById('rec-device-select'),
     loopback: document.getElementById('rec-loopback-check'),
     loopbackField: document.getElementById('rec-loopback-field'),
+    liveField: document.getElementById('rec-live-field'),
+    liveCheck: document.getElementById('rec-live-check'),
+    liveHint: document.getElementById('rec-live-hint'),
     start: document.getElementById('rec-start-btn'),
     pause: document.getElementById('rec-pause-btn'),
     resume: document.getElementById('rec-resume-btn'),
@@ -108,6 +121,7 @@ export function initRecorder(context) {
   }
 
   populateDevices();
+  initLiveSupport();
   if (navigator.mediaDevices.addEventListener) {
     navigator.mediaDevices.addEventListener('devicechange', () => {
       populateDevices();
@@ -207,6 +221,103 @@ async function onDeviceChosen() {
 function currentMicLabel() {
   const track = micStream && micStream.getAudioTracks()[0];
   return (track && track.label) || '';
+}
+
+// ---- Live transcription tap -------------------------------------------------
+
+/** Reveal + prime the "Live transcript" checkbox when this install can. */
+async function initLiveSupport() {
+  if (!els.liveField || !els.liveCheck || typeof ctx.api.liveSupportGet !== 'function') return;
+  try {
+    const support = await ctx.api.liveSupportGet();
+    if (!support || !support.supported) return; // no whisper binary: stay hidden
+    els.liveField.hidden = false;
+    const cfg = ctx.config || (typeof ctx.api.getConfig === 'function' ? await ctx.api.getConfig() : null) || {};
+    const modelName = cfg.liveModel || 'small';
+    const model = support.models && support.models[modelName];
+    const ready = Boolean(model && model.downloaded);
+    els.liveCheck.disabled = !ready;
+    els.liveCheck.checked = ready && Boolean(cfg.liveTranscriptEnabled);
+    if (els.liveHint) els.liveHint.hidden = ready;
+  } catch {
+    // Support probe failed — leave the feature hidden.
+  }
+}
+
+/** Start the live session + audio tap. NEVER throws: live is advisory and a
+ *  failure here must not touch the recording that is already running. */
+async function maybeStartLive() {
+  if (!els.liveCheck || els.liveField.hidden || !els.liveCheck.checked) return;
+  if (typeof ctx.api.liveStart !== 'function') return;
+  try {
+    const attendees = (ctx.state.details && ctx.state.details.attendees) || [];
+    await ctx.api.liveStart({ attendees });
+    await audioCtx.audioWorklet.addModule('js/pcmTap.worklet.js');
+    tapSource = audioCtx.createMediaStreamSource(destNode.stream);
+    tapNode = new AudioWorkletNode(audioCtx, 'pcm-tap');
+    tapSource.connect(tapNode);
+    // A worklet with no downstream connection may not be pulled — route it to
+    // the destination through a muted gain so processing is guaranteed.
+    muteGain = audioCtx.createGain();
+    muteGain.gain.value = 0;
+    tapNode.connect(muteGain);
+    muteGain.connect(audioCtx.destination);
+    tapNode.port.onmessage = (e) => queueLivePcm(e.data);
+    liveActive = true;
+    document.dispatchEvent(new CustomEvent('mm:live-start'));
+  } catch (err) {
+    showToast({
+      kind: 'error',
+      title: 'Live transcript unavailable',
+      message: `${err.message} Recording continues normally.`,
+    });
+    await stopLive();
+  }
+}
+
+/** Batch worklet blocks (~0.5 s) before crossing IPC. Lossy-tolerant: a
+ *  failed send is dropped — the durable recording path is separate. */
+function queueLivePcm(data) {
+  if (!liveActive || !data || !data.buf) return;
+  pcmBatch.push(new Uint8Array(data.buf));
+  pcmBatchRms = Math.max(pcmBatchRms, Number(data.rms) || 0);
+  if (pcmBatch.length < 4) return;
+  const total = pcmBatch.reduce((n, b) => n + b.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const b of pcmBatch) {
+    merged.set(b, offset);
+    offset += b.length;
+  }
+  const rms = pcmBatchRms;
+  pcmBatch = [];
+  pcmBatchRms = 0;
+  ctx.api.livePcm(merged.buffer, rms).catch(() => {});
+}
+
+async function stopLive() {
+  if (tapNode) tapNode.port.onmessage = null;
+  for (const node of [tapSource, tapNode, muteGain]) {
+    if (node) {
+      try {
+        node.disconnect();
+      } catch {
+        // Already disconnected.
+      }
+    }
+  }
+  tapSource = null;
+  tapNode = null;
+  muteGain = null;
+  pcmBatch = [];
+  pcmBatchRms = 0;
+  if (!liveActive) return;
+  liveActive = false;
+  try {
+    await ctx.api.liveStop();
+  } catch {
+    // The main-side session dies with the app either way.
+  }
 }
 
 // ---- Capture pipeline -------------------------------------------------------
@@ -384,6 +495,7 @@ async function startRecording() {
 
   mediaRecorder.start(TIMESLICE_MS);
   status = 'recording';
+  maybeStartLive(); // fire-and-forget; never blocks or fails the recording
   // Starting a recording begins a NEW audio story for this meeting — drop any
   // previously attached file (it stays on disk in the recordings folder).
   ctx.state.recording = null;
@@ -453,6 +565,14 @@ function pauseRecording() {
   mediaRecorder.pause();
   activeMs += Date.now() - segmentStartedAt;
   status = 'paused';
+  // Stop feeding the live tap; main's data-gap timer flushes the tail.
+  if (tapSource && tapNode) {
+    try {
+      tapSource.disconnect(tapNode);
+    } catch {
+      // Already disconnected.
+    }
+  }
   updateRecUi();
   setStatus('Recording paused.', { busy: false });
 }
@@ -462,6 +582,13 @@ function resumeRecording() {
   mediaRecorder.resume();
   segmentStartedAt = Date.now();
   status = 'recording';
+  if (liveActive && tapSource && tapNode) {
+    try {
+      tapSource.connect(tapNode);
+    } catch {
+      // Live tap could not resume — recording is unaffected.
+    }
+  }
   updateRecUi();
   setStatus('Recording…', { busy: true });
 }
@@ -488,6 +615,7 @@ async function stopRecording(force) {
   status = 'stopping';
   updateRecUi();
   setStatus('Finishing the recording…', { busy: true });
+  await stopLive(); // live is advisory — end it before finalizing the audio
 
   // The final ondataavailable fires before onstop, so its chunk is already
   // queued by the time this resolves — drainAll flushes everything to disk.
@@ -544,6 +672,7 @@ async function discardRecording() {
   if (status === 'recording') activeMs += Date.now() - segmentStartedAt;
   status = 'stopping';
   updateRecUi();
+  await stopLive();
 
   await stopMediaRecorder();
   queue = []; // nothing to keep — drop unflushed chunks
@@ -563,6 +692,20 @@ async function discardRecording() {
 }
 
 function teardownGraph() {
+  // Defensive: stopLive() normally ran already; make teardown idempotent.
+  if (tapNode) tapNode.port.onmessage = null;
+  for (const node of [tapSource, tapNode, muteGain]) {
+    if (node) {
+      try {
+        node.disconnect();
+      } catch {
+        // Already disconnected.
+      }
+    }
+  }
+  tapSource = null;
+  tapNode = null;
+  muteGain = null;
   if (micStream) {
     for (const t of micStream.getTracks()) t.stop();
     micStream = null;

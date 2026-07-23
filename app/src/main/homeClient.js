@@ -224,6 +224,24 @@ async function applyJobNames(jobId, mapping) {
   return res.json();
 }
 
+/** POST /live/questions — mid-meeting Q&A flagging over a live-transcript
+ *  window. Callers treat any failure as a silent skip (live is advisory). */
+async function postLiveQuestions(payload) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/questions`,
+    {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(45000),
+    },
+    'flagging live questions'
+  );
+  if (!res.ok) await throwHttpError(res, 'flagging live questions');
+  return res.json();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -236,4 +254,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions };

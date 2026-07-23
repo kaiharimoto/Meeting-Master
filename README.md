@@ -58,21 +58,30 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **During the meeting**
 
-3. Press **Q** anywhere → the question modal opens.
-4. Type the question, **Tab** → type the answer, **Tab** → type/select the
+3. With **Live transcript (beta)** enabled (Record panel checkbox; model
+   downloaded once via Settings → Live transcription), a rolling draft
+   transcript appears while people talk — whisper.cpp running on the laptop's
+   own GPU. When the home server is reachable over Tailscale, its AI also
+   flags **live question candidates** in the Q&A panel: click **Approve** to
+   turn one into a card (or **Dismiss** it) without breaking your flow. The
+   draft is advisory; the full-quality transcript still comes after the
+   meeting, and anything the live pass missed is caught by the post-meeting
+   question detection.
+4. Press **Q** anywhere → the question modal opens.
+5. Type the question, **Tab** → type the answer, **Tab** → type/select the
    participant who answered (attendees are suggested), **Enter** → the card is
    saved. (**Shift+Enter** adds a newline inside the answer; **Escape**
    cancels.)
-5. Repeat for every notable Q&A. Click any card to edit it in place.
+6. Repeat for every notable Q&A. Click any card to edit it in place.
 
 **After the meeting**
 
-6. Click **Stop & use recording** — the recording attaches to the meeting.
+7. Click **Stop & use recording** — the recording attaches to the meeting.
    (External recording instead? Click **Upload audio file…** and pick the WAV.)
-7. Click **Generate transcript**. The app uploads the attached recording to
+8. Click **Generate transcript**. The app uploads the attached recording to
    the home server and polls progress
    (queued → normalizing → transcribing → transcript ready).
-8. When the transcript is ready, the **Fix names** review opens automatically:
+9. When the transcript is ready, the **Fix names** review opens automatically:
    every name found in the transcript is listed with its count, sound-alike
    misspellings come pre-suggested for merging into your attendees, and
    corrections rewrite the stored transcript BEFORE any AI reads it. Click
@@ -84,7 +93,7 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    Action Items, Key Figures, and Topics before printing. Then click
    **Generate PDF** — saved under `Documents\MeetingMaster\`; click **Open PDF**
    to review it.
-9. Click **Send email**. The home server emails the PDF to the preset
+10. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
 
 Past meetings are saved automatically (and via **History → Save current**);

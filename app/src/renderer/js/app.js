@@ -13,6 +13,8 @@ import { initEmailPreview, openEmailPreview } from './emailPreview.js';
 import { initNameFix, openNameFix } from './nameFix.js';
 import { initHistory, saveCurrentToHistory } from './history.js';
 import { initRecorder, renderNote } from './recorder.js';
+import { initLiveTranscript, hideLivePane } from './liveTranscript.js';
+import { initLiveFlags, renderLiveFlags } from './liveFlags.js';
 import { initNav } from './nav.js';
 import { initTheme } from './theme.js';
 import { initServerStatus } from './serverStatus.js';
@@ -46,6 +48,9 @@ function defaultState() {
     // Finished in-app recording attached to this meeting (see recorder.js):
     // {recId, filePath, durationMs, bytes, finishedAt, source} or null.
     recording: null,
+    // Mid-meeting live question candidates (liveFlags.js): pending rows and
+    // dismissed question keys (normQ strings) — both per meeting.
+    liveFlags: { pending: [], dismissed: [] },
   };
 }
 
@@ -88,6 +93,7 @@ function boot() {
       renderExtractPrompt();
       updateButtons(ctx);
       renderNote(); // the "Recording attached" line (no-op before initRecorder)
+      renderLiveFlags(); // inline live candidates (no-op before initLiveFlags)
     },
   };
 
@@ -98,6 +104,8 @@ function boot() {
   initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
   initGenerate(ctx);
   initRecorder(ctx); // after initGenerate — it drives the upload buttons' state
+  initLiveTranscript(ctx);
+  initLiveFlags(ctx, { onCardsChanged: () => renderCards(ctx) });
   initSummaryEdit(ctx, { onSaved: () => setStatus('Summary updated — it will appear in the next PDF.') });
   initEmailPreview(ctx);
   initNameFix(ctx, {
@@ -205,6 +213,7 @@ function boot() {
     // Replace contents in place — modules hold a reference to `state`.
     Object.assign(state, defaultState());
     ctx.persist();
+    hideLivePane(); // a new meeting starts with a clean live-transcript pane
     ctx.renderAll();
     // Kill any interval still polling the previous meeting's job.
     maybeResumePolling();

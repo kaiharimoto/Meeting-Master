@@ -125,6 +125,9 @@ class Settings(BaseSettings):
     # question/answer pairs; keep the temperature low for faithful extraction.
     EXTRACT_NUM_PREDICT: int = 1500
     EXTRACT_TEMPERATURE: float = 0.2
+    # Mid-meeting live question flagging (POST /live/questions): a small
+    # window and a small answer budget so results come back in seconds.
+    LIVE_EXTRACT_NUM_PREDICT: int = 600
 
     # --- Email (Gmail SMTP with an App Password) ---
     SMTP_HOST: str = "smtp.gmail.com"
@@ -183,6 +186,7 @@ WRITABLE_KEYS = (
     "SUMMARY_TEMPERATURE",
     "EXTRACT_NUM_PREDICT",
     "EXTRACT_TEMPERATURE",
+    "LIVE_EXTRACT_NUM_PREDICT",
     "WHISPER_MODEL_DEFAULT",
     "SMTP_USER",
     "SMTP_APP_PASSWORD",

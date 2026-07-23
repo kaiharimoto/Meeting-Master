@@ -18,7 +18,7 @@ let backdrop, listHost, countEl, datalist, addBtn, cancelBtn, allBtn, noneBtn;
 // Per-open working set: one entry per candidate row.
 let rows = [];
 
-function makeId() {
+export function makeId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') {
     return window.crypto.randomUUID();
   }
@@ -41,7 +41,7 @@ const STOPWORDS = new Set([
   'from', 'have', 'has', 'had', 'does', 'did', 'any', 'not', 'but', 'get',
 ]);
 
-function normQ(text) {
+export function normQ(text) {
   return String(text || '')
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -59,7 +59,7 @@ function tokenSet(norm) {
 // short typed question sitting inside a longer AI phrasing also counts as a
 // duplicate — but requires ≥ 2 shared content words so a single common word
 // can't collapse two distinct questions.
-function isDuplicate(a, b) {
+export function isDuplicate(a, b) {
   if (!a || !b) return false;
   if (a === b) return true;
   const sa = tokenSet(a);
@@ -75,17 +75,44 @@ function isDuplicate(a, b) {
 }
 
 // Capture AI candidates into state, dropping any that duplicate an existing
-// manual card (the operator already typed that question during the meeting).
+// manual card (the operator already typed that question during the meeting)
+// or a live candidate the operator already dismissed mid-meeting. Un-actioned
+// LIVE candidates are merged in (the post-meeting version wins on duplicates
+// — better model, full transcript) so nothing flagged live silently vanishes.
 export function captureExtracted(questions) {
   const list = Array.isArray(questions) ? questions : [];
   const existing = (ctx.state.cards || []).map((c) => normQ(c.question)).filter(Boolean);
+  const lf = ctx.state.liveFlags || {};
+  const dismissed = Array.isArray(lf.dismissed) ? lf.dismissed : [];
+  const livePending = Array.isArray(lf.pending) ? lf.pending : [];
+
   const deduped = list.filter((q) => {
     if (!q || !q.question) return false;
     const nq = normQ(q.question);
-    return !existing.some((e) => isDuplicate(nq, e));
+    return (
+      !existing.some((e) => isDuplicate(nq, e)) &&
+      !dismissed.some((d) => isDuplicate(nq, d))
+    );
   });
-  ctx.state.extractedQuestions = deduped;
-  return deduped.length;
+
+  const carriedLive = livePending.filter((p) => {
+    if (!p || !p.question) return false;
+    const np = normQ(p.question);
+    return (
+      np &&
+      !deduped.some((q) => isDuplicate(np, normQ(q.question))) &&
+      !existing.some((e) => isDuplicate(np, e))
+    );
+  });
+
+  ctx.state.extractedQuestions = [...deduped, ...carriedLive];
+  if (livePending.length > 0) {
+    lf.pending = [];
+    // liveFlags.js re-renders (empties) its inline list on this event —
+    // a DOM event avoids an import cycle between the two modules.
+    document.dispatchEvent(new CustomEvent('mm:liveflags'));
+  }
+  return ctx.state.extractedQuestions.length;
 }
 
 export function initExtractReview(context, opts) {

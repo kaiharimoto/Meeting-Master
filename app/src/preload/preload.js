@@ -81,6 +81,24 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener(CHANNELS.REC_EVENT, listener);
   },
 
+  // Live mid-meeting transcription (v0.9.0)
+  liveSupportGet: () => call(CHANNELS.LIVE_SUPPORT_GET),
+  liveModelDownload: (name) => call(CHANNELS.LIVE_MODEL_DOWNLOAD, name),
+  liveModelDelete: (name) => call(CHANNELS.LIVE_MODEL_DELETE, name),
+  liveStart: (opts) => call(CHANNELS.LIVE_START, opts),
+  livePcm: (chunk, rms) => call(CHANNELS.LIVE_PCM, chunk, rms),
+  liveStop: () => call(CHANNELS.LIVE_STOP),
+  onLiveEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.LIVE_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.LIVE_EVENT, listener);
+  },
+  onLiveModelEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.LIVE_MODEL_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.LIVE_MODEL_EVENT, listener);
+  },
+
   // Server-mode window pages (boot page + Dashboard tab in the one window)
   getSidecarState: () => call(CHANNELS.SIDECAR_STATE_GET),
   retrySidecar: () => call(CHANNELS.SIDECAR_RETRY),

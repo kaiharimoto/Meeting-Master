@@ -1800,3 +1800,56 @@ kbd {
   background: var(--danger);
   animation: rec-pulse 1.6s ease-in-out infinite;
 }
+
+/* ---- Live mid-meeting transcription ---------------------------------------- */
+
+.live-wrap {
+  margin-top: 12px;
+}
+.live-wrap .log-view {
+  height: 180px;
+  margin-top: 6px;
+}
+.live-disclaimer {
+  flex: 1;
+  margin: 0;
+}
+.live-wrap .log-line.live-note {
+  color: var(--warn-ink);
+  font-style: italic;
+}
+
+/* Inline live question candidates in the Q&A panel. */
+.live-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.live-flags-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.live-flags-heading::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+.live-flag-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.live-flag-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}

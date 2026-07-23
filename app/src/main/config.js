@@ -23,6 +23,8 @@ const KEYS = [
   'SMTP_APP_PASSWORD',
   'MIC_DEVICE_ID',
   'MIC_DEVICE_LABEL',
+  'LIVE_TRANSCRIPT_ENABLED',
+  'LIVE_MODEL',
 ];
 
 // Parse simple KEY=VALUE lines. Blank lines and #-comments are ignored.
@@ -70,6 +72,10 @@ const FIELD_TO_KEY = Object.freeze({
   // Windows reinstall (which reshuffles device ids) can re-match by name.
   micDeviceId: 'MIC_DEVICE_ID',
   micDeviceLabel: 'MIC_DEVICE_LABEL',
+  // Live mid-meeting transcription: '1' = the Record panel checkbox defaults
+  // on; model ∈ {small, base} (validated by whisperLocator's whitelist).
+  liveTranscriptEnabled: 'LIVE_TRANSCRIPT_ENABLED',
+  liveModel: 'LIVE_MODEL',
 });
 
 /**
@@ -135,6 +141,8 @@ function get() {
     smtpAppPassword: val('SMTP_APP_PASSWORD'),
     micDeviceId: val('MIC_DEVICE_ID'),
     micDeviceLabel: val('MIC_DEVICE_LABEL'),
+    liveTranscriptEnabled: val('LIVE_TRANSCRIPT_ENABLED') === '1',
+    liveModel: val('LIVE_MODEL').toLowerCase() === 'base' ? 'base' : 'small',
     configPath: loadedPath || candidates[0],
   };
 }

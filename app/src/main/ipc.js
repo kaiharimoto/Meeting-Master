@@ -14,6 +14,10 @@ const updater = require('./updater');
 const paths = require('./paths');
 const serverManager = require('./serverManager');
 const recorder = require('./recorder');
+const whisperLocator = require('./whisperLocator');
+const modelManager = require('./modelManager');
+const liveTranscriber = require('./liveTranscriber');
+const liveFlagger = require('./liveFlagger');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -234,6 +238,41 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return { ok: true, path: dir };
   });
 
+  // ---- Live mid-meeting transcription (v0.9.0) ------------------------------
+  // handleLocal throughout: local processes + the recording bus are involved.
+
+  function pushTo(channel) {
+    return (payload) => {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+    };
+  }
+  liveTranscriber.setEmitter(pushTo(CHANNELS.LIVE_EVENT));
+  liveFlagger.setEmitter(pushTo(CHANNELS.LIVE_EVENT));
+  modelManager.setEmitter(pushTo(CHANNELS.LIVE_MODEL_EVENT));
+
+  handleLocal(CHANNELS.LIVE_SUPPORT_GET, () => whisperLocator.support());
+  handleLocal(CHANNELS.LIVE_MODEL_DOWNLOAD, (name) => modelManager.download(name));
+  handleLocal(CHANNELS.LIVE_MODEL_DELETE, (name) => modelManager.remove(name));
+
+  handleLocal(CHANNELS.LIVE_START, (opts) => {
+    const input = opts || {};
+    const model = config.get().liveModel || 'small';
+    const out = liveTranscriber.start({
+      attendees: Array.isArray(input.attendees) ? input.attendees : [],
+      model,
+    });
+    liveFlagger.start(); // silent-skip loop; dies with the transcriber session
+    return out;
+  });
+
+  handleLocal(CHANNELS.LIVE_PCM, (chunk, rms) => liveTranscriber.feed(chunk, rms));
+
+  handleLocal(CHANNELS.LIVE_STOP, () => {
+    liveFlagger.stop();
+    return liveTranscriber.stop();
+  });
+
   // ---- App shell ---------------------------------------------------------------
 
   handle(CHANNELS.APP_INFO, () => ({
@@ -319,6 +358,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       hasToken: Boolean(cfg.bearerToken),
       micDeviceId: cfg.micDeviceId,
       micDeviceLabel: cfg.micDeviceLabel,
+      liveTranscriptEnabled: cfg.liveTranscriptEnabled,
+      liveModel: cfg.liveModel,
       configPath: cfg.configPath,
     };
   });
@@ -335,6 +376,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       hasSmtpPassword: Boolean(cfg.smtpAppPassword),
       micDeviceId: cfg.micDeviceId,
       micDeviceLabel: cfg.micDeviceLabel,
+      liveTranscriptEnabled: cfg.liveTranscriptEnabled,
+      liveModel: cfg.liveModel,
       configPath: cfg.configPath,
     };
   }
@@ -353,6 +396,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       smtpPassword: input.smtpPassword,
       micDeviceId: input.micDeviceId,
       micDeviceLabel: input.micDeviceLabel,
+      liveTranscriptEnabled: input.liveTranscriptEnabled,
+      liveModel: input.liveModel,
     };
 
     // A pasted connection code wins over any typed URL/token fields.

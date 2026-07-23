@@ -20,6 +20,14 @@ let backdrop,
   pageSizeEl,
   micSelectEl,
   openRecordingsBtn,
+  liveSection,
+  liveModelEl,
+  liveDefaultEl,
+  liveDownloadBtn,
+  liveDeleteBtn,
+  liveNote,
+  liveProgress,
+  liveProgressFill,
   smtpFields,
   smtpUserEl,
   smtpPasswordEl,
@@ -88,6 +96,14 @@ export function initSettings(context, opts = {}) {
   pageSizeEl = document.getElementById('settings-page-size');
   micSelectEl = document.getElementById('settings-mic-select');
   openRecordingsBtn = document.getElementById('open-recordings-btn');
+  liveSection = document.getElementById('settings-live-section');
+  liveModelEl = document.getElementById('settings-live-model');
+  liveDefaultEl = document.getElementById('settings-live-default');
+  liveDownloadBtn = document.getElementById('settings-live-download-btn');
+  liveDeleteBtn = document.getElementById('settings-live-delete-btn');
+  liveNote = document.getElementById('settings-live-note');
+  liveProgress = document.getElementById('settings-live-progress');
+  liveProgressFill = document.getElementById('settings-live-progress-fill');
   smtpFields = document.getElementById('settings-smtp-fields');
   smtpUserEl = document.getElementById('settings-smtp-user');
   smtpPasswordEl = document.getElementById('settings-smtp-password');
@@ -125,6 +141,90 @@ export function initSettings(context, opts = {}) {
   backdrop.addEventListener('mousedown', (e) => {
     if (e.target === backdrop) closeSettings();
   });
+
+  initLiveSection();
+}
+
+// ---- Live transcription section --------------------------------------------
+
+let liveSupport = null; // last liveSupportGet() result
+
+function initLiveSection() {
+  if (!liveSection || !ctx.api) return;
+  if (liveModelEl) liveModelEl.addEventListener('change', syncLiveButtons);
+  if (liveDownloadBtn) {
+    liveDownloadBtn.addEventListener('click', async () => {
+      if (typeof ctx.api.liveModelDownload !== 'function') return;
+      try {
+        await ctx.api.liveModelDownload(liveModelEl.value);
+        liveDownloadBtn.disabled = true;
+        liveNote.textContent = 'Starting download…';
+      } catch (err) {
+        liveNote.textContent = err.message;
+      }
+    });
+  }
+  if (liveDeleteBtn) {
+    liveDeleteBtn.addEventListener('click', async () => {
+      if (typeof ctx.api.liveModelDelete !== 'function') return;
+      if (!confirm('Delete the downloaded live-transcription model?')) return;
+      try {
+        await ctx.api.liveModelDelete(liveModelEl.value);
+        await refreshLiveSection();
+      } catch (err) {
+        liveNote.textContent = err.message;
+      }
+    });
+  }
+  if (typeof ctx.api.onLiveModelEvent === 'function') {
+    ctx.api.onLiveModelEvent((payload) => {
+      if (!payload || payload.model !== (liveModelEl && liveModelEl.value)) return;
+      if (payload.state === 'running') {
+        liveProgress.hidden = false;
+        liveProgressFill.style.width = `${payload.progress || 0}%`;
+        liveNote.textContent = payload.message || '';
+      } else {
+        liveProgress.hidden = true;
+        liveNote.textContent = payload.message || '';
+        refreshLiveSection();
+      }
+    });
+  }
+}
+
+async function refreshLiveSection(cfg) {
+  if (!liveSection) return;
+  if (!ctx.api || typeof ctx.api.liveSupportGet !== 'function') {
+    liveSection.hidden = true;
+    return;
+  }
+  try {
+    liveSupport = await ctx.api.liveSupportGet();
+  } catch {
+    liveSupport = null;
+  }
+  if (!liveSupport || !liveSupport.supported) {
+    liveSection.hidden = true; // no whisper binary on this machine
+    return;
+  }
+  liveSection.hidden = false;
+  const conf = cfg || current || {};
+  if (liveModelEl) liveModelEl.value = conf.liveModel === 'base' ? 'base' : 'small';
+  if (liveDefaultEl) liveDefaultEl.checked = Boolean(conf.liveTranscriptEnabled);
+  syncLiveButtons();
+}
+
+function syncLiveButtons() {
+  if (!liveSupport || !liveSupport.models || !liveModelEl) return;
+  const model = liveSupport.models[liveModelEl.value];
+  const downloaded = Boolean(model && model.downloaded);
+  if (liveDownloadBtn) {
+    liveDownloadBtn.hidden = downloaded;
+    liveDownloadBtn.disabled = false;
+  }
+  if (liveDeleteBtn) liveDeleteBtn.hidden = !downloaded;
+  if (liveNote) liveNote.textContent = downloaded ? 'Model ready.' : 'Not downloaded yet.';
+  if (liveProgress) liveProgress.hidden = true;
 }
 
 /** Open the Settings modal, prefilling from the main process. */
@@ -153,6 +253,7 @@ export async function openSettings({ welcome = false } = {}) {
   smtpNote.hidden = !cfg.hasSmtpPassword;
   syncSmtpVisibility();
   await populateMicSelect(cfg);
+  await refreshLiveSection(cfg);
 
   backdrop.hidden = false;
   codeInput.focus();
@@ -241,6 +342,11 @@ async function onSave() {
       payload.micDeviceLabel = micSelectEl.value ? chosen.textContent : '';
     }
     // A disabled "(not connected)" selection keeps the saved preference.
+  }
+
+  if (liveSection && !liveSection.hidden && liveModelEl && liveDefaultEl) {
+    payload.liveModel = liveModelEl.value === 'base' ? 'base' : 'small';
+    payload.liveTranscriptEnabled = liveDefaultEl.checked ? '1' : '';
   }
 
   // A blank secret means "keep what's saved" (omit) only when one exists;

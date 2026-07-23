@@ -23,6 +23,11 @@ log = logging.getLogger(__name__)
 # Keep the approval list reviewable; a real meeting rarely has more real Q&A.
 _MAX_QUESTIONS = 30
 
+# Live extraction must fail fast: the laptop calls every ~30 s while the
+# meeting is running, and a slow/hung call would queue behind itself. The
+# window is small, so a healthy Ollama answers well inside this.
+LIVE_TIMEOUT = httpx.Timeout(60.0, connect=5.0)
+
 _SCHEMA_HINT = (
     'Respond with ONLY a JSON object of this exact shape:\n'
     '{\n'
@@ -108,6 +113,49 @@ def _dedupe(questions: list[ExtractedQuestion]) -> list[ExtractedQuestion]:
         seen.add(key)
         out.append(q)
     return out[:_MAX_QUESTIONS]
+
+
+async def run_live(
+    window_text: str,
+    attendees: list[str],
+    already_flagged: list[str],
+    settings: Settings,
+) -> list[ExtractedQuestion]:
+    """Extract Q&A candidates from a PARTIAL live transcript window.
+
+    Called mid-meeting by the laptop (POST /live/questions). Same contract as
+    the post-meeting run() — candidates only, operator approves — but a single
+    fast chat call: the window is already capped by the route, and the answer
+    budget is small (LIVE_EXTRACT_NUM_PREDICT) so results arrive while the
+    conversation is still fresh. The post-meeting extraction over the full,
+    higher-quality transcript remains the backstop for anything missed here.
+    """
+    attendee_line = ", ".join(attendees) if attendees else "(not listed)"
+    flagged_block = (
+        "\n".join(f"- {q}" for q in already_flagged) if already_flagged else "(none)"
+    )
+    user_prompt = (
+        f"Attendees: {attendee_line}\n"
+        "This is a PARTIAL, ROUGH live transcript of a meeting that is still "
+        "in progress (machine-transcribed; names may be misspelled). Extract "
+        "only question-and-answer pairs where the answer already appears in "
+        "this excerpt.\n"
+        "Do NOT repeat any of these already-flagged questions:\n"
+        f"{flagged_block}\n\n"
+        "Transcript excerpt:\n\n"
+        f"{window_text}"
+    )
+    async with httpx.AsyncClient(timeout=LIVE_TIMEOUT) as client:
+        parsed = await _ollama.chat_json(
+            client, settings, SYSTEM_PROMPT, user_prompt,
+            num_predict=settings.LIVE_EXTRACT_NUM_PREDICT,
+            temperature=settings.EXTRACT_TEMPERATURE,
+        )
+    questions = _dedupe(_coerce(parsed))
+    # Belt-and-braces: the model was told not to repeat flagged questions, but
+    # drop exact repeats anyway so the laptop never re-surfaces one.
+    flagged_keys = {q.casefold().strip() for q in already_flagged}
+    return [q for q in questions if q.question.casefold().strip() not in flagged_keys]
 
 
 async def run(

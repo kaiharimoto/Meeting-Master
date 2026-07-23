@@ -123,6 +123,8 @@
 
           <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
 
+          <div id="live-flags" class="live-flags" aria-live="polite" hidden></div>
+
           <div id="card-list" class="card-list" aria-live="polite"></div>
 
           <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
@@ -150,6 +152,16 @@
                 Also record computer audio (for remote calls)
               </label>
             </div>
+            <!-- Revealed when this install has whisper-cli (recorder.js) -->
+            <div class="field field-wide" id="rec-live-field" hidden>
+              <label class="rec-loopback">
+                <input id="rec-live-check" type="checkbox" />
+                Live transcript (beta) — draft text appears while you talk
+              </label>
+              <p id="rec-live-hint" class="settings-help" hidden>
+                Download the live model first: Settings → Live transcription.
+              </p>
+            </div>
           </div>
 
           <div class="button-row">
@@ -162,6 +174,18 @@
           </div>
 
           <div id="rec-meter" class="rec-meter" hidden><div id="rec-meter-fill" class="rec-meter-fill"></div></div>
+
+          <div id="live-wrap" class="live-wrap" hidden>
+            <div class="log-toolbar">
+              <span class="settings-help live-disclaimer">Live draft — rough and a few
+                seconds behind. The final transcript is produced after the meeting.</span>
+              <label class="log-follow">
+                <input id="live-follow-check" type="checkbox" checked /> Follow
+              </label>
+              <button id="live-copy-btn" type="button" class="btn btn-secondary btn-small">Copy</button>
+            </div>
+            <div id="live-view" class="log-view" aria-live="off"></div>
+          </div>
 
           <div id="rec-note" class="rec-note" role="status" aria-live="polite" hidden></div>
         </section>
@@ -508,6 +532,29 @@
         <p class="settings-help">
           Every in-app recording is kept here — nothing is deleted
           automatically.
+        </p>
+      </div>
+
+      <div class="field" id="settings-live-section" hidden>
+        <label for="settings-live-model">Live transcription (beta)</label>
+        <select id="settings-live-model">
+          <option value="small">Higher accuracy — small model (~466 MB)</option>
+          <option value="base">Lower footprint — base model (~142 MB)</option>
+        </select>
+        <label class="rec-loopback">
+          <input id="settings-live-default" type="checkbox" />
+          Turn the live transcript on by default when recording
+        </label>
+        <div class="settings-code-row">
+          <button id="settings-live-download-btn" type="button" class="btn btn-secondary">Download model</button>
+          <button id="settings-live-delete-btn" type="button" class="btn btn-secondary" hidden>Delete model</button>
+          <span id="settings-live-note" class="settings-help" role="status"></span>
+        </div>
+        <div id="settings-live-progress" class="rec-meter" hidden><div id="settings-live-progress-fill" class="rec-meter-fill"></div></div>
+        <p class="settings-help">
+          Runs on this laptop's GPU while you record. The live transcript is a
+          draft — the final transcript is still produced by the home server
+          after the meeting.
         </p>
       </div>
 
