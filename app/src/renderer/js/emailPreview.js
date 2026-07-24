@@ -4,6 +4,7 @@
 // from the same template — with copy buttons. The PDF is attached by hand.
 
 import { showError, setStatus } from './status.js';
+import { copyText } from './clipboard.js';
 
 let ctx = null;
 let backdrop, toEl, subjectEl, bodyEl, noteEl;
@@ -17,10 +18,9 @@ export function initEmailPreview(context) {
   noteEl = document.getElementById('em-note');
 
   const copy = (getText, label) => async () => {
-    try {
-      await navigator.clipboard.writeText(getText());
+    if (await copyText(getText())) {
       noteEl.textContent = `${label} copied.`;
-    } catch {
+    } else {
       noteEl.textContent = `Could not copy — select the ${label.toLowerCase()} text and copy manually.`;
     }
   };

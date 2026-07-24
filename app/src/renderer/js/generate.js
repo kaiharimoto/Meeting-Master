@@ -8,6 +8,7 @@ import { saveCurrentToHistory } from './history.js';
 import { showToast } from './toast.js';
 import { showProblem, clearProblem } from './problems.js';
 import { FIRST_TRANSCRIPT_KEY } from './checklist.js';
+import { copyText } from './clipboard.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -606,7 +607,10 @@ function transcriptOrExplain() {
 async function onCopyTranscript() {
   const text = transcriptOrExplain();
   if (!text) return;
-  await navigator.clipboard.writeText(text);
+  if (!(await copyText(text))) {
+    showError('Could not copy to the clipboard — use "Save transcript" to write it to a file instead.');
+    return;
+  }
   setStatus('Transcript copied to the clipboard.');
   showToast({ kind: 'success', title: 'Transcript copied', message: 'Paste it anywhere.' });
 }
@@ -630,13 +634,34 @@ async function onCopyAiPrompt() {
   }
   setStatus('Fetching the AI prompt…', { busy: true });
   const { text } = await ctx.api.getJobPrompt(jobId);
-  await navigator.clipboard.writeText(text);
+  if (!(await copyText(text))) {
+    // The prompt isn't shown anywhere to select by hand, so offer the file
+    // route rather than leaving the operator with no way to get at it.
+    showError('Could not copy to the clipboard — save the prompt to a file instead.');
+    showToast({
+      kind: 'error',
+      title: 'Clipboard unavailable',
+      message: 'Save the AI prompt as a .txt file and open it from there.',
+      action: { label: 'Save prompt…', onClick: () => guarded(() => savePromptToFile(text)) },
+    });
+    return;
+  }
   setStatus('AI prompt copied — paste it into your model, then import its JSON reply via Edit summary.');
   showToast({
     kind: 'success',
     title: 'AI prompt copied',
     message: 'Paste into Claude/ChatGPT; import the JSON reply via Edit summary → Import AI output.',
   });
+}
+
+async function savePromptToFile(text) {
+  if (!ctx.api || typeof ctx.api.pickSavePath !== 'function') return;
+  const title = (ctx.state.details && ctx.state.details.title) || 'meeting';
+  const safe = title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'meeting';
+  const { filePath } = await ctx.api.pickSavePath(`${safe}-ai-prompt.txt`);
+  if (!filePath) return;
+  await ctx.api.saveTextFile(filePath, text);
+  setStatus(`AI prompt saved: ${filePath}`);
 }
 
 // ---- Dev shortcut ----------------------------------------------------------------

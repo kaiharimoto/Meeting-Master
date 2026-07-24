@@ -31,6 +31,7 @@ const paths = require('./paths');
 const recorder = require('./recorder');
 const updater = require('./updater');
 const zoom = require('./zoom');
+const permissions = require('./permissions');
 
 let mainWindow = null;
 let tray = null;
@@ -521,18 +522,19 @@ app.whenReady().then(() => {
   // Move any bundled/legacy fonts into the update-proof user dir (see paths.js).
   paths.migrateFonts();
 
-  // Microphone access for in-app recording. Electron denies getUserMedia
-  // outright when no handler is registered. Grant media to OUR file:// pages
-  // only — the server-mode window navigates to the http://127.0.0.1 dashboard
-  // with the same session, and remote content must never get the mic. The
-  // check handler matters too: without it enumerateDevices() returns blank
-  // labels and the device picker shows nameless microphones.
+  // Web permissions for OUR file:// pages only (see permissions.js for the
+  // allowlist and why it must stay complete).
+  const senderUrl = (webContents) =>
+    (webContents && !webContents.isDestroyed() && webContents.getURL()) || '';
+
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const url = (webContents && webContents.getURL()) || '';
-    callback(permission === 'media' && url.startsWith('file:'));
+    callback(permissions.isAllowed(permission, { url: senderUrl(webContents) }));
   });
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) =>
-    permission === 'media' && String(requestingOrigin || '').startsWith('file:')
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) =>
+    permissions.isAllowed(permission, {
+      url: senderUrl(webContents),
+      origin: requestingOrigin,
+    })
   );
 
   // System-audio (loopback) capture for the "also record computer audio"

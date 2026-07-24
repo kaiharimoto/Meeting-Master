@@ -9,6 +9,7 @@
 // button covers "I want this text right now".
 
 import { showToast } from './toast.js';
+import { copyText } from './clipboard.js';
 
 let els = null;
 let fullText = '';
@@ -25,11 +26,18 @@ export function initLiveTranscript(ctx) {
   if (els.copy) {
     els.copy.addEventListener('click', async () => {
       if (!fullText) return;
-      try {
-        await navigator.clipboard.writeText(fullText);
-        showToast({ kind: 'success', title: 'Live transcript copied', message: 'Draft quality — the final transcript comes after the meeting.' });
-      } catch {
-        // Clipboard denied — nothing actionable.
+      if (await copyText(fullText)) {
+        showToast({
+          kind: 'success',
+          title: 'Live transcript copied',
+          message: 'Draft quality — the final transcript comes after the meeting.',
+        });
+      } else {
+        showToast({
+          kind: 'error',
+          title: 'Could not copy',
+          message: 'Select the text in the pane and copy it with Ctrl+C.',
+        });
       }
     });
   }
