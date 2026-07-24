@@ -515,6 +515,11 @@ section#summary {
 
 /* ---- Shared ------------------------------------------------------------------ */
 
+/* AI-emitted **emphasis** renders as <strong>. Pin it at 700 — the default
+ * "bolder" would ask for 900 inside already-bold text, which the two-weight
+ * brand font can only synthesize. */
+strong { font-weight: 700; }
+
 .placeholder {
   margin-top: 12pt;
   font-size: var(--fs-small);

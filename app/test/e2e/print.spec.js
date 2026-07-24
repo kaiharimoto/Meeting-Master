@@ -83,6 +83,14 @@ test('print template renders the fixture with the contracted typography', async 
   const chipColor = await chips.first().evaluate((el) => getComputedStyle(el).color);
   expect(chipColor).toBe(ACCENT);
 
+  // ---- **emphasis** markers ---------------------------------------------------
+  // The fixture carries AI-style **bold** markers: they render as <strong>
+  // elements, and the literal asterisks never survive into the page.
+  await expect(page.locator('.answer strong').first()).toBeVisible();
+  await expect(page.locator('.takeaway-text strong').first()).toBeVisible();
+  await expect(page.locator('#qa-cards')).not.toContainText('**');
+  await expect(page.locator('#summary-body')).not.toContainText('**');
+
   // The summary's accent rule must have a real (non-transparent) background —
   // this is what printBackground:true exists to preserve.
   const ruleBackground = await page

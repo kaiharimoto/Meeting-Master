@@ -60,6 +60,11 @@ SYSTEM_PROMPT = (
     "months').\n"
     "- topics: the subjects discussed, as short noun phrases (2-5 words), not "
     "sentences.\n\n"
+    "EMPHASIS: in each takeaway, decision, action-item task, and key figure, "
+    "wrap the single most load-bearing phrase — the deciding number, date, "
+    "name, or outcome — in **double asterisks** (markdown bold). At most one "
+    "or two short bold spans per item; never bold a whole sentence, and use "
+    "no other markdown anywhere.\n\n"
     "String array elements carry no leading bullet character. Omit a section "
     "(empty array) only if the transcript truly has none. " + _SCHEMA_HINT
 )
@@ -70,7 +75,8 @@ _MERGE_SYSTEM_PROMPT = (
     "You merge several partial structured summaries of ONE meeting into a "
     "single structured summary. Deduplicate overlapping points, keep the most "
     "specific wording, and preserve every distinct takeaway, decision, action "
-    "item, figure, and topic. Invent nothing. " + _SCHEMA_HINT
+    "item, figure, and topic. Keep any **bold** emphasis markers on the "
+    "phrases they wrap. Invent nothing. " + _SCHEMA_HINT
 )
 
 
