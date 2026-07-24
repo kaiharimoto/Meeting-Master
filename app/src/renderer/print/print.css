@@ -8,16 +8,21 @@
  *   boxed 3-column details band / "Q&A n" / ruled rows Qn|question|answer /
  *   MEETING SUMMARY flowing after the Q&A / end colophon.
  *
- * TYPE SCALE — seven stops, so parallel content always reads at one size:
- *   42pt title · 20pt summary header + Q index · 17pt section header +
- *   takeaway index · 12pt body (Q/A text, takeaways, decisions, detail
- *   values) · 11pt small body (tasks, figures, prose, colophon, contents) ·
- *   9.5pt micro-caps (topbar, kickers, chips, attribution) · 8.5pt captions
- *   (detail/table labels, legend).
+ * TYPE SCALE — seven stops as :root vars, so parallel content always reads
+ * at one size and the whole document tunes from one place. Sized for
+ * LARGE-PRINT readability (older readers): 14pt body per APH large-print
+ * guidance, nothing below 10pt. The display sizes stay put — small text is
+ * the accessibility bottleneck, not the title.
+ *   --fs-title 42pt · --fs-display 20pt (summary header, Q index) ·
+ *   --fs-section 17pt (section header, takeaway index) · --fs-body 14pt
+ *   (Q/A text, takeaways, decisions, detail values) · --fs-small 12.5pt
+ *   (tasks, figures, prose, colophon, contents) · --fs-micro 10.5pt
+ *   (uppercase kickers, chips, attribution) · --fs-caption 10pt (detail/
+ *   table labels, legend).
  * The summary is a structured "deck": Key Takeaways (accent-numbered), then
  * Follow-Up Points (accent checkbox markers) beside Topics Discussed (outline
  * accent chips). A legacy plain-string summary falls back to 2-column prose
- * via #summary-body.is-prose. The e2e print spec asserts .question at 12pt,
+ * via #summary-body.is-prose. The e2e print spec asserts .question at 14pt,
  * the accent .sum-heading kicker, and the takeaway/topic/follow-up counts.
  *
  * NOTE: no @font-face here — src/main/pdf.js injects Neue Haas Grotesk at
@@ -26,6 +31,14 @@
  */
 
 :root {
+  --fs-title: 42pt;      /* masthead title */
+  --fs-display: 20pt;    /* summary header, Q index */
+  --fs-section: 17pt;    /* Q&A section header, takeaway index */
+  --fs-body: 14pt;       /* Q/A text, takeaways, decisions, detail values */
+  --fs-small: 12.5pt;    /* tasks, figures, prose, colophon, contents */
+  --fs-micro: 10.5pt;    /* uppercase kickers, chips, attribution */
+  --fs-caption: 10pt;    /* detail/table labels, legend */
+
   --ink: #16191d;        /* near-black, slightly cool */
   --ink-soft: #23282e;   /* answers, summary body */
   --muted: #6a7076;      /* placeholders, colophon date */
@@ -40,7 +53,7 @@ body {
   font-family: 'Neue Haas Grotesk', 'Helvetica Neue', Arial, sans-serif;
   color: var(--ink);
   background: #ffffff;
-  font-size: 12pt;
+  font-size: var(--fs-body);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -55,7 +68,7 @@ body {
 
 .topbar-label,
 .topbar-tag {
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -71,7 +84,7 @@ body {
 
 #detail-title {
   margin-top: 26pt;
-  font-size: 42pt;
+  font-size: var(--fs-title);
   line-height: 1.02;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -98,7 +111,7 @@ body {
 }
 
 .detail-label {
-  font-size: 8.5pt;
+  font-size: var(--fs-caption);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -107,7 +120,7 @@ body {
 
 .detail-value {
   margin-top: 4pt;
-  font-size: 12pt;
+  font-size: var(--fs-body);
   line-height: 1.35;
   font-weight: 400;
   color: var(--ink);
@@ -119,7 +132,7 @@ body {
 section#contents { margin-top: 26pt; }
 
 .contents-head {
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -136,7 +149,7 @@ section#contents { margin-top: 26pt; }
   padding: 3.5pt 0;
 }
 
-.toc-name { font-size: 11pt; font-weight: 600; color: var(--ink); }
+.toc-name { font-size: var(--fs-small); font-weight: 600; color: var(--ink); }
 
 .toc-dots {
   flex: 1;
@@ -145,7 +158,7 @@ section#contents { margin-top: 26pt; }
 }
 
 .toc-count {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-weight: 700;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
@@ -155,7 +168,7 @@ section#contents { margin-top: 26pt; }
  * table of contents with page numbers. */
 .toc-unit {
   margin-left: 3pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 400;
   color: var(--muted);
 }
@@ -168,7 +181,7 @@ section#qa { margin-top: 34pt; }
   display: flex;
   align-items: baseline;
   gap: 8pt;
-  font-size: 17pt;
+  font-size: var(--fs-section);
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -187,7 +200,7 @@ section#qa { margin-top: 34pt; }
  * shared baseline even though their sizes and line-heights differ. */
 .qa-card {
   display: grid;
-  grid-template-columns: 0.7in 2.8in 1fr;
+  grid-template-columns: 0.7in 2.9in 1fr;
   column-gap: 0.28in;
   align-items: baseline;
   padding: 16pt 0 18pt;
@@ -198,7 +211,7 @@ section#qa { margin-top: 34pt; }
 .qa-card + .qa-card { border-top: 1.5pt solid var(--ink); }
 
 .q-index {
-  font-size: 20pt;
+  font-size: var(--fs-display);
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -206,16 +219,16 @@ section#qa { margin-top: 34pt; }
   font-variant-numeric: tabular-nums;
 }
 
-/* e2e asserts 12pt => 16px computed. */
+/* e2e asserts 14pt => ~18.67px computed. */
 .question {
-  font-size: 12pt;
+  font-size: var(--fs-body);
   line-height: 1.45;
   font-weight: 700;
   color: var(--ink);
 }
 
 .answer {
-  font-size: 12pt;
+  font-size: var(--fs-body);
   line-height: 1.5;
   font-weight: 400;
   color: var(--ink-soft);
@@ -223,7 +236,7 @@ section#qa { margin-top: 34pt; }
 
 .participant-chip {
   margin-top: 8pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -241,7 +254,7 @@ section#summary {
 }
 
 .summary-header {
-  font-size: 20pt;
+  font-size: var(--fs-display);
   font-weight: 700;
   letter-spacing: 0.015em;
   text-transform: uppercase;
@@ -267,7 +280,7 @@ section#summary {
 }
 
 #summary-body.is-prose p {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   line-height: 1.6;
   color: var(--ink-soft);
 }
@@ -285,7 +298,7 @@ section#summary {
   display: flex;
   align-items: center;
   gap: 9pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -318,7 +331,7 @@ section#summary {
 }
 
 .takeaway-num {
-  font-size: 17pt;
+  font-size: var(--fs-section);
   line-height: 1;
   font-weight: 700;
   color: var(--accent);
@@ -326,7 +339,7 @@ section#summary {
 }
 
 .takeaway-text {
-  font-size: 12pt;
+  font-size: var(--fs-body);
   line-height: 1.45;
   font-weight: 400;
   color: var(--ink);
@@ -358,7 +371,7 @@ section#summary {
   border-radius: 2pt;
 }
 
-.decision-text { font-size: 12pt; line-height: 1.45; color: var(--ink); }
+.decision-text { font-size: var(--fs-body); line-height: 1.45; color: var(--ink); }
 
 /* Action Items — a ruled table: priority dot · task · owner · due. */
 .sum-actions { margin-bottom: 28pt; }
@@ -367,7 +380,7 @@ section#summary {
 
 .ai-row {
   display: grid;
-  grid-template-columns: 16pt 1fr 1.2in 1in;
+  grid-template-columns: 16pt 1fr 1.35in 1.05in;
   column-gap: 12pt;
   align-items: baseline;
   padding: 8pt 0;
@@ -380,7 +393,7 @@ section#summary {
 .ai-head {
   border-top: none;
   padding: 0 0 6pt;
-  font-size: 8.5pt;
+  font-size: var(--fs-caption);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -400,10 +413,10 @@ section#summary {
 .ai-pri-normal { background: var(--accent-mid); }
 .ai-pri-low { background: #fff; border: 1pt solid var(--muted); }
 
-.ai-task { font-size: 11pt; line-height: 1.4; color: var(--ink); }
-.ai-owner { font-size: 11pt; font-weight: 700; color: var(--ink-soft); }
+.ai-task { font-size: var(--fs-small); line-height: 1.4; color: var(--ink); }
+.ai-owner { font-size: var(--fs-small); font-weight: 700; color: var(--ink-soft); }
 .ai-due {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -412,7 +425,7 @@ section#summary {
   margin-top: 9pt;
   display: flex;
   gap: 16pt;
-  font-size: 8.5pt;
+  font-size: var(--fs-caption);
   letter-spacing: 0.03em;
   color: var(--muted);
 }
@@ -452,7 +465,7 @@ section#summary {
 }
 
 .figure-text {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   line-height: 1.35;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -470,7 +483,7 @@ section#summary {
   padding: 4pt 11pt;
   border: 1pt solid var(--accent);
   border-radius: 999px;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--accent);
@@ -488,14 +501,14 @@ section#summary {
 }
 
 .colophon-title {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .colophon-date {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-weight: 400;
   color: var(--ink);
 }
@@ -504,7 +517,7 @@ section#summary {
 
 .placeholder {
   margin-top: 12pt;
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-style: italic;
   color: var(--muted);
 }

@@ -1,7 +1,7 @@
 'use strict';
 
 // Verifies the PDF template's contract against the pinned mockMeeting.json
-// fixture: the ruled Q&A table (12pt text, medical-blue Q index) and the
+// fixture: the ruled Q&A table (14pt large-print text, medical-blue Q index) and the
 // structured presentation-style summary — Key Takeaways (accent-numbered),
 // Follow-Up Points, and Topics Discussed (outline accent chips) — plus a
 // non-transparent accent rule (printBackground) and a real multi-kB PDF.
@@ -28,12 +28,12 @@ test('print template renders the fixture with the contracted typography', async 
   // Details header carries the meeting title.
   await expect(page.locator('#details')).toContainText(fixture.details.title);
 
-  // Q&A text renders at 12pt => 16px computed.
+  // Q&A text renders at the 14pt large-print body size => ~18.67px computed.
   const questionFontSize = await page
     .locator('.qa-card .question')
     .first()
     .evaluate((el) => getComputedStyle(el).fontSize);
-  expect(questionFontSize).toBe('16px');
+  expect(questionFontSize.startsWith('18.66')).toBeTruthy();
 
   // The question index carries the calm medical-blue accent (#3e7ca6).
   const indexColor = await page
