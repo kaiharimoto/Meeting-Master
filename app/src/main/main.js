@@ -283,6 +283,12 @@ function createServerWindow(startHidden) {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (handleDashboardAction(url)) event.preventDefault();
   });
+  // The dashboard lives in an IFRAME (the sidebar's Dashboard tab) since
+  // v0.5.0, and will-navigate only fires for the main frame — so without
+  // this the dashboard's "Update & restart app" link did nothing at all.
+  mainWindow.webContents.on('will-frame-navigate', (event) => {
+    if (handleDashboardAction(event.url)) event.preventDefault();
+  });
   mainWindow.webContents.setWindowOpenHandler(({ url }) =>
     handleDashboardAction(url) ? { action: 'deny' } : { action: 'allow' }
   );

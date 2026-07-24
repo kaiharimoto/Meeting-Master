@@ -445,9 +445,19 @@ kbd {
   color: var(--ink-faint);
 }
 
+/* An update is downloaded: the version label becomes a real control (the
+   always-available way to install — a toast can be missed or dismissed). */
 .app-version.update-ready {
   color: var(--success);
   font-weight: 700;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success-soft);
+}
+.app-version.update-ready:hover {
+  filter: brightness(1.08);
+  text-decoration: underline;
 }
 
 /* Theme toggle shows the icon for the theme you'd switch TO. */
