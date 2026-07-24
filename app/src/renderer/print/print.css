@@ -6,16 +6,18 @@
  * and type. Layout follows the user's designv3.pdf mock:
  *   topbar (MEETING NOTES · INTERNAL) / heavy rule / large title /
  *   boxed 3-column details band / "Q&A n" / ruled rows Qn|question|answer /
- *   page-broken GENERAL SUMMARY with 2-column body / end colophon.
+ *   MEETING SUMMARY flowing after the Q&A / end colophon.
  *
- * TYPE SCALE (v3 mock supersedes the original 24pt/16pt contract):
- *   title 42pt · Q index 22pt · summary header 20pt · Q/A text 13pt ·
- *   key-takeaway text 12.5pt · details values 12pt · follow-up text 11pt ·
- *   section kickers/labels/topic chips 9.5-10pt · captions 8.5pt.
+ * TYPE SCALE — seven stops, so parallel content always reads at one size:
+ *   42pt title · 20pt summary header + Q index · 17pt section header +
+ *   takeaway index · 12pt body (Q/A text, takeaways, decisions, detail
+ *   values) · 11pt small body (tasks, figures, prose, colophon, contents) ·
+ *   9.5pt micro-caps (topbar, kickers, chips, attribution) · 8.5pt captions
+ *   (detail/table labels, legend).
  * The summary is a structured "deck": Key Takeaways (accent-numbered), then
  * Follow-Up Points (accent checkbox markers) beside Topics Discussed (outline
  * accent chips). A legacy plain-string summary falls back to 2-column prose
- * via #summary-body.is-prose. The e2e print spec asserts .question at 13pt,
+ * via #summary-body.is-prose. The e2e print spec asserts .question at 12pt,
  * the accent .sum-heading kicker, and the takeaway/topic/follow-up counts.
  *
  * NOTE: no @font-face here — src/main/pdf.js injects Neue Haas Grotesk at
@@ -117,7 +119,7 @@ body {
 section#contents { margin-top: 26pt; }
 
 .contents-head {
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -134,7 +136,7 @@ section#contents { margin-top: 26pt; }
   padding: 3.5pt 0;
 }
 
-.toc-name { font-size: 10.5pt; font-weight: 600; color: var(--ink); }
+.toc-name { font-size: 11pt; font-weight: 600; color: var(--ink); }
 
 .toc-dots {
   flex: 1;
@@ -143,10 +145,19 @@ section#contents { margin-top: 26pt; }
 }
 
 .toc-count {
-  font-size: 10.5pt;
+  font-size: 11pt;
   font-weight: 700;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+/* "items" unit after each count — the dot-leader row otherwise reads as a
+ * table of contents with page numbers. */
+.toc-unit {
+  margin-left: 3pt;
+  font-size: 9.5pt;
+  font-weight: 400;
+  color: var(--muted);
 }
 
 /* ---- Q&A ------------------------------------------------------------------ */
@@ -171,11 +182,14 @@ section#qa { margin-top: 34pt; }
 }
 
 /* Row: Q index | question | answer + attribution. Rules between rows only —
- * a row that lands at the top of a new page carries its rule with it. */
+ * a row that lands at the top of a new page carries its rule with it.
+ * Baseline alignment keeps the index, question, and answer first lines on a
+ * shared baseline even though their sizes and line-heights differ. */
 .qa-card {
   display: grid;
-  grid-template-columns: 0.95in 2.5in 1fr;
+  grid-template-columns: 0.7in 2.8in 1fr;
   column-gap: 0.28in;
+  align-items: baseline;
   padding: 16pt 0 18pt;
   break-inside: avoid;
   page-break-inside: avoid;
@@ -184,7 +198,7 @@ section#qa { margin-top: 34pt; }
 .qa-card + .qa-card { border-top: 1.5pt solid var(--ink); }
 
 .q-index {
-  font-size: 22pt;
+  font-size: 20pt;
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -192,24 +206,24 @@ section#qa { margin-top: 34pt; }
   font-variant-numeric: tabular-nums;
 }
 
-/* e2e asserts 13pt => 17.33px computed. */
+/* e2e asserts 12pt => 16px computed. */
 .question {
-  font-size: 13pt;
-  line-height: 1.4;
+  font-size: 12pt;
+  line-height: 1.45;
   font-weight: 700;
   color: var(--ink);
 }
 
 .answer {
-  font-size: 13pt;
-  line-height: 1.55;
+  font-size: 12pt;
+  line-height: 1.5;
   font-weight: 400;
   color: var(--ink-soft);
 }
 
 .participant-chip {
   margin-top: 8pt;
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -218,10 +232,12 @@ section#qa { margin-top: 34pt; }
 
 /* ---- Summary (own page, big caps header, 2-column body) ------------------- */
 
+/* The summary flows after the Q&A instead of forcing a fresh page — with few
+ * questions the forced break stranded two-thirds of a page. The header and
+ * rule refuse a break right after them so the section never opens as an
+ * orphan heading at a page bottom. */
 section#summary {
-  margin-top: 34pt;
-  break-before: page;
-  page-break-before: always;
+  margin-top: 40pt;
 }
 
 .summary-header {
@@ -229,12 +245,16 @@ section#summary {
   font-weight: 700;
   letter-spacing: 0.015em;
   text-transform: uppercase;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .summary-rule {
   margin-top: 8pt;
   height: 3pt;
   background: var(--accent);
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 #summary-body { margin-top: 22pt; }
@@ -265,7 +285,7 @@ section#summary {
   display: flex;
   align-items: center;
   gap: 9pt;
-  font-size: 10pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -298,7 +318,7 @@ section#summary {
 }
 
 .takeaway-num {
-  font-size: 18pt;
+  font-size: 17pt;
   line-height: 1;
   font-weight: 700;
   color: var(--accent);
@@ -306,8 +326,8 @@ section#summary {
 }
 
 .takeaway-text {
-  font-size: 12.5pt;
-  line-height: 1.4;
+  font-size: 12pt;
+  line-height: 1.45;
   font-weight: 400;
   color: var(--ink);
 }
@@ -338,7 +358,7 @@ section#summary {
   border-radius: 2pt;
 }
 
-.decision-text { font-size: 12pt; line-height: 1.4; color: var(--ink); }
+.decision-text { font-size: 12pt; line-height: 1.45; color: var(--ink); }
 
 /* Action Items — a ruled table: priority dot · task · owner · due. */
 .sum-actions { margin-bottom: 28pt; }
@@ -380,10 +400,10 @@ section#summary {
 .ai-pri-normal { background: var(--accent-mid); }
 .ai-pri-low { background: #fff; border: 1pt solid var(--muted); }
 
-.ai-task { font-size: 11pt; line-height: 1.35; color: var(--ink); }
-.ai-owner { font-size: 10pt; font-weight: 700; color: var(--ink-soft); }
+.ai-task { font-size: 11pt; line-height: 1.4; color: var(--ink); }
+.ai-owner { font-size: 11pt; font-weight: 700; color: var(--ink-soft); }
 .ai-due {
-  font-size: 10pt;
+  font-size: 11pt;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }

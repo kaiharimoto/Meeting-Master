@@ -336,6 +336,11 @@
         var count = document.createElement('span');
         count.className = 'toc-count';
         count.textContent = String(e[1]);
+        // Unit label so the count doesn't read as a page number.
+        var unit = document.createElement('span');
+        unit.className = 'toc-unit';
+        unit.textContent = e[1] === 1 ? 'item' : 'items';
+        count.appendChild(unit);
         row.appendChild(name);
         row.appendChild(dots);
         row.appendChild(count);
