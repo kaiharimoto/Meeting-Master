@@ -17,8 +17,10 @@ export function initPreflight(context) {
 
   // Re-check when the Meeting screen comes back into view — a fixed mic or a
   // rebooted server should clear its warning without an app restart.
+  // nav.js dispatches `detail: {screen}` — comparing the detail object to a
+  // string meant this never fired, so the chips only ever rendered once.
   document.addEventListener('mm:screen', (e) => {
-    if (e.detail === 'meeting') refreshPreflight();
+    if (e.detail && e.detail.screen === 'meeting') refreshPreflight();
   });
   refreshPreflight();
 }

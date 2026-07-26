@@ -50,12 +50,28 @@ export function initStage(context) {
     const header = panel.querySelector('h2');
     if (!header) continue;
     header.classList.add('stage-toggle');
-    header.addEventListener('click', () => {
+
+    // The heading's contents move INSIDE a real button. An <h2> with a click
+    // handler is invisible to the keyboard, and collapsed content is
+    // display:none — so before this, a keyboard user could not reach a
+    // collapsed panel at all. The button lives inside the h2 so the heading
+    // keeps its semantics and the section's aria-labelledby chain still
+    // resolves to this text.
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'panel-toggle';
+    toggle.setAttribute('aria-expanded', 'true');
+    while (header.firstChild) toggle.append(header.firstChild);
+    header.append(toggle);
+
+    toggle.addEventListener('click', () => {
       const collapsed = panel.classList.contains('is-collapsed');
       overrides[panel.id] = !collapsed; // remember the user's choice this stage
       panel.classList.toggle('is-collapsed', !collapsed);
+      toggle.setAttribute('aria-expanded', String(collapsed));
       renderSummaries();
     });
+
     // Summary line shown only while collapsed.
     const summary = document.createElement('div');
     summary.className = 'panel-summary';
@@ -124,6 +140,8 @@ export function refreshStage() {
         ? overrides[panel.id]
         : collapsedDefaults.includes(panel.id);
     panel.classList.toggle('is-collapsed', collapsed);
+    const toggle = panel.querySelector('.panel-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
   }
 
   const [text, promotedId] = nextStep(stage);

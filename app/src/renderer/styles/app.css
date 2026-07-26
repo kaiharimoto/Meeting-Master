@@ -18,18 +18,24 @@
   --surface: #ffffff;
   --surface-2: #f6f8fb;
   --surface-3: #edf1f7;
+  /* Form controls. Inputs sit ON --surface panels, so their boundary comes
+     from --border-control (3:1, WCAG 1.4.11) rather than a fill difference. */
+  --field-bg: #ffffff;
 
-  /* Ink */
+  /* Ink. --ink-faint is held at >=4.5:1 on every surface in BOTH themes; it
+     carries real content (timestamps, version, placeholders), not decoration. */
   --ink: #1c222b;
   --ink-soft: #57606d;
-  --ink-faint: #8a93a1;
+  --ink-faint: #5e6773;
 
   /* Brand + accent */
   --brand: #1a2b4a;
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
-  --accent-soft: #dbeafe;
+  --accent-soft: #eaf3ff;
   --accent-ghost: rgba(37, 99, 235, 0.08);
+  /* Ink that sits ON an accent fill (was two different hard-coded literals). */
+  --on-accent: #ffffff;
 
   /* Status */
   --success: #15803d;
@@ -41,18 +47,52 @@
   --danger-soft: #fee2e2;
 
   /* Lines + depth */
-  --border: #d9dfe8;
-  --border-strong: #c3ccd8;
+  --border: #cbd3de;
+  --border-strong: #aab4c2;
+  --border-control: #8a94a3; /* input/control edges — must clear 3:1 */
+  --scrim: rgba(15, 20, 32, 0.5); /* modal backdrop; theme-aware */
   --shadow-1: 0 1px 2px rgba(26, 43, 74, 0.06);
   --shadow-2: 0 1px 3px rgba(26, 43, 74, 0.08), 0 4px 14px rgba(26, 43, 74, 0.06);
   --shadow-3: 0 18px 50px rgba(15, 23, 42, 0.35);
 
   /* Shape + rhythm */
+  --r-xs: 4px;
   --r-sm: 7px;
   --r-md: 10px;
   --r-lg: 14px;
+  --r-pill: 999px;
   --sidebar-w: 240px;
   --titlebar-h: 40px;
+
+  /* Type scale. Six steps replacing thirteen ad-hoc sizes. Phase 1 only
+     swaps literals whose value is UNCHANGED, so the diff is reviewable;
+     the stragglers (11.5/12.5/13.5/14/16/18/20px) collapse onto these
+     steps in the Phase 2 typography pass. */
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 15px;
+  --fs-md: 17px;
+  --fs-lg: 21px;
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.3;
+  --lh-base: 1.5;
+  --lh-loose: 1.6;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* Spacing: a 4px grid. The off-grid 6/7/9/11/18/22px values still in the
+     file are snapped in Phase 2. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
 
   /* Motion */
   --t-fast: 120ms ease;
@@ -69,27 +109,37 @@
   --surface: #171b24;
   --surface-2: #1d232e;
   --surface-3: #232b38;
+  /* Dark inputs used to share --surface with the panel behind them, so with a
+     1.4:1 border they had no visible boundary at all. */
+  --field-bg: #1d232e;
 
   --ink: #e7ebf2;
   --ink-soft: #9aa4b2;
-  --ink-faint: #6b7585;
+  --ink-faint: #98a2b1;
 
   --brand: #d5deed;
   --accent: #6b9aff;
   --accent-strong: #86acff;
-  --accent-soft: rgba(107, 154, 255, 0.18);
-  --accent-ghost: rgba(107, 154, 255, 0.1);
+  /* The soft fills are PRE-COMPOSITED over --surface rather than alpha: as
+     alpha they resolved to a different colour on every ancestor (--bg vs
+     --surface vs --surface-2), so one rule produced three contrast ratios. */
+  --accent-soft: #26324b;
+  --accent-ghost: #1f2840;
+  --on-accent: #0d1220;
 
   --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.14);
+  --success-soft: #1e3631;
   --warn-ink: #f0b667;
-  --warn-bg: rgba(240, 182, 103, 0.1);
-  --warn-border: rgba(240, 182, 103, 0.35);
+  --warn-bg: #2d2b2b;
+  --warn-border: #635139;
   --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.14);
+  --danger-soft: #372727;
 
-  --border: #262d3a;
-  --border-strong: #35404f;
+  --border: #3a4352;
+  --border-strong: #4a5568;
+  --border-control: #67717f;
+  /* A 50% near-black scrim over an already-dark app separates nothing. */
+  --scrim: rgba(0, 0, 0, 0.62);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.5), 0 6px 18px rgba(0, 0, 0, 0.38);
   --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.6);
@@ -133,6 +183,20 @@ body {
 
 ::selection {
   background: var(--accent-soft);
+}
+
+/* Visually hidden, still announced. Kept focusable-safe (no display:none). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 kbd {
@@ -233,7 +297,7 @@ kbd {
   height: 26px;
   border-radius: 7px;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-accent);
   display: grid;
   place-content: center;
   font-size: 12px;
@@ -244,7 +308,7 @@ kbd {
 
 :root[data-theme="dark"] .brand-mark {
   background: var(--accent);
-  color: #0f1117;
+  color: var(--on-accent);
 }
 
 .brand-name {
@@ -527,49 +591,6 @@ kbd {
   margin-left: auto;
 }
 
-/* Legacy header block (pre-sidebar layout) — kept so an unmigrated index.html
-   still renders sanely; remove once the shell migration is complete. */
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 28px;
-  background: var(--brand);
-  color: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.app-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.app-header .btn-secondary {
-  background: transparent;
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.4);
-}
-
-.app-header .connection-info {
-  margin-left: auto;
-  font-size: 13px;
-  color: #c6d2e8;
-  max-width: 45%;
-}
-
-.app-main {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 24px 28px 72px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
 /* ---------- Panels ---------- */
 
 .panel {
@@ -638,11 +659,11 @@ kbd {
 .settings-modal select {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   font: inherit;
   color: var(--ink);
-  background: var(--surface);
+  background: var(--field-bg);
   transition: border-color var(--t-fast), background var(--t-base);
 }
 
@@ -685,18 +706,19 @@ kbd {
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  /* 0.45 dropped secondary labels to ~3.5:1, and 8+ buttons are disabled at
+     rest — pair a gentler fade with an explicit ink so they stay readable. */
+  opacity: 0.6;
+  color: var(--ink-soft);
   cursor: not-allowed;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
-:root[data-theme="dark"] .btn-primary {
-  color: #0d1220;
-}
+
 
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-strong);
@@ -1274,7 +1296,7 @@ kbd {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 20, 32, 0.5);
+  background: var(--scrim);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1485,11 +1507,7 @@ kbd {
 .pipe-step.done .pipe-dot {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-}
-
-:root[data-theme="dark"] .pipe-step.done .pipe-dot {
-  color: #0d1220;
+  color: var(--on-accent);
 }
 
 .pipe-step.current .pipe-dot {
@@ -1699,7 +1717,7 @@ kbd {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - var(--titlebar-h, 40px));
+  min-height: calc(100vh - var(--titlebar-h));
   border: 0;
   background: var(--bg);
 }
@@ -1781,7 +1799,7 @@ kbd {
   font-size: 13px;
   color: var(--success);
   background: var(--success-soft);
-  border: 1px solid var(--success-soft);
+  border: 1px solid var(--success);
   border-radius: var(--r-sm);
   padding: 9px 12px;
 }
@@ -1856,11 +1874,11 @@ kbd {
   position: sticky;
   top: 12px;
   z-index: 60; /* above .modal-backdrop (50): glanceable during capture */
-  max-height: calc(100vh - var(--titlebar-h, 40px) - 40px);
+  max-height: calc(100vh - var(--titlebar-h) - 40px);
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--r-md, 12px);
+  border-radius: var(--r-md);
   padding: 14px 14px 16px;
   display: flex;
   flex-direction: column;
@@ -1993,18 +2011,31 @@ kbd {
 
 /* Collapsible panels: header becomes a toggle, body hides, a one-line
    summary keeps the content reachable and scannable. */
-.panel h2.stage-toggle {
+/* stage.js moves the heading's contents into this button so collapsing is
+   keyboard-operable; it fills the h2 so a click anywhere on the heading (and
+   the specs' #<panel>-heading click) still lands on the control. */
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
   user-select: none;
 }
-.panel h2.stage-toggle::after {
+.panel-toggle::after {
   content: "▾";
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-faint);
   transition: transform var(--t-fast);
 }
-.panel.is-collapsed h2.stage-toggle::after {
+.panel.is-collapsed .panel-toggle::after {
   transform: rotate(-90deg);
 }
 .panel .panel-summary {
@@ -2071,7 +2102,7 @@ kbd {
   margin-bottom: 12px;
 }
 .problem-card {
-  border: 1px solid var(--danger-soft);
+  border: 1px solid var(--danger);
   border-left: 3px solid var(--danger);
   border-radius: var(--r-sm);
   background: var(--danger-soft);
