@@ -28,6 +28,7 @@ import { initActivity } from './activity.js';
 import { initAppUpdate } from './appUpdate.js';
 import { initCommandPalette } from './commandPalette.js';
 import { initSaveIndicator } from './saveIndicator.js';
+import { initShell } from './shell.js';
 import { isTypingTarget, anyModalOpen } from './keys.js';
 import { openModal, closeModal } from './modalKit.js';
 
@@ -180,6 +181,7 @@ function boot() {
   initServerStatus(ctx);
   initActivity(ctx);
   initSaveIndicator();
+  initShell();
   initNav(); // last: emits the initial mm:screen event to ready listeners
   initShortcutsOverlay();
   initCommandPalette();

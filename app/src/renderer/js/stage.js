@@ -78,11 +78,38 @@ export function initStage(context) {
     header.closest('.panel-heading-row')
       ? header.closest('.panel-heading-row').after(summary)
       : header.after(summary);
+
+    wrapBody(panel, summary);
   }
 
   document.addEventListener('mm:job', refreshStage);
   document.addEventListener('mm:stage', refreshStage);
   refreshStage();
+}
+
+// Move everything below the heading into .panel-body > .panel-body-inner.
+//
+// Collapsing used to be display:none, which cannot animate — there is no
+// height to interpolate between. A grid whose single row goes 1fr -> 0fr can,
+// and the inner element supplies the overflow:hidden the animation clips
+// against. The collapse CONTRACT is unchanged: the class is still
+// `is-collapsed` and the rule still targets direct children of .panel.
+function wrapBody(panel, summary) {
+  const body = document.createElement('div');
+  body.className = 'panel-body';
+  const inner = document.createElement('div');
+  inner.className = 'panel-body-inner';
+  body.append(inner);
+
+  // Everything after the summary line is body. (The summary itself, the
+  // heading and the heading row stay put — they show while collapsed.)
+  let node = summary.nextSibling;
+  while (node) {
+    const next = node.nextSibling;
+    inner.append(node);
+    node = next;
+  }
+  summary.after(body);
 }
 
 function computeStage() {

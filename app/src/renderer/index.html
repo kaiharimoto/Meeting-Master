@@ -8,6 +8,7 @@
   />
   <title>Meeting Master</title>
   <script src="js/themeBoot.js"></script>
+  <script src="js/shellBoot.js"></script>
   <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
@@ -20,28 +21,33 @@
       <div class="sidebar-brand">
         <span class="brand-mark" aria-hidden="true">M</span>
         <span class="brand-name">Meeting Master</span>
+        <button id="sidebar-toggle" type="button" class="icon-btn sidebar-toggle"
+                aria-expanded="true" aria-controls="sidebar"
+                aria-label="Collapse the sidebar" title="Collapse the sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        </button>
       </div>
 
       <nav class="sidebar-nav" aria-label="Primary">
-        <button id="nav-meeting" type="button" class="nav-item active">
+        <button id="nav-meeting" type="button" title="Meeting" class="nav-item active">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          Meeting
+          <span class="nav-label">Meeting</span>
         </button>
-        <button id="nav-activity" type="button" class="nav-item">
+        <button id="nav-activity" type="button" title="Activity" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Activity
+          <span class="nav-label">Activity</span>
         </button>
-        <button id="nav-dashboard" type="button" class="nav-item" hidden>
+        <button id="nav-dashboard" type="button" title="Dashboard" class="nav-item" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-          Dashboard
+          <span class="nav-label">Dashboard</span>
         </button>
-        <button id="history-btn" type="button" class="nav-item">
+        <button id="history-btn" type="button" title="History" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          History
+          <span class="nav-label">History</span>
         </button>
-        <button id="settings-btn" type="button" class="nav-item">
+        <button id="settings-btn" type="button" title="Settings" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          Settings
+          <span class="nav-label">Settings</span>
         </button>
       </nav>
 
@@ -81,6 +87,13 @@
         </div>
 
         <div id="setup-checklist" class="setup-checklist" hidden></div>
+
+        <!-- The four workflow panels. Single column by default; at a wide
+             enough CONTAINER (not viewport — the rail and the sidebar both eat
+             width) this becomes two columns: working left, context right. DOM
+             order is unchanged, so tab order still reads details -> Q&A ->
+             record -> generate. -->
+        <div class="meeting-grid">
 
         <!-- 1. Meeting details -->
         <section id="panel-details" class="panel" aria-labelledby="details-heading">
@@ -139,6 +152,12 @@
             <button id="quick-add-btn" type="button" class="btn btn-primary btn-small">Add</button>
             <button id="quick-more-btn" type="button" class="btn btn-secondary btn-small"
                     title="Open the full card with answer and answerer fields">More fields…</button>
+          </div>
+
+          <div id="list-toolbar" class="list-toolbar" hidden>
+            <span id="card-count" class="card-count"></span>
+            <button id="density-toggle" type="button" class="density-toggle"
+                    aria-pressed="false" title="Show more cards at once">Compact</button>
           </div>
 
           <div id="card-list" class="card-list" aria-live="polite"></div>
@@ -258,7 +277,15 @@
 
           <p id="config-note" class="config-note" hidden></p>
         </section>
+        </div><!-- /.meeting-grid -->
         </div><!-- /.meeting-main -->
+
+        <!-- Drag (or arrow-key) to trade width between the rail and the main
+             column. Only present while the rail is. -->
+        <div id="rail-resizer" class="rail-resizer" role="separator"
+             aria-orientation="vertical" tabindex="0"
+             aria-label="Suggestions rail width"
+             aria-valuemin="240" aria-valuemax="460" aria-valuenow="300"></div>
 
         <!-- Live question suggestions: a peripheral rail the operator can
              monitor while typing questions — it never reflows the main

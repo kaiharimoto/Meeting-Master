@@ -104,6 +104,14 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 10. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
 
+**Fitting the window.** The Meeting screen goes two-column as soon as the panels
+have room for it — working column (Q&A, Generate) on the left, context column
+(Details, Record) on the right — so a docked laptop stops reading like a phone.
+The sidebar collapses to icons (the button beside the logo), the live
+suggestions rail can be dragged wider or narrower by the handle beside it (or
+resized with the arrow keys once focused), and the Q&A list has a **Compact**
+toggle for long meetings. All four preferences are remembered.
+
 Past meetings are saved automatically (and via **History → Save current**);
 reopen any of them from the **History** button to review, regenerate, or re-send.
 Any server-side job can also be pulled back in from **Activity → Open in

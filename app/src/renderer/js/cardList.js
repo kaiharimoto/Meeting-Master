@@ -14,11 +14,22 @@ import { buildEmptyState } from './emptyState.js';
 let ctx = null;
 let onEditCard = null;
 let container = null;
+let toolbar = null;
+let countEl = null;
 
 export function initCardList(context, opts) {
   ctx = context;
   onEditCard = opts.onEditCard;
   container = document.getElementById('card-list');
+  toolbar = document.getElementById('list-toolbar');
+  countEl = document.getElementById('card-count');
+}
+
+// The list's own toolbar (count + density) only makes sense once there's a
+// list — an empty state with a "Compact" button above it is noise.
+function renderToolbar(count) {
+  if (toolbar) toolbar.hidden = count === 0;
+  if (countEl) countEl.textContent = `${count} question${count === 1 ? '' : 's'}`;
 }
 
 // Handlers resolve their card by id at event time. Card OBJECTS are replaced
@@ -30,6 +41,7 @@ function liveCard(id) {
 
 export function renderCards() {
   const cards = ctx.state.cards || [];
+  renderToolbar(cards.length);
 
   if (cards.length === 0) {
     container.replaceChildren(
