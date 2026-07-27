@@ -72,7 +72,7 @@
         <div class="meeting-main">
         <div class="screen-head">
           <h2 class="screen-title">Meeting</h2>
-          <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
+          <button id="new-meeting-btn" type="button" class="btn btn-secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>New meeting</button>
         </div>
 
         <div id="next-step" class="next-step" role="status" hidden>
@@ -133,7 +133,7 @@
 
           <div id="card-list" class="card-list" aria-live="polite"></div>
 
-          <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
+          <button id="add-card-btn" type="button" class="btn btn-secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add question</button>
         </section>
 
         <!-- 3. Record audio -->
@@ -176,17 +176,17 @@
           </div>
 
           <div class="button-row">
-            <button id="rec-start-btn" type="button" class="btn btn-primary">Start recording</button>
+            <button id="rec-start-btn" type="button" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Start recording</button>
             <button id="rec-pause-btn" type="button" class="btn btn-secondary" hidden>Pause</button>
             <button id="rec-resume-btn" type="button" class="btn btn-primary" hidden>Resume</button>
-            <button id="rec-stop-btn" type="button" class="btn btn-primary" hidden>Stop &amp; use recording</button>
+            <button id="rec-stop-btn" type="button" class="btn btn-primary" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Stop &amp; use recording</button>
             <button id="rec-discard-btn" type="button" class="btn btn-secondary" hidden>Discard</button>
             <button id="rec-mini-btn" type="button" class="btn btn-secondary" hidden
                     title="Shrink to a small always-on-top recording strip">Mini mode</button>
             <span id="rec-timer" class="rec-timer" hidden>00:00</span>
           </div>
 
-          <div id="rec-meter" class="rec-meter" hidden><div id="rec-meter-fill" class="rec-meter-fill"></div></div>
+          <div id="rec-meter" class="meter meter--level rec-meter" hidden aria-hidden="true"><div id="rec-meter-fill" class="meter-fill"></div></div>
 
           <div id="live-wrap" class="live-wrap" hidden>
             <div class="log-toolbar">
@@ -213,11 +213,11 @@
           <div class="button-row">
             <button id="pick-audio-btn" type="button" class="btn btn-primary">Generate transcript</button>
             <button id="start-ai-btn" type="button" class="btn btn-primary" disabled
-                    title="Run the AI summary + question detection on the (name-corrected) transcript">Start AI</button>
+                    title="Run the AI summary + question detection on the (name-corrected) transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Start AI</button>
             <button id="edit-summary-btn" type="button" class="btn btn-secondary">Edit summary</button>
-            <button id="generate-pdf-btn" type="button" class="btn btn-primary">Generate PDF</button>
+            <button id="generate-pdf-btn" type="button" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Generate PDF</button>
             <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
-            <button id="send-email-btn" type="button" class="btn btn-primary" disabled>Send email</button>
+            <button id="send-email-btn" type="button" class="btn btn-primary" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send email</button>
           </div>
           <div class="button-row">
             <button id="copy-transcript-btn" type="button" class="btn btn-secondary" disabled
@@ -239,6 +239,11 @@
           <div id="status-line" class="status-line" role="status" aria-live="polite">
             <span id="status-spinner" class="spinner" hidden></span>
             <span id="status-text">Ready.</span>
+          </div>
+          <div id="status-meter" class="meter status-meter" hidden
+               role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-label="Transcription progress">
+            <div id="status-meter-fill" class="meter-fill"></div>
           </div>
 
           <p id="config-note" class="config-note" hidden></p>
@@ -602,7 +607,7 @@
           <button id="settings-live-delete-btn" type="button" class="btn btn-secondary" hidden>Delete model</button>
           <span id="settings-live-note" class="settings-help" role="status"></span>
         </div>
-        <div id="settings-live-progress" class="rec-meter" hidden><div id="settings-live-progress-fill" class="rec-meter-fill"></div></div>
+        <div id="settings-live-progress" class="meter rec-meter" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Model download progress"><div id="settings-live-progress-fill" class="meter-fill"></div></div>
         <p class="settings-help">
           Runs on this laptop's GPU while you record. The live transcript is a
           draft — the final transcript is still produced by the home server

@@ -3,6 +3,7 @@
 // meant it, forgiving when you didn't.
 
 import { showToast } from './toast.js';
+import { buildEmptyState } from './emptyState.js';
 
 let ctx = null;
 let onEditCard = null;
@@ -19,10 +20,13 @@ export function renderCards() {
 
   const cards = ctx.state.cards || [];
   if (cards.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'card-list-empty';
-    empty.textContent = 'No questions yet — press Q during the meeting to capture one.';
-    container.append(empty);
+    container.append(
+      buildEmptyState({
+        icon: 'question',
+        title: 'No questions yet — press Q during the meeting to capture one.',
+        hint: 'Each one becomes a card you can edit, and lands in the PDF.',
+      })
+    );
     return;
   }
 

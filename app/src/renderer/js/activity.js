@@ -4,6 +4,8 @@
 // DOM events) as the fallback signal. All api calls are guarded — the screen
 // renders sensibly with a stubbed or older window.api.
 
+import { buildEmptyState } from './emptyState.js';
+
 const STEPS = [
   { key: 'queued', label: 'Queued' },
   { key: 'normalizing', label: 'Normalize' },
@@ -16,7 +18,7 @@ const DONE_STATES = new Set(['ready', 'pdf_received', 'emailed']);
 const LOG_CAP = 1000;
 
 const CHECK_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
 let ctx = null;
 let els = null;
@@ -104,11 +106,13 @@ function renderPipeline() {
   const job = currentJob();
 
   if (!job || !job.state) {
-    const empty = document.createElement('div');
-    empty.className = 'pipeline-empty';
-    empty.textContent =
-      'No job yet — pick the meeting audio on the Meeting screen to start the AI.';
-    host.append(empty);
+    host.append(
+      buildEmptyState({
+        icon: 'activity',
+        title: 'No job running',
+        hint: 'Generate a transcript on the Meeting screen and its progress appears here.',
+      })
+    );
     return;
   }
 
@@ -252,12 +256,16 @@ function renderJobs() {
   const host = els.jobs;
   host.replaceChildren();
   if (jobsCache.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'jobs-empty';
-    empty.textContent = ctx.api && typeof ctx.api.listJobs === 'function'
-      ? 'No jobs on the home server yet — start one from the Meeting screen.'
-      : 'Connect to the home server to see its job history here.';
-    host.append(empty);
+    const connected = ctx.api && typeof ctx.api.listJobs === 'function';
+    host.append(
+      buildEmptyState({
+        icon: 'server',
+        title: connected ? 'No jobs on the home server yet' : 'Not connected to the home server',
+        hint: connected
+          ? 'Start one from the Meeting screen and it shows up here.'
+          : 'Paste your connection code in Settings to see the job history.',
+      })
+    );
     return;
   }
 
@@ -338,10 +346,7 @@ function renderLog() {
     })
   );
   if (logLines.length === 0) {
-    const empty = document.createElement('span');
-    empty.className = 'log-line';
-    empty.textContent = '(no log lines yet)';
-    view.append(empty);
+    view.append(buildEmptyState({ icon: 'terminal', title: 'No log lines yet' }));
   }
   if (els.follow && els.follow.checked) {
     view.scrollTop = view.scrollHeight;

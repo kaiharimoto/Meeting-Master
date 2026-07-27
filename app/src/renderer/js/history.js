@@ -3,6 +3,7 @@
 // separate from the single "current meeting" state.
 
 import { showError } from './status.js';
+import { buildEmptyState } from './emptyState.js';
 
 const HISTORY_KEY = 'meetingmaster.history.v1';
 const MAX_SNAPSHOTS = 60;
@@ -107,10 +108,13 @@ function renderList() {
   listHost.replaceChildren();
 
   if (list.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'history-empty';
-    empty.textContent = 'No saved meetings yet. Generate a PDF or click “Save current” to keep one here.';
-    listHost.append(empty);
+    listHost.append(
+      buildEmptyState({
+        icon: 'clock',
+        title: 'No saved meetings yet',
+        hint: 'Generating a PDF saves one automatically — or click “Save current”.',
+      })
+    );
     return;
   }
 

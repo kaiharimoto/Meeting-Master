@@ -183,7 +183,9 @@ function initLiveSection() {
       if (!payload || payload.model !== (liveModelEl && liveModelEl.value)) return;
       if (payload.state === 'running') {
         liveProgress.hidden = false;
-        liveProgressFill.style.width = `${payload.progress || 0}%`;
+        const pct = Math.max(0, Math.min(100, Number(payload.progress) || 0));
+        liveProgressFill.style.width = `${pct}%`;
+        liveProgress.setAttribute('aria-valuenow', String(pct));
         liveNote.textContent = payload.message || '';
       } else {
         liveProgress.hidden = true;

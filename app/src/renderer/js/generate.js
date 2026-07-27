@@ -411,7 +411,10 @@ async function pollOnce() {
         text += ` · ${fmtEta(remainMs)}`;
       }
     }
-    setStatus(text, { busy: isBusyState(job.state) });
+    setStatus(text, {
+      busy: isBusyState(job.state),
+      progress: typeof job.progress === 'number' ? job.progress : null,
+    });
   }
 }
 
