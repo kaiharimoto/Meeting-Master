@@ -3,6 +3,8 @@
 // is generated — the same "you're in control of what goes out" idea as the
 // question-approval step. Edits ctx.state.summary in place.
 
+import { openModal, closeModal } from './modalKit.js';
+
 let ctx = null;
 let onSaved = null;
 
@@ -219,8 +221,7 @@ export function openSummaryEdit() {
     items.forEach((a) => actionsHost.append(buildActionRow(a || {})));
   }
 
-  backdrop.hidden = false;
-  takeawaysEl.focus();
+  openModal(backdrop, takeawaysEl);
 }
 
 function buildActionRow(a) {
@@ -298,5 +299,5 @@ function save() {
 }
 
 function close() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
 }

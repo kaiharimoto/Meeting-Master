@@ -9,6 +9,7 @@ import { showToast } from './toast.js';
 import { showProblem, clearProblem } from './problems.js';
 import { FIRST_TRANSCRIPT_KEY } from './checklist.js';
 import { copyText } from './clipboard.js';
+import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -670,7 +671,10 @@ async function savePromptToFile(text) {
 // ---- Dev shortcut ----------------------------------------------------------------
 
 async function onDevMockShortcut(e) {
-  if (!(e.ctrlKey && e.shiftKey && (e.key === 'M' || e.key === 'm'))) return;
+  if (!matchChord(e, 'ctrl+shift+m')) return;
+  // Guards every other global shortcut has and this one didn't: never fire
+  // while typing, never fire over an open dialog.
+  if (isTypingTarget(e.target) || anyModalOpen()) return;
   e.preventDefault();
   try {
     // Dev-only nicety: the fixture only exists relative to the source tree,

@@ -1,17 +1,19 @@
 // Keyboard-first Q&A capture: a global "Q" opens the modal, Tab flows
 // question -> answer -> participant, Enter commits, Escape cancels.
+//
+// The modal is the deliberate, all-fields path. The inline bar at the top of
+// the panel (quickCapture.js) is the fast path; both commit through addCard()
+// so there is exactly one place a card comes into existence.
+
+import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
+import { openModal, closeModal, isModalOpen } from './modalKit.js';
 
 let ctx = null;
 let onCardsChanged = null;
 let editingCard = null; // null => creating a new card; otherwise edited in place
 
-let backdrop, modalTitle, questionEl, answerEl, participantEl, datalist, saveBtn, cancelBtn;
-
-function isTypingTarget(target) {
-  if (!target || !target.tagName) return false;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
-}
+let backdrop, modalTitle, questionEl, answerEl, participantEl, datalist;
+let saveBtn, saveAddBtn, cancelBtn;
 
 function makeId() {
   // crypto.randomUUID exists in every Chromium the app runs in; the fallback
@@ -20,6 +22,25 @@ function makeId() {
     return window.crypto.randomUUID();
   }
   return `card-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * The single commit path for a new card. Returns the created card so callers
+ * can reference it (the quick bar announces it; the modal keeps its id).
+ * Persists and notifies — callers only decide what to do with focus.
+ */
+export function addCard({ question, answer = '', participant = '' }) {
+  const card = {
+    id: makeId(),
+    question: String(question || '').trim(),
+    answer: String(answer || '').trim(),
+    participant: String(participant || '').trim(),
+  };
+  if (!card.question) return null;
+  ctx.state.cards.push(card);
+  ctx.persist();
+  onCardsChanged();
+  return card;
 }
 
 export function initCapture(context, opts) {
@@ -33,16 +54,18 @@ export function initCapture(context, opts) {
   participantEl = document.getElementById('card-participant');
   datalist = document.getElementById('participant-options');
   saveBtn = document.getElementById('card-save-btn');
+  saveAddBtn = document.getElementById('card-save-add-btn');
   cancelBtn = document.getElementById('card-cancel-btn');
 
   document.addEventListener('keydown', onGlobalKeydown);
   backdrop.addEventListener('keydown', onModalKeydown);
-  saveBtn.addEventListener('click', commit);
-  cancelBtn.addEventListener('click', closeModal);
+  saveBtn.addEventListener('click', () => commit({ keepOpen: false }));
+  if (saveAddBtn) saveAddBtn.addEventListener('click', () => commit({ keepOpen: true }));
+  cancelBtn.addEventListener('click', close);
 
   // Clicking the dimmed area (not the dialog itself) cancels, like Escape.
   backdrop.addEventListener('mousedown', (e) => {
-    if (e.target === backdrop) closeModal();
+    if (e.target === backdrop) close();
   });
 
   questionEl.addEventListener('input', () => questionEl.classList.remove('field-invalid'));
@@ -52,25 +75,29 @@ function onGlobalKeydown(e) {
   if (e.key !== 'q' && e.key !== 'Q') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return; // leave shortcuts alone
   if (isTypingTarget(e.target)) return; // typing "q" into a field is just text
-  if (!backdrop.hidden) return; // already open
+  if (isModalOpen(backdrop)) return; // already open
   // Don't hijack "q" while another modal (e.g. Settings) is open.
-  const otherModal = document.querySelector('.modal-backdrop:not([hidden])');
-  if (otherModal && otherModal !== backdrop) return;
+  if (anyModalOpen(backdrop)) return;
   e.preventDefault();
   openCardModal(null);
 }
 
-/** Open the modal — pass a card from state.cards to edit it in place. */
-export function openCardModal(card) {
+/**
+ * Open the modal — pass a card from state.cards to edit it in place, or
+ * `{ prefill }` to seed a new card's fields (the quick bar's "more fields…").
+ */
+export function openCardModal(card, { prefill } = {}) {
   editingCard = card || null;
+  const seed = card || prefill || {};
   modalTitle.textContent = card ? 'Edit question' : 'New question';
-  questionEl.value = card ? card.question : '';
-  answerEl.value = card ? card.answer : '';
-  participantEl.value = card ? card.participant : '';
+  questionEl.value = seed.question || '';
+  answerEl.value = seed.answer || '';
+  participantEl.value = seed.participant || '';
   questionEl.classList.remove('field-invalid');
   refreshParticipantDatalist();
-  backdrop.hidden = false;
-  questionEl.focus();
+  // "Save and add another" only makes sense while creating.
+  if (saveAddBtn) saveAddBtn.hidden = Boolean(card);
+  openModal(backdrop, questionEl);
 }
 
 // The "Answered by" field suggests the attendees entered in section 1.
@@ -88,37 +115,28 @@ function refreshParticipantDatalist() {
 function onModalKeydown(e) {
   if (e.key === 'Escape') {
     e.preventDefault();
-    closeModal();
+    close();
     return;
   }
-  if (e.key === 'Tab') {
-    // Trap focus inside the modal: positive tabindex alone would let Tab
-    // escape to the page behind the backdrop after the last field.
-    const cycle = [questionEl, answerEl, participantEl, cancelBtn, saveBtn];
+  // Ctrl+Enter saves and keeps the dialog open for the next question — the
+  // rhythm for a run of related Q&A. (Tab is trapped by modalKit.)
+  if (matchChord(e, 'ctrl+enter')) {
     e.preventDefault();
-    const idx = cycle.indexOf(e.target);
-    if (idx === -1) {
-      questionEl.focus();
-      return;
-    }
-    cycle[(idx + (e.shiftKey ? cycle.length - 1 : 1)) % cycle.length].focus();
+    commit({ keepOpen: !editingCard });
     return;
   }
   if (e.key === 'Enter') {
-    // Enter activates the focused button; on the fields it commits
-    // (Shift+Enter inserts a newline, but only in the answer textarea).
-    if (e.target === cancelBtn) {
-      e.preventDefault();
-      closeModal();
-      return;
-    }
+    // A focused button activates natively (Save, Save and add another,
+    // Cancel) — don't second-guess which one.
+    if (e.target && e.target.tagName === 'BUTTON') return;
+    // Shift+Enter inserts a newline, but only in the answer textarea.
     if (e.target === answerEl && e.shiftKey) return;
     e.preventDefault();
-    commit();
+    commit({ keepOpen: false });
   }
 }
 
-function commit() {
+function commit({ keepOpen }) {
   const question = questionEl.value.trim();
   const answer = answerEl.value.trim();
   const participant = participantEl.value.trim();
@@ -135,21 +153,29 @@ function commit() {
     editingCard.question = question;
     editingCard.answer = answer;
     editingCard.participant = participant;
+    ctx.persist();
+    onCardsChanged();
   } else {
-    ctx.state.cards.push({ id: makeId(), question, answer, participant });
+    addCard({ question, answer, participant });
   }
 
-  ctx.persist();
-  closeModal();
-  onCardsChanged();
+  if (keepOpen && !editingCard) {
+    // Clear for the next one but keep the answerer — a run of questions is
+    // usually answered by the same person.
+    questionEl.value = '';
+    answerEl.value = '';
+    questionEl.classList.remove('field-invalid');
+    questionEl.focus();
+    return;
+  }
+  close();
 }
 
-function closeModal() {
-  backdrop.hidden = true;
+function close() {
   editingCard = null;
   questionEl.classList.remove('field-invalid');
-  // Refocus the body so the very next "Q" press opens a fresh card without
-  // the operator having to click anywhere first.
-  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-  document.body.focus();
+  // modalKit returns focus to whatever opened the dialog; when that was a bare
+  // "Q" press there is nothing to return to, so the next "Q" opens a fresh
+  // card without the operator having to click anywhere first.
+  closeModal(backdrop);
 }

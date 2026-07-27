@@ -3,6 +3,7 @@
 
 import { initDetailsForm, renderDetailsForm } from './detailsForm.js';
 import { initCapture, openCardModal } from './capture.js';
+import { initQuickCapture } from './quickCapture.js';
 import { initCardList, renderCards } from './cardList.js';
 import { initGenerate, updateButtons, maybeResumePolling, startAi } from './generate.js';
 import { initStatus, setStatus, showError } from './status.js';
@@ -25,8 +26,15 @@ import { initTheme } from './theme.js';
 import { initServerStatus } from './serverStatus.js';
 import { initActivity } from './activity.js';
 import { initAppUpdate } from './appUpdate.js';
+import { initCommandPalette } from './commandPalette.js';
+import { initSaveIndicator } from './saveIndicator.js';
+import { isTypingTarget, anyModalOpen } from './keys.js';
+import { openModal, closeModal } from './modalKit.js';
 
 const STORAGE_KEY = 'meetingmaster.meeting.v1';
+// Coalesce a burst of persist() calls into one 'saved' announcement.
+const SAVED_DEBOUNCE_MS = 400;
+let savedTimer = null;
 
 function newMeetingId() {
   return `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -100,6 +108,14 @@ function boot() {
       } catch {
         // Quota/unavailable storage should never break the app.
       }
+      // The write above is synchronous and already done; this only tells the
+      // UI about it. Debounced because persist() fires per keystroke and the
+      // indicator would otherwise thrash.
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(
+        () => document.dispatchEvent(new CustomEvent('mm:saved')),
+        SAVED_DEBOUNCE_MS
+      );
     },
     renderAll() {
       renderDetailsForm(ctx);
@@ -119,11 +135,12 @@ function boot() {
   initDetailsForm(ctx);
   initCardList(ctx, { onEditCard: (card) => openCardModal(card) });
   initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
+  initQuickCapture();
   initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
   initGenerate(ctx);
   initRecorder(ctx); // after initGenerate — it drives the upload buttons' state
   initLiveTranscript(ctx);
-  initLiveFlags(ctx, { onCardsChanged: () => renderCards(ctx) });
+  initLiveFlags(ctx); // approvals commit through capture.js's addCard()
   initStage(ctx);
   initPreflight(ctx);
   initChecklist(ctx);
@@ -162,8 +179,10 @@ function boot() {
   initTheme(ctx);
   initServerStatus(ctx);
   initActivity(ctx);
+  initSaveIndicator();
   initNav(); // last: emits the initial mm:screen event to ready listeners
   initShortcutsOverlay();
+  initCommandPalette();
   showAppVersion(ctx).then(() => initAppUpdate(ctx));
 
   document.getElementById('add-card-btn').addEventListener('click', () => openCardModal(null));
@@ -281,9 +300,7 @@ function boot() {
 function initShortcutsOverlay() {
   const backdrop = document.getElementById('shortcuts-modal');
   if (!backdrop) return;
-  const close = () => {
-    backdrop.hidden = true;
-  };
+  const close = () => closeModal(backdrop);
   document.getElementById('shortcuts-close-btn').addEventListener('click', close);
   backdrop.addEventListener('mousedown', (e) => {
     if (e.target === backdrop) close();
@@ -296,15 +313,11 @@ function initShortcutsOverlay() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = e.target;
-    const typing =
-      t && t.tagName && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    if (typing) return;
+    if (isTypingTarget(e.target)) return;
     // Don't stack on top of another open dialog.
-    if (document.querySelector('.modal-backdrop:not([hidden])')) return;
+    if (anyModalOpen(backdrop)) return;
     e.preventDefault();
-    backdrop.hidden = false;
-    document.getElementById('shortcuts-close-btn').focus();
+    openModal(backdrop, document.getElementById('shortcuts-close-btn'));
   });
 }
 

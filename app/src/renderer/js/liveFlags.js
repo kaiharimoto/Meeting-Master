@@ -14,11 +14,11 @@
 
 import { setStatus } from './status.js';
 import { showToast } from './toast.js';
-import { normQ, isDuplicate, makeId } from './extractReview.js';
+import { normQ, isDuplicate } from './extractReview.js';
+import { addCard } from './capture.js';
 import { updateButtons } from './generate.js';
 
 let ctx = null;
-let onCardsChanged = null;
 let els = null;
 
 // The rail shows while a live session runs (even when empty, so the operator
@@ -35,9 +35,8 @@ function flagsState() {
   return lf;
 }
 
-export function initLiveFlags(context, opts = {}) {
+export function initLiveFlags(context) {
   ctx = context;
-  onCardsChanged = opts.onCardsChanged || function () {};
   els = {
     rail: document.getElementById('live-rail'),
     list: document.getElementById('live-rail-list'),
@@ -205,16 +204,15 @@ function buildRow(candidate, index) {
   approve.textContent = 'Approve';
   approve.addEventListener('click', () => {
     const lf = flagsState();
-    ctx.state.cards.push({
-      id: makeId(),
+    lf.pending.splice(index, 1);
+    // addCard() is the single place a card comes into existence — it persists
+    // (the pending splice above rides along) and re-renders the list.
+    addCard({
       question: candidate.question,
       answer: candidate.answer,
       participant: answerer.value.trim(),
     });
-    lf.pending.splice(index, 1);
-    ctx.persist();
     renderLiveFlags();
-    onCardsChanged();
     updateButtons(ctx);
     setStatus('Question added to the Q&A list.');
   });

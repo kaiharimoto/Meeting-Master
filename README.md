@@ -67,12 +67,20 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    draft is advisory; the full-quality transcript still comes after the
    meeting, and anything the live pass missed is caught by the post-meeting
    question detection.
-4. Press **Q** anywhere → the question modal opens.
-5. Type the question, **Tab** → type the answer, **Tab** → type/select the
-   participant who answered (attendees are suggested), **Enter** → the card is
-   saved. (**Shift+Enter** adds a newline inside the answer; **Escape**
-   cancels.)
+4. Two ways to capture, both always available:
+   * **Fast** — type straight into the bar at the top of the Q&A panel and press
+     **Enter**. The cursor stays put, so a run of questions is one continuous
+     action. **More fields…** hands what you've typed to the full card.
+   * **Full** — press **Q** anywhere → the question modal opens.
+5. In the modal: type the question, **Tab** → type the answer, **Tab** →
+   type/select the participant who answered (attendees are suggested),
+   **Enter** → the card is saved. (**Ctrl+Enter** saves and keeps the modal open
+   for the next question; **Shift+Enter** adds a newline inside the answer;
+   **Escape** cancels.)
 6. Repeat for every notable Q&A. Click any card to edit it in place.
+   **Ctrl+K** opens a command palette — every action in the app by name,
+   filtered to the ones that are actually available right now. Press **?** for
+   the full shortcut list.
 
 **After the meeting**
 

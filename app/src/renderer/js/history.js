@@ -4,6 +4,7 @@
 
 import { showError } from './status.js';
 import { buildEmptyState } from './emptyState.js';
+import { openModal, closeModal } from './modalKit.js';
 
 const HISTORY_KEY = 'meetingmaster.history.v1';
 const MAX_SNAPSHOTS = 60;
@@ -87,9 +88,9 @@ export function saveCurrentToHistory() {
   return true;
 }
 
-function openHistory() {
+export function openHistory() {
   renderList();
-  backdrop.hidden = false;
+  openModal(backdrop, closeBtn);
 }
 
 function fmtSaved(iso) {
@@ -188,5 +189,5 @@ function openSnapshot(snap) {
 }
 
 function close() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
 }

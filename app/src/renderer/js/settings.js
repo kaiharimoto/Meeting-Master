@@ -4,6 +4,8 @@
 // exist in the renderer because the USER typed or pasted them here — they are
 // never RETURNED to the renderer (getFullConfig reports hasToken, not token).
 
+import { openModal, closeModal } from './modalKit.js';
+
 let ctx = null;
 let onSaved = null;
 
@@ -270,8 +272,7 @@ export async function openSettings({ welcome = false } = {}) {
     zoomEl.value = saved;
   }
 
-  backdrop.hidden = false;
-  codeInput.focus();
+  openModal(backdrop, codeInput);
 }
 
 // Fill the default-microphone picker. A saved device that is currently
@@ -389,10 +390,8 @@ async function onSave() {
 }
 
 function closeSettings() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
   clearErrors();
-  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-  document.body.focus();
 }
 
 function showError(el, message) {

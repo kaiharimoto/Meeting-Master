@@ -72,6 +72,7 @@
         <div class="meeting-main">
         <div class="screen-head">
           <h2 class="screen-title">Meeting</h2>
+          <span id="save-indicator" class="save-indicator" role="status" aria-live="polite" hidden></span>
           <button id="new-meeting-btn" type="button" class="btn btn-secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>New meeting</button>
         </div>
 
@@ -126,10 +127,19 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               Questions &amp; answers
             </h2>
-            <span class="hint-chip">Press <kbd>Q</kbd> to add a question</span>
+            <span class="hint-chip"><kbd>Q</kbd> for the full card &middot; <kbd>Ctrl</kbd>+<kbd>K</kbd> for anything</span>
           </div>
 
           <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
+
+          <div id="quick-capture" class="quick-capture">
+            <input id="quick-question" type="text" autocomplete="off"
+                   aria-label="Add a question"
+                   placeholder="Type a question, press Enter — it stays here for the next one" />
+            <button id="quick-add-btn" type="button" class="btn btn-primary btn-small">Add</button>
+            <button id="quick-more-btn" type="button" class="btn btn-secondary btn-small"
+                    title="Open the full card with answer and answerer fields">More fields…</button>
+          </div>
 
           <div id="card-list" class="card-list" aria-live="polite"></div>
 
@@ -372,28 +382,32 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
       <h3 id="card-modal-title">New question</h3>
 
+      <!-- No positive tabindex: DOM order already produces the cycle, and
+           positive values reorder the whole document's tab sequence. -->
       <div class="field">
         <label for="card-question">Question</label>
-        <input id="card-question" type="text" tabindex="1" autocomplete="off" />
+        <input id="card-question" type="text" autocomplete="off" />
       </div>
 
       <div class="field">
         <label for="card-answer">Answer</label>
-        <textarea id="card-answer" rows="4" tabindex="2"></textarea>
+        <textarea id="card-answer" rows="4"></textarea>
       </div>
 
       <div class="field">
         <label for="card-participant">Answered by</label>
-        <input id="card-participant" type="text" tabindex="3" autocomplete="off"
+        <input id="card-participant" type="text" autocomplete="off"
                list="participant-options" placeholder="Who gave the answer?" />
         <datalist id="participant-options"></datalist>
       </div>
 
       <div class="modal-actions">
         <span class="keyboard-hint">
-          <kbd>Enter</kbd> save &middot; <kbd>Shift+Enter</kbd> newline in answer &middot; <kbd>Esc</kbd> cancel
+          <kbd>Enter</kbd> save &middot; <kbd>Ctrl+Enter</kbd> save &amp; add another &middot;
+          <kbd>Esc</kbd> cancel
         </span>
         <button id="card-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="card-save-add-btn" type="button" class="btn btn-secondary">Save &amp; add another</button>
         <button id="card-save-btn" type="button" class="btn btn-primary">Save</button>
       </div>
     </div>
@@ -671,8 +685,10 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
       <h3 id="shortcuts-modal-title">Keyboard shortcuts</h3>
       <div class="shortcuts-list">
+        <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Command palette — run anything by name</span></div>
         <div class="shortcut-row"><kbd>Q</kbd><span>Capture a new question</span></div>
         <div class="shortcut-row"><kbd>Enter</kbd><span>Save the open question card</span></div>
+        <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>Save and add another question</span></div>
         <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>Enter</kbd><span>New line inside an answer</span></div>
         <div class="shortcut-row"><kbd>Esc</kbd><span>Close the open dialog</span></div>
         <div class="shortcut-row"><kbd>?</kbd><span>Show these shortcuts</span></div>
@@ -681,6 +697,22 @@
         <span class="keyboard-hint"></span>
         <button id="shortcuts-close-btn" type="button" class="btn btn-primary">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ Command palette (Ctrl+K, hidden by default) ============ -->
+  <div id="palette-modal" class="modal-backdrop palette-backdrop" hidden>
+    <div class="modal palette-modal" role="dialog" aria-modal="true" aria-labelledby="palette-title">
+      <h3 id="palette-title" class="sr-only">Command palette</h3>
+      <input id="palette-input" type="text" class="palette-input" autocomplete="off"
+             role="combobox" aria-expanded="true" aria-controls="palette-list"
+             aria-autocomplete="list" aria-label="Search commands"
+             placeholder="Type a command…" />
+      <ul id="palette-list" class="palette-list" role="listbox" aria-label="Commands"></ul>
+      <p id="palette-empty" class="palette-empty" hidden>No matching command.</p>
+      <p class="keyboard-hint">
+        <kbd>&uarr;</kbd><kbd>&darr;</kbd> choose &middot; <kbd>Enter</kbd> run &middot; <kbd>Esc</kbd> close
+      </p>
     </div>
   </div>
 

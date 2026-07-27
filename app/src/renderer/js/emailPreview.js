@@ -5,6 +5,7 @@
 
 import { showError, setStatus } from './status.js';
 import { copyText } from './clipboard.js';
+import { openModal, closeModal } from './modalKit.js';
 
 let ctx = null;
 let backdrop, toEl, subjectEl, bodyEl, noteEl;
@@ -40,7 +41,7 @@ export function initEmailPreview(context) {
 }
 
 function close() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
 }
 
 export async function openEmailPreview() {
@@ -58,7 +59,7 @@ export async function openEmailPreview() {
     noteEl.textContent = ctx.state.pdfPath
       ? `Attach the PDF: ${ctx.state.pdfPath}`
       : 'Generate the PDF first, then attach it to the email.';
-    backdrop.hidden = false;
+    openModal(backdrop, document.getElementById('em-close'));
     setStatus('Email text ready to copy.');
   } catch (err) {
     showError(err && err.message ? err.message : String(err));

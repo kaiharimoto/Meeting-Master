@@ -5,6 +5,7 @@
 // and adds the kept ones as ordinary (editable) Q&A cards.
 
 import { setStatus } from './status.js';
+import { openModal, closeModal } from './modalKit.js';
 
 let ctx = null;
 let onCardsAdded = null;
@@ -130,44 +131,22 @@ export function initExtractReview(context, opts) {
   noneBtn = document.getElementById('extract-none-btn');
 
   addBtn.addEventListener('click', addSelected);
-  cancelBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', close);
   allBtn.addEventListener('click', () => setAll(true));
   noneBtn.addEventListener('click', () => setAll(false));
 
   backdrop.addEventListener('mousedown', (e) => {
-    if (e.target === backdrop) closeModal();
+    if (e.target === backdrop) close();
   });
   backdrop.addEventListener('keydown', onModalKeydown);
 }
 
-// Visible, enabled focusable controls inside the modal, in DOM order.
-function focusables() {
-  return Array.from(
-    backdrop.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])')
-  ).filter((el) => !el.disabled && el.offsetParent !== null);
-}
-
-// Escape closes; Tab is trapped so focus can never leave the modal (matching
-// the card-capture modal). Without the trap, Tab past the last control would
-// escape to the page behind the backdrop and Escape would stop working.
+// Escape closes. Tab is trapped by modalKit, which owns that behaviour for
+// every dialog (this module used to carry its own copy).
 function onModalKeydown(e) {
   if (e.key === 'Escape') {
     e.preventDefault();
-    closeModal();
-    return;
-  }
-  if (e.key !== 'Tab') return;
-  const items = focusables();
-  if (items.length === 0) return;
-  const first = items[0];
-  const last = items[items.length - 1];
-  const active = document.activeElement;
-  if (e.shiftKey && (active === first || !backdrop.contains(active))) {
-    e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && (active === last || !backdrop.contains(active))) {
-    e.preventDefault();
-    first.focus();
+    close();
   }
 }
 
@@ -227,9 +206,8 @@ export function openExtractModal() {
   listHost.replaceChildren();
   candidates.forEach((q, i) => listHost.append(buildRow(q, i)));
 
-  backdrop.hidden = false;
   updateCount();
-  addBtn.focus();
+  openModal(backdrop, addBtn);
 }
 
 function buildRow(candidate, index) {
@@ -344,7 +322,7 @@ function addSelected() {
   ctx.state.questionsReviewed = true;
   ctx.persist();
 
-  closeModal();
+  close();
   onCardsAdded();
   renderExtractPrompt();
   setStatus(
@@ -354,8 +332,8 @@ function addSelected() {
   );
 }
 
-function closeModal() {
-  backdrop.hidden = true;
+function close() {
+  closeModal(backdrop);
   rows = [];
   listHost.replaceChildren();
 }

@@ -592,6 +592,20 @@ kbd {
   margin-left: auto;
 }
 
+/* Autosave receipt. Sits next to the screen title, never moves the layout:
+   it reserves no space until the first save of the session. */
+.save-indicator {
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  transition: color var(--t-base);
+}
+
+.save-indicator.is-fresh {
+  color: var(--success);
+  font-weight: var(--fw-medium);
+}
+
 /* ---------- Panels ---------- */
 
 .panel {
@@ -760,6 +774,37 @@ kbd {
   flex-wrap: wrap;
   gap: var(--sp-3);
   margin-bottom: 16px;
+}
+
+/* ---------- Inline quick capture ---------- */
+
+/* The fast path: one field, always in the same place, always ready. Deliberately
+   flush with the card list below it so it reads as "row zero" of the list. */
+.quick-capture {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.quick-capture input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font: inherit;
+  color: var(--ink);
+  background: var(--field-bg);
+  transition: border-color var(--t-fast), background var(--t-base);
+}
+
+.quick-capture input::placeholder {
+  color: var(--ink-faint);
+}
+
+.quick-capture input:focus {
+  border-color: var(--accent);
 }
 
 /* ---------- Q&A cards ---------- */
@@ -1399,15 +1444,30 @@ kbd {
 
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--sp-3);
   margin-top: 4px;
 }
 
+/* Button labels never break mid-phrase. */
+.modal-actions .btn {
+  white-space: nowrap;
+}
+
+/* The hint takes its own full-width line above the buttons. With three actions
+   in the capture modal there is no width left to share, and a hint that wraps
+   between the buttons reads as a layout accident. */
 .keyboard-hint {
-  margin-right: auto;
+  flex: 1 1 100%;
   font-size: var(--fs-xs);
   color: var(--ink-soft);
+}
+
+/* Several modals carry the element only as a spacer — don't reserve a line. */
+.keyboard-hint:empty {
+  display: none;
 }
 
 /* Sheet variant: History/Settings render as full content-area screens (the
@@ -1447,6 +1507,70 @@ kbd {
 .modal--sheet .modal h3 {
   font-size: var(--fs-lg);
   letter-spacing: -0.01em;
+}
+
+/* ---------- Command palette ---------- */
+
+/* Above the live rail (60), the popover (80) and the titlebar (90) — the
+   palette must never open UNDER something. Below toasts (200), which are
+   announcements and outrank everything. */
+.palette-backdrop {
+  z-index: 150;
+  padding-top: 14vh;
+}
+
+.palette-modal {
+  width: min(560px, 92vw);
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+}
+
+.palette-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--fs-md);
+  color: var(--ink);
+  background: var(--field-bg);
+}
+
+.palette-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.palette-input:focus {
+  border-color: var(--accent);
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.palette-item {
+  padding: 8px var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Selection is carried by fill AND weight, not colour alone. */
+.palette-item.is-active {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.palette-empty {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
 }
 
 /* ---------- Settings modal ---------- */
