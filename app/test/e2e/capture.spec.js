@@ -72,8 +72,9 @@ test('Q opens the modal; capture, commit, and edit a card with the keyboard', as
   await expect(cards.first()).toContainText('A 12% increase locked for 24 months.');
   await expect(cards.first()).toContainText('Bob Ramirez');
 
-  // Clicking the card reopens the modal prefilled (edit mode).
-  await cards.first().locator('.card-question').click();
+  // The card's pencil reopens the modal prefilled (edit mode). Clicking the
+  // TEXT now edits it in place — that's cardOps.spec.js's business.
+  await cards.first().locator('.card-edit').click();
   await expect(modal).toBeVisible();
   await expect(question).toHaveValue('What is the renewal price?');
   await expect(answer).toHaveValue('A 12% increase locked for 24 months.');
@@ -172,8 +173,9 @@ test('editing an existing card has no "add another" — and Escape restores focu
   await page.keyboard.press('Enter');
   await expect(cards).toHaveCount(1);
 
-  // Open the card for editing from the card itself.
-  await cards.first().locator('.card-question').click();
+  // Open the card for editing — Enter on the focused card, the keyboard path.
+  await cards.first().focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('#card-modal')).toBeVisible();
   await expect(page.locator('#card-save-add-btn')).toBeHidden();
 

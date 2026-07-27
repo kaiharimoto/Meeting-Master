@@ -77,7 +77,11 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    **Enter** → the card is saved. (**Ctrl+Enter** saves and keeps the modal open
    for the next question; **Shift+Enter** adds a newline inside the answer;
    **Escape** cancels.)
-6. Repeat for every notable Q&A. Click any card to edit it in place.
+6. Repeat for every notable Q&A. **Click a question or answer to edit it right
+   there** — Enter saves, Escape reverts, and the pencil on the card opens the
+   full dialog when you need the answerer too. The list is one tab stop:
+   **↑/↓** move between cards, **E** edits the focused one in place, **Delete**
+   removes it (undoable), and **Alt+↑/↓** reorders — or drag a card by its grip.
    **Ctrl+K** opens a command palette — every action in the app by name,
    filtered to the ones that are actually available right now. Press **?** for
    the full shortcut list.

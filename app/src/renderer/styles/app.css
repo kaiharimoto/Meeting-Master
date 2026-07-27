@@ -948,9 +948,11 @@ kbd {
   background: var(--surface-2);
   padding: var(--sp-4) 44px var(--sp-4) var(--sp-4);
   box-shadow: var(--shadow-1);
-  cursor: pointer;
+  /* Not a button any more: the CARD isn't clickable, its text is. */
+  cursor: default;
+  animation: mm-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
   transition: background var(--t-fast), border-color var(--t-fast),
-    transform var(--t-fast), box-shadow var(--t-fast);
+    box-shadow var(--t-fast);
 }
 
 .qa-card:hover {
@@ -959,16 +961,150 @@ kbd {
   box-shadow: var(--shadow-2);
 }
 
+/* The list is one tab stop; the focused card has to say so clearly. */
+.qa-card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .card-question {
   font-weight: var(--fw-bold);
   color: var(--ink);
   margin-bottom: 4px;
+  cursor: text;
 }
 
 .card-answer {
   color: var(--ink-soft);
   white-space: pre-wrap; /* keep Shift+Enter newlines */
   margin-bottom: 6px;
+  cursor: text;
+}
+
+/* ---------- Card actions ----------
+   A floating toolbar rather than reserved gutter: three permanent buttons on
+   every card would cost 80px of text width on every line, forever, to serve a
+   moment. Hidden at rest, present on hover or when the card has focus. */
+
+.card-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+
+.qa-card:hover .card-actions,
+.qa-card:focus-within .card-actions,
+.qa-card.is-dragging .card-actions {
+  opacity: 1;
+}
+
+/* …except while the card is being edited in place: the toolbar floats over the
+   right end of the very field you're typing into. (:focus-within would
+   otherwise reveal it, since the editor holds focus.) */
+.qa-card:has(.card-editor) .card-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.card-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.card-actions button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.card-actions button:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.card-grip {
+  cursor: grab;
+}
+
+.card-grip:active,
+.qa-card.is-dragging .card-grip {
+  cursor: grabbing;
+}
+
+/* ---------- Inline editing ---------- */
+
+/* The editor inherits the slot's type so the text doesn't jump size or weight
+   when it becomes editable — the point is that you're editing the thing you
+   were reading, in place. */
+.card-editor {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-xs);
+  background: var(--field-bg);
+  color: var(--ink);
+  font: inherit;
+  line-height: inherit;
+  resize: none;
+  overflow: hidden;
+}
+
+.card-editor--question {
+  font-weight: var(--fw-bold);
+}
+
+.card-editor--answer {
+  color: var(--ink-soft);
+}
+
+/* ---------- Dragging ---------- */
+
+.qa-card.is-dragging {
+  z-index: 2; /* over its neighbours, under the rail (60) */
+  /* Fully opaque and on the raised surface: a translucent card lets the one it
+     is passing over show through, which reads as a glitch rather than depth. */
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  border-color: var(--accent);
+  cursor: grabbing;
+  animation: none; /* never replay the entrance mid-drag */
+  transition: box-shadow var(--t-fast), border-color var(--t-fast);
+}
+
+/* While reordering, hover highlights would fire on every card the pointer
+   crosses. */
+.card-list.is-reordering .qa-card:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.card-list.is-reordering .qa-card.is-dragging:hover {
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  border-color: var(--accent);
 }
 
 /* ---------- Compact density ----------
@@ -1044,20 +1180,11 @@ kbd {
   padding: 3px var(--sp-3);
 }
 
+/* The × keeps its own hover colour; its position and size now come from
+   .card-actions button. It used to be absolutely positioned itself, which put
+   it on top of the two buttons that joined it in the toolbar. */
 .card-delete {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--ink-faint);
   font-size: var(--fs-md);
-  line-height: 1;
-  cursor: pointer;
-  transition: background var(--t-fast), color var(--t-fast);
 }
 
 .card-delete:hover {

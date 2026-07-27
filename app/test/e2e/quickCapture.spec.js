@@ -116,7 +116,7 @@ test('editing a card through the modal updates its element in place', async ({ p
   });
 
   const card = page.locator('#card-list .qa-card').first();
-  await card.locator('.card-question').click();
+  await card.locator('.card-edit').click();
   await page.locator('#card-question').fill('Rewritten question?');
   await page.locator('#card-answer').fill('And now it has an answer.');
   await page.keyboard.press('Enter');
@@ -125,8 +125,13 @@ test('editing a card through the modal updates its element in place', async ({ p
   await expect(card).toContainText('Rewritten question?');
   // The answer slot appears without rebuilding the card…
   await expect(card).toContainText('And now it has an answer.');
-  // …and the delete button stays last so the layout is unchanged.
-  await expect(card.locator(':scope > *').last()).toHaveClass(/card-delete/);
+  // …in the right place: question, answer, answerer, then the action toolbar.
+  const order = await card.evaluate((el) =>
+    Array.from(el.querySelectorAll('.card-body > *, :scope > .card-actions')).map(
+      (n) => n.className
+    )
+  );
+  expect(order).toEqual(['card-question', 'card-answer', 'card-actions']);
 });
 
 test('the bar hides with the panel body when the Q&A panel collapses', async ({ page }) => {
