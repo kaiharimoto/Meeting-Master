@@ -29,8 +29,11 @@ async function call(channel, ...args) {
 contextBridge.exposeInMainWorld('api', {
   uploadMeeting: (meeting, wavFilePath) => call(CHANNELS.JOB_UPLOAD, meeting, wavFilePath),
   getJobStatus: (jobId) => call(CHANNELS.JOB_STATUS, jobId),
-  renderPdf: (meeting, transcript, summary) =>
-    call(CHANNELS.PDF_RENDER, meeting, transcript, summary),
+  // No transcript argument: it is deliberately not part of the printed
+  // document (see src/main/pdf.js), and it used to be sent here only to be
+  // ignored.
+  renderPdf: (meeting, summary) => call(CHANNELS.PDF_RENDER, meeting, summary),
+  previewPdf: (meeting, summary) => call(CHANNELS.PDF_PREVIEW, meeting, summary),
   openPdf: (pdfPath) => call(CHANNELS.PDF_OPEN, pdfPath),
   sendPdfViaHome: (jobId, pdfPath) => call(CHANNELS.PDF_SEND_HOME, jobId, pdfPath),
   sendPdfViaLaptop: (meeting, pdfPath) => call(CHANNELS.PDF_SEND_LAPTOP, meeting, pdfPath),

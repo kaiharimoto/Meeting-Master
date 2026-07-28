@@ -45,12 +45,14 @@ export function initGenerate(context) {
     pick: document.getElementById('pick-audio-btn'),
     generate: document.getElementById('generate-pdf-btn'),
     open: document.getElementById('open-pdf-btn'),
+    preview: document.getElementById('preview-pdf-btn'),
     send: document.getElementById('send-email-btn'),
   };
 
   els.pick.addEventListener('click', () => guarded(onPickAudio));
   els.generate.addEventListener('click', () => guarded(onGeneratePdf));
   els.open.addEventListener('click', () => guarded(onOpenPdf));
+  if (els.preview) els.preview.addEventListener('click', () => guarded(onPreviewPdf));
   els.send.addEventListener('click', () => guarded(onSendEmail));
 
   // Explicit file upload — bypasses any attached in-app recording.
@@ -434,7 +436,6 @@ async function onGeneratePdf() {
   // placeholder when summary is null.
   const { pdfPath, fontUsed, warning } = await api.renderPdf(
     buildMeetingJson(),
-    ctx.state.transcript,
     ctx.state.summary
   );
 
@@ -450,6 +451,20 @@ async function onGeneratePdf() {
     setStatus(`PDF saved to ${pdfPath}${warning ? ` (${warning})` : ''}`);
     showToast({ kind: 'success', title: 'PDF saved', message: pdfPath });
   }
+}
+
+// The same render as Generate PDF, shown in a window instead of written to
+// disk — same template path, same font injection, same paper geometry. Seeing
+// the document beats generating a file to find out.
+async function onPreviewPdf() {
+  const api = requireApi();
+  if (typeof api.previewPdf !== 'function') {
+    showError('The PDF preview needs a newer version of the desktop app.');
+    return;
+  }
+  setStatus('Opening the preview…', { busy: true });
+  const { warning } = await api.previewPdf(buildMeetingJson(), ctx.state.summary);
+  setStatus(warning ? `Preview open — ${warning}` : 'Preview open in its own window.');
 }
 
 async function onOpenPdf() {

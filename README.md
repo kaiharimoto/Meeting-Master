@@ -102,9 +102,12 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    found — keep the good ones (low-confidence answerers are flagged), fix the
    answerer, and they become normal cards (nothing is added automatically).
    Optionally click **Edit summary** to tweak the Key Takeaways, Decisions,
-   Action Items, Key Figures, and Topics before printing. Then click
-   **Generate PDF** — saved under `Documents\MeetingMaster\`; click **Open PDF**
-   to review it.
+   Action Items, Key Figures, and Topics before printing. Click **Preview** to
+   see the printed document in its own window — the same template, fonts, paper
+   size and margins the PDF will use, so it is a proof rather than an
+   impression; press Preview again after an edit and the same window refreshes.
+   Then click **Generate PDF** — saved under `Documents\MeetingMaster\`; click
+   **Open PDF** to review it.
 10. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
 

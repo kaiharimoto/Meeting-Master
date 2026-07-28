@@ -12,6 +12,7 @@ const CHANNELS = Object.freeze({
   JOB_PROGRESS: 'job:progress',
   PDF_RENDER: 'pdf:render',
   PDF_OPEN: 'pdf:open',
+  PDF_PREVIEW: 'pdf:preview',
   PDF_SEND_HOME: 'pdf:sendHome',
   PDF_SEND_LAPTOP: 'pdf:sendLaptop',
   FILE_PICK_WAV: 'file:pickWav',

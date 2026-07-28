@@ -307,7 +307,8 @@ both the main process (`src/main/ipc.js`) and the preload script.
 | `job:upload` | renderer → main | `uploadMeeting(meeting, wavFilePath) -> {jobId}` |
 | `job:status` | renderer → main | `getJobStatus(jobId) -> Job record` |
 | `job:progress` | **main → renderer** | `onJobProgress(cb)` — `cb({jobId\|null, state, message})`; returns an unsubscribe fn |
-| `pdf:render` | renderer → main | `renderPdf(meeting, transcript, summary) -> {pdfPath, fontUsed, warning\|null}` |
+| `pdf:render` | renderer → main | `renderPdf(meeting, summary) -> {pdfPath, fontUsed, warning\|null}` |
+| `pdf:preview` | renderer → main | `previewPdf(meeting, summary) -> {ok, fontUsed, warning\|null}` — shows the same render in a reusable child window instead of printing it |
 | `pdf:open` | renderer → main | `openPdf(pdfPath) -> {ok}` |
 | `pdf:sendHome` | renderer → main | `sendPdfViaHome(jobId, pdfPath) -> {ok, emailed, error\|null}` |
 | `pdf:sendLaptop` | renderer → main | `sendPdfViaLaptop(meeting, pdfPath) -> {ok, error\|null}` |

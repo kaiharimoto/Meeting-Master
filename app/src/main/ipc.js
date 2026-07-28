@@ -133,9 +133,19 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
 
   // ---- PDF -------------------------------------------------------------------
 
-  handle(CHANNELS.PDF_RENDER, (meeting, transcript, summary) => {
+  handle(CHANNELS.PDF_RENDER, (meeting, summary) => {
     const cfg = config.get();
-    return pdf.renderMeetingPdf({ meeting, transcript, summary, pageSize: cfg.pageSize });
+    return pdf.renderMeetingPdf({ meeting, summary, pageSize: cfg.pageSize });
+  });
+
+  handle(CHANNELS.PDF_PREVIEW, (meeting, summary) => {
+    const cfg = config.get();
+    return pdf.openPdfPreview({
+      meeting,
+      summary,
+      pageSize: cfg.pageSize,
+      parent: getMainWindow(),
+    });
   });
 
   handle(CHANNELS.PDF_OPEN, async (pdfPath) => {

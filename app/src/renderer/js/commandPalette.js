@@ -73,6 +73,7 @@ function commands() {
       openSummaryEdit()
     ),
     command('Fix names', 'spelling merge attendees', () => openNameFix()),
+    button('preview-pdf-btn', 'Preview the PDF', 'print look check page proof'),
     button('generate-pdf-btn', 'Generate PDF', 'print render document'),
     button('open-pdf-btn', 'Open PDF', 'view document'),
     button('send-email-btn', 'Send email', 'mail send deliver'),
