@@ -77,10 +77,19 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    **Enter** → the card is saved. (**Ctrl+Enter** saves and keeps the modal open
    for the next question; **Shift+Enter** adds a newline inside the answer;
    **Escape** cancels.)
-6. Repeat for every notable Q&A. **Click a question or answer to edit it right
+6. Repeat for every notable Q&A. **A question with no answer yet is a normal
+   card, not a broken one** — it shows a faint *"+ Add an answer"* line you can
+   click (or press **A** on the focused card) whenever the answer actually
+   arrives, three minutes later. Every card also carries the moment it was
+   captured (`04:12` into the recording), which is what makes step 9's
+   answer-drafting possible. Type an answerer who isn't on the attendee list and
+   the app offers to add them, so the name is spelled the same everywhere from
+   then on.
+7. **Click a question or answer to edit it right
    there** — Enter saves, Escape reverts, and the pencil on the card opens the
    full dialog when you need the answerer too. The list is one tab stop:
-   **↑/↓** move between cards, **E** edits the focused one in place, **Delete**
+   **↑/↓** move between cards, **E** edits the focused one in place, **A** jumps
+   straight to its answer, **Delete**
    removes it (undoable), and **Alt+↑/↓** reorders — or drag a card by its grip.
    **Ctrl+K** opens a command palette — every action in the app by name,
    filtered to the ones that are actually available right now. Press **?** for
@@ -88,12 +97,12 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **After the meeting**
 
-7. Click **Stop & use recording** — the recording attaches to the meeting.
+8. Click **Stop & use recording** — the recording attaches to the meeting.
    (External recording instead? Click **Upload audio file…** and pick the WAV.)
-8. Click **Generate transcript**. The app uploads the attached recording to
+9. Click **Generate transcript**. The app uploads the attached recording to
    the home server and polls progress
    (queued → normalizing → transcribing → transcript ready).
-9. When the transcript is ready, the **Fix names** review opens automatically:
+10. When the transcript is ready, the **Fix names** review opens automatically:
    every name found in the transcript is listed with its count, sound-alike
    misspellings come pre-suggested for merging into your attendees, and
    corrections rewrite the stored transcript BEFORE any AI reads it. Click
@@ -101,6 +110,14 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    **"detected questions"** prompt may appear in the Q&A panel. Click **Review & add** to approve the Q&A pairs it
    found — keep the good ones (low-confidence answerers are flagged), fix the
    answerer, and they become normal cards (nothing is added automatically).
+   Left some answers blank during the meeting? Click **Fill blank answers** —
+   for each unanswered card the server reads only the conversation *around the
+   moment you wrote that question down* (45 seconds before, three and a half
+   minutes after) and drafts the answer from it, rather than searching the whole
+   recording. The drafts open in a review: confident ones are pre-ticked, unsure
+   ones are flagged **check this one** and start unticked, every answer is
+   editable before you accept it, and a question the transcript genuinely never
+   answered is simply left blank.
    Optionally click **Edit summary** to tweak the Key Takeaways, Decisions,
    Action Items, Key Figures, and Topics before printing. Click **Preview** to
    see the printed document in its own window — the same template, fonts, paper
@@ -108,7 +125,7 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    impression; press Preview again after an edit and the same window refreshes.
    Then click **Generate PDF** — saved under `Documents\MeetingMaster\`; click
    **Open PDF** to review it.
-10. Click **Send email**. The home server emails the PDF to the preset
+11. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
 
 **Accessibility.** Settings carries two controls that stay out of each other's
@@ -129,6 +146,9 @@ toggle for long meetings. All four preferences are remembered.
 
 Past meetings are saved automatically (and via **History → Save current**);
 reopen any of them from the **History** button to review, regenerate, or re-send.
+A recurring meeting doesn't need retyping: **Start like this** on any saved
+meeting opens a fresh one carrying its title, time, attendees and recipients,
+dated today — no cards, no transcript, no recording.
 Any server-side job can also be pulled back in from **Activity → Open in
 Meeting** — including on the home server itself, where the app window is the
 same meeting UI with the server dashboard as a sidebar tab (v0.5.0+). If the local model can't summarize a meeting, **Copy AI prompt**

@@ -1072,6 +1072,35 @@ kbd {
   cursor: text;
 }
 
+/* A question with no answer yet. The slot stays in the DOM so it can be
+   clicked (and so `A` has something to focus) — and reading as an invitation
+   rather than as content makes "which of these still needs an answer?"
+   answerable at a glance down the list. */
+.card-answer.is-blank {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.card-answer.is-blank::before {
+  content: "+ ";
+  font-style: normal;
+}
+
+.qa-card:hover .card-answer.is-blank,
+.qa-card:focus-within .card-answer.is-blank {
+  color: var(--accent);
+}
+
+/* When the question was captured, in recording time. Quiet — it is a
+   reference, not a fact about the meeting. */
+.card-stamp {
+  display: inline-block;
+  margin-left: var(--sp-2);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
 /* ---------- Card actions ----------
    A floating toolbar rather than reserved gutter: three permanent buttons on
    every card would cost 80px of text width on every line, forever, to serve a
@@ -1258,6 +1287,12 @@ kbd {
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin-bottom: var(--sp-1);
+}
+
+/* The placeholder is one short line — clamping it does nothing but break the
+   ::before marker's layout. */
+.card-list[data-density="compact"] .card-answer.is-blank {
+  display: block;
 }
 
 .card-participant {
@@ -1915,6 +1950,25 @@ kbd {
 .modal--sheet .modal h3 {
   font-size: var(--fs-lg);
   letter-spacing: -0.01em;
+}
+
+/* Drafted-answer review rows: the answer is EDITABLE in the review, because a
+   draft that is 90% right should cost a word change, not a rejection. */
+.answer-draft {
+  width: 100%;
+  margin-top: var(--sp-2);
+  padding: 7px 9px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--field-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  resize: vertical;
+}
+
+.answer-draft:focus {
+  border-color: var(--accent);
 }
 
 /* ---------- Command palette ---------- */

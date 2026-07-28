@@ -10,12 +10,13 @@ seemed aimed at / who could answer — a softer culling aid).
 See _ollama.py for the shared chat/token helpers.
 """
 
+import asyncio
 import logging
 
 import httpx
 
 from ..config import Settings
-from ..models import ExtractedQuestion, MeetingMeta
+from ..models import AnsweredQuestion, ExtractedQuestion, MeetingMeta
 from . import _ollama
 
 log = logging.getLogger(__name__)
@@ -27,6 +28,33 @@ _MAX_QUESTIONS = 30
 # meeting is running, and a slow/hung call would queue behind itself. The
 # window is small, so a healthy Ollama answers well inside this.
 LIVE_TIMEOUT = httpx.Timeout(60.0, connect=5.0)
+
+# Answer-drafting runs after the meeting with the operator waiting on it, so
+# it can afford longer than the live path but not the full summarize budget.
+ANSWER_TIMEOUT = httpx.Timeout(180.0, connect=5.0)
+
+# One question at a time, but several in flight — each has its own transcript
+# window, so batching them into one prompt would just invite cross-talk.
+_ANSWER_CONCURRENCY = 3
+
+_ANSWER_SYSTEM_PROMPT = (
+    "You are a meeting-analysis assistant. You are given ONE question that a "
+    "note-taker wrote down during a meeting, and the part of the transcript "
+    "around the moment they wrote it. Find the answer that was actually given "
+    "in that excerpt.\n\n"
+    "Output:\n"
+    "- answer: the answer as it was given, concise but complete. If the "
+    "excerpt does not contain an answer, use an empty string.\n"
+    "- answerer: the name of the person who gave the answer, chosen from the "
+    "listed attendees when the transcript makes it clear who spoke; otherwise "
+    "an empty string. Never guess a name the transcript does not support.\n"
+    "- confidence: 'high' only if the excerpt plainly contains the answer, "
+    "otherwise 'low'.\n\n"
+    "Use ONLY what is in the excerpt. NEVER invent an answer — an empty answer "
+    "is a correct and useful result when the excerpt does not contain one.\n"
+    'Respond with ONLY a JSON object of this exact shape:\n'
+    '{"answer": "...", "answerer": "...", "confidence": "high or low"}'
+)
 
 _SCHEMA_HINT = (
     'Respond with ONLY a JSON object of this exact shape:\n'
@@ -201,3 +229,70 @@ async def run(
             )
             collected.extend(_coerce(parsed))
         return _dedupe(collected)
+
+
+# ---- Answer drafting for operator-captured questions -------------------------
+
+
+def _coerce_answer(parsed, card_id: str) -> AnsweredQuestion:
+    """One model reply -> an AnsweredQuestion, defensively.
+
+    An unparseable or empty reply is not an error: "no answer in this excerpt"
+    is a legitimate outcome, and the operator sees the blank and moves on.
+    """
+    if not isinstance(parsed, dict):
+        return AnsweredQuestion(id=card_id, confidence="low")
+    answer = str(parsed.get("answer") or "").strip()
+    answerer = str(parsed.get("answerer") or "").strip()
+    confidence = str(parsed.get("confidence") or "").strip().lower()
+    # An answer with nobody attached, or no answer at all, is never "high".
+    if confidence != "high" or not answer or not answerer:
+        confidence = "low"
+    return AnsweredQuestion(
+        id=card_id, answer=answer, answerer=answerer, confidence=confidence
+    )
+
+
+async def run_answers(
+    items: list[dict],
+    attendees: list[str],
+    settings: Settings,
+) -> list[AnsweredQuestion]:
+    """Draft an answer for each captured question from its transcript window.
+
+    ``items`` are ``{"id", "question", "window"}`` — the route owns slicing the
+    window out of the transcript, because only it has the timed segments.
+    Questions run concurrently (bounded), and one failure yields an empty
+    answer for that question rather than failing the whole request: a partial
+    result is still useful, and the operator approves each one anyway.
+    """
+    attendee_line = ", ".join(attendees) if attendees else "(not listed)"
+    semaphore = asyncio.Semaphore(_ANSWER_CONCURRENCY)
+
+    async def draft(client: httpx.AsyncClient, item: dict) -> AnsweredQuestion:
+        card_id = str(item.get("id") or "")
+        question = str(item.get("question") or "").strip()
+        window = str(item.get("window") or "").strip()
+        if not question or not window:
+            return AnsweredQuestion(id=card_id, confidence="low")
+        user_prompt = (
+            f"Attendees: {attendee_line}\n\n"
+            f"Question written down by the note-taker:\n{question}\n\n"
+            "Transcript around the moment it was written "
+            "(machine-transcribed; names may be misspelled):\n\n"
+            f"{window}"
+        )
+        async with semaphore:
+            try:
+                parsed = await _ollama.chat_json(
+                    client, settings, _ANSWER_SYSTEM_PROMPT, user_prompt,
+                    num_predict=settings.LIVE_EXTRACT_NUM_PREDICT,
+                    temperature=settings.EXTRACT_TEMPERATURE,
+                )
+            except Exception as exc:  # one bad question must not sink the rest
+                log.warning("Answer drafting failed for card %s: %s", card_id, exc)
+                return AnsweredQuestion(id=card_id, confidence="low")
+        return _coerce_answer(parsed, card_id)
+
+    async with httpx.AsyncClient(timeout=ANSWER_TIMEOUT) as client:
+        return list(await asyncio.gather(*(draft(client, i) for i in items)))

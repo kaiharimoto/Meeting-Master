@@ -202,6 +202,35 @@ Job record shape:
 `error` is `null` unless `state` is `failed`. Segment `start`/`end` are
 **seconds** (float) — the server converts whisper.cpp's millisecond offsets.
 
+### `POST /jobs/{id}/answers`
+
+- Auth: Bearer token.
+- Body:
+
+  ```json
+  {
+    "questions": [ { "id": "str", "question": "str", "atMs": 125000 } ],
+    "attendees": ["str"]
+  }
+  ```
+
+- Drafts an answer for each question from **only the slice of transcript around
+  the moment it was written down** — 45 s before `atMs` through 210 s after —
+  rather than the whole recording. `atMs` is the elapsed recording time the
+  laptop stamped onto the card at capture (`null` for cards captured outside a
+  recording, which fall back to the full transcript). Answering is one bounded-
+  concurrency chat call per question, so one bad question can't sink the batch.
+- Requires a transcript: unknown id → `404`, no transcript yet → `409`, Ollama
+  unreachable → `502`. At most 25 questions per request.
+- Response: `200`
+
+  ```json
+  {"answers": [ { "id": "str", "answer": "str", "answerer": "str", "confidence": "high|low" } ]}
+  ```
+
+  An empty `answer` means the window did not contain one — the laptop leaves
+  that card blank rather than inventing something.
+
 ### `POST /jobs/{id}/pdf`
 
 - Auth: Bearer token.
@@ -307,6 +336,7 @@ both the main process (`src/main/ipc.js`) and the preload script.
 | `job:upload` | renderer → main | `uploadMeeting(meeting, wavFilePath) -> {jobId}` |
 | `job:status` | renderer → main | `getJobStatus(jobId) -> Job record` |
 | `job:progress` | **main → renderer** | `onJobProgress(cb)` — `cb({jobId\|null, state, message})`; returns an unsubscribe fn |
+| `job:draftAnswers` | renderer → main | `draftAnswers(jobId, questions, attendees) -> {answers}` — drafts answers for blank cards from the transcript around each card's capture stamp |
 | `pdf:render` | renderer → main | `renderPdf(meeting, summary) -> {pdfPath, fontUsed, warning\|null}` |
 | `pdf:preview` | renderer → main | `previewPdf(meeting, summary) -> {ok, fontUsed, warning\|null}` — shows the same render in a reusable child window instead of printing it |
 | `pdf:open` | renderer → main | `openPdf(pdfPath) -> {ok}` |

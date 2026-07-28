@@ -149,6 +149,21 @@ test('start → chunks land in order → pause freezes the timer → stop attach
   expect(firstAppend.args[1]).toBe(0); // seq
   expect(firstAppend.args[2]).toBeGreaterThan(0); // chunk bytes
 
+  // A question captured WHILE the recording runs is stamped with how far into
+  // it we are. That stamp is what lets the home server answer the question
+  // from the right ninety seconds of the transcript afterwards, so it has to
+  // come from the real recorder clock — not a stub.
+  await page.locator('#quick-question').click();
+  await page.keyboard.type('Asked while the tape is rolling?');
+  await page.keyboard.press('Enter');
+  const stamped = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('meetingmaster.meeting.v1')).cards[0]
+  );
+  expect(typeof stamped.atMs).toBe('number');
+  expect(stamped.atMs).toBeGreaterThan(0);
+  expect(stamped.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  await expect(page.locator('#card-list .qa-card .card-stamp')).toHaveText(/^\d{2}:\d{2}$/);
+
   // Pause: timer text freezes.
   await page.locator('#rec-pause-btn').click();
   await expect(page.locator('#rec-resume-btn')).toBeVisible();

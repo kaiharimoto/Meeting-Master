@@ -244,6 +244,7 @@
             <button id="pick-audio-btn" type="button" class="btn btn-primary">Generate transcript</button>
             <button id="start-ai-btn" type="button" class="btn btn-primary" disabled
                     title="Run the AI summary + question detection on the (name-corrected) transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Start AI</button>
+            <button id="fill-answers-btn" type="button" class="btn btn-secondary" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>Fill blank answers</button>
             <button id="edit-summary-btn" type="button" class="btn btn-secondary">Edit summary</button>
             <button id="generate-pdf-btn" type="button" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Generate PDF</button>
             <button id="preview-pdf-btn" type="button" class="btn btn-secondary"
@@ -467,6 +468,28 @@
         <span class="keyboard-hint">Approved questions become normal, editable cards.</span>
         <button id="extract-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
         <button id="extract-add-btn" type="button" class="btn btn-primary">Add selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Drafted answers review (hidden by default) ============ -->
+  <div id="answers-modal" class="modal-backdrop" hidden>
+    <div class="modal extract-modal" role="dialog" aria-modal="true" aria-labelledby="answers-modal-title">
+      <h3 id="answers-modal-title">Answers from the transcript</h3>
+      <p id="answers-intro" class="extract-intro"></p>
+
+      <div class="extract-toolbar">
+        <span id="answers-count" class="extract-count"></span>
+      </div>
+
+      <div id="answers-list" class="extract-list"></div>
+
+      <div class="modal-actions">
+        <span class="keyboard-hint">
+          Edit anything before you use it — these go straight onto your cards.
+        </span>
+        <button id="answers-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="answers-apply-btn" type="button" class="btn btn-primary">Use selected</button>
       </div>
     </div>
   </div>
@@ -750,6 +773,7 @@
         <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>Enter</kbd><span>New line inside an answer</span></div>
         <div class="shortcut-row"><kbd>&uarr;</kbd><kbd>&darr;</kbd><span>Move between question cards</span></div>
         <div class="shortcut-row"><kbd>E</kbd><span>Edit the focused question where it sits</span></div>
+        <div class="shortcut-row"><kbd>A</kbd><span>Add or edit the focused question's answer</span></div>
         <div class="shortcut-row"><kbd>Del</kbd><span>Delete the focused question (undoable)</span></div>
         <div class="shortcut-row"><kbd>Alt</kbd>+<kbd>&uarr;</kbd><kbd>&darr;</kbd><span>Reorder the focused question</span></div>
         <div class="shortcut-row"><kbd>Esc</kbd><span>Close the open dialog, or abandon an edit</span></div>

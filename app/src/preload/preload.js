@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('api', {
   // ignored.
   renderPdf: (meeting, summary) => call(CHANNELS.PDF_RENDER, meeting, summary),
   previewPdf: (meeting, summary) => call(CHANNELS.PDF_PREVIEW, meeting, summary),
+  draftAnswers: (jobId, questions, attendees) =>
+    call(CHANNELS.JOB_DRAFT_ANSWERS, jobId, questions, attendees),
   openPdf: (pdfPath) => call(CHANNELS.PDF_OPEN, pdfPath),
   sendPdfViaHome: (jobId, pdfPath) => call(CHANNELS.PDF_SEND_HOME, jobId, pdfPath),
   sendPdfViaLaptop: (meeting, pdfPath) => call(CHANNELS.PDF_SEND_LAPTOP, meeting, pdfPath),

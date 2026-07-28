@@ -16,6 +16,7 @@ import { buildEmptyState } from './emptyState.js';
 import { flip, animateOut } from './flip.js';
 import { initCardEdit, startInlineEdit, isEditing } from './cardEdit.js';
 import { initCardDrag, bindDragHandle } from './cardDrag.js';
+import { offerAttendees } from './attendees.js';
 
 let ctx = null;
 let onEditCard = null;
@@ -76,6 +77,7 @@ export function updateCard(id, patch) {
   }
   ctx.persist();
   renderCards();
+  if (patch.participant) offerAttendees([patch.participant]);
 }
 
 /** Move a card to `toIndex`, with an Undo toast that restores the old order. */
@@ -305,21 +307,74 @@ function updateCardEl(el, card) {
   const del = el.querySelector('.card-delete');
   if (del.getAttribute('aria-label') !== label) del.setAttribute('aria-label', label);
 
-  const answerAdded = syncSlot(body, 'card-answer', 'div', card.answer);
+  // The answer slot ALWAYS exists, even when empty. Removing it when there was
+  // no answer meant the one thing an operator does most — write down the
+  // question now, add the answer when it arrives — was the one thing inline
+  // editing couldn't do, because there was nothing on the card to click.
+  const answerAdded = syncAnswer(body, card.answer);
   const participantAdded = syncSlot(body, 'card-participant', 'span', card.participant);
+  syncStamp(body, card);
 
   // Appending only when a slot was just created keeps the common path from
   // detaching and reattaching nodes (which would drop focus, or an open
   // inline editor, out of the card).
   if (answerAdded || participantAdded) {
     const parts = [question];
-    for (const cls of ['card-answer', 'card-participant']) {
+    for (const cls of ['card-answer', 'card-participant', 'card-stamp']) {
       const node = body.querySelector('.' + cls);
       if (node) parts.push(node);
     }
     body.append(...parts);
   }
   return el;
+}
+
+// The answer, or an invitation to write one. `.is-blank` is what the operator
+// scans for: which questions still need an answer.
+const ANSWER_PLACEHOLDER = 'Add an answer';
+
+function syncAnswer(host, text) {
+  let node = host.querySelector('.card-answer');
+  const created = !node;
+  if (!node) {
+    node = document.createElement('div');
+    node.className = 'card-answer';
+    host.append(node);
+  }
+  const blank = !text;
+  const wanted = blank ? ANSWER_PLACEHOLDER : text;
+  if (node.textContent !== wanted) node.textContent = wanted;
+  node.classList.toggle('is-blank', blank);
+  return created;
+}
+
+// When the question was captured, as minutes into the recording. Only shown
+// for cards that carry the stamp — cards typed outside a recording, and every
+// card from before this existed, simply don't have one.
+function syncStamp(host, card) {
+  const at = typeof card.atMs === 'number' ? card.atMs : null;
+  let node = host.querySelector('.card-stamp');
+  if (at === null) {
+    if (node) node.remove();
+    return;
+  }
+  if (!node) {
+    node = document.createElement('span');
+    node.className = 'card-stamp';
+    host.append(node);
+  }
+  const text = fmtStamp(at);
+  if (node.textContent !== text) {
+    node.textContent = text;
+    node.title = `Captured ${text} into the recording`;
+  }
+}
+
+function fmtStamp(ms) {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // Creates, updates or removes one optional slot. True when it was created.
@@ -402,6 +457,15 @@ function onListKeydown(e) {
       const live = liveCard(id);
       const slot = card.querySelector('.card-question');
       if (live && slot) startInlineEdit(live, slot, 'question');
+      break;
+    }
+    case 'a': {
+      // Jump straight into the ANSWER. The answer arrives a minute after the
+      // question in every real meeting, so this is the key that gets used.
+      e.preventDefault();
+      const live = liveCard(id);
+      const slot = card.querySelector('.card-answer');
+      if (live && slot) startInlineEdit(live, slot, 'answer');
       break;
     }
     case 'Enter': {

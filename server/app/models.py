@@ -57,6 +57,28 @@ class ExtractedQuestion(BaseModel):
     confidence: str = "high"
 
 
+class AnsweredQuestion(BaseModel):
+    """An answer the AI drafted for a question the OPERATOR captured.
+
+    The inverse of ExtractedQuestion: there the AI finds the question, here the
+    question is already known (typed during the meeting) and only the answer is
+    missing. Carries the card ``id`` so the laptop can match the answer back to
+    the exact card without string-matching questions it may since have edited.
+
+    Like every AI output in this app, it is a SUGGESTION — the operator approves
+    each one before it touches a card.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    answer: str = ""
+    answerer: str = ""
+    # "high" when the transcript window plainly contains the answer; "low" when
+    # the model had to reach. Empty answer is always low.
+    confidence: str = "high"
+
+
 class ActionItem(BaseModel):
     """A follow-up task extracted from the meeting: what to do, who owns it,
     when it's due, and how urgent. Rendered as a ruled table in the PDF."""

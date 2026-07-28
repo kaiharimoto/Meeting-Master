@@ -44,6 +44,14 @@ CANNED_QUESTIONS = [
     }
 ]
 
+# The answer-drafting stage (POST /jobs/{id}/answers) asks for ONE answer to a
+# question it already has, so it gets its own canned reply shape.
+CANNED_ANSWER = {
+    "answer": "A 12% increase locked for 24 months.",
+    "answerer": "Bob",
+    "confidence": "high",
+}
+
 _TESTS_DIR = Path(__file__).resolve().parent
 _STUBS_DIR = _TESTS_DIR / "stubs"
 _TMP = Path(tempfile.mkdtemp(prefix="meeting-master-tests-"))
@@ -74,9 +82,12 @@ class _FakeOllamaHandler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802 (BaseHTTPRequestHandler API)
         length = int(self.headers.get("Content-Length") or 0)
         request = self.rfile.read(length).decode("utf-8", "replace")
-        # The stages carry distinctive schema keywords in their prompts:
-        # extraction asks for "answerer"; summarization asks for "keyTakeaways".
-        if "answerer" in request:
+        # The stages carry distinctive keywords in their prompts. Answer
+        # drafting is checked FIRST: its schema also mentions "answerer", so
+        # the broader extraction branch below would otherwise swallow it.
+        if "written down by the note-taker" in request:
+            content = json.dumps(CANNED_ANSWER)
+        elif "answerer" in request:
             content = json.dumps({"questions": CANNED_QUESTIONS})
         elif "keyTakeaways" in request:
             content = json.dumps(CANNED_SUMMARY_SECTIONS)

@@ -10,6 +10,7 @@ import { showProblem, clearProblem } from './problems.js';
 import { FIRST_TRANSCRIPT_KEY } from './checklist.js';
 import { copyText } from './clipboard.js';
 import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
+import { refreshFillButton } from './answerFill.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -595,6 +596,9 @@ export function updateButtons(context) {
     const jobId = c.state.job && c.state.job.id;
     emailBtn.disabled = !hasApi || !jobId || typeof c.api.getEmailPreview !== 'function';
   }
+  // Owned by answerFill.js — it depends on how many cards are still blank,
+  // which nothing else here tracks.
+  refreshFillButton();
 }
 
 // ---- Transcript / external-AI escape hatch ----------------------------------

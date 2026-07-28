@@ -46,6 +46,7 @@ const CHANNELS = Object.freeze({
   JOB_EMAIL_PREVIEW: 'job:emailPreview',
   JOB_NAMES_GET: 'job:namesGet',
   JOB_NAMES_APPLY: 'job:namesApply',
+  JOB_DRAFT_ANSWERS: 'job:draftAnswers',
   FILE_SAVE_TEXT: 'file:saveText',
   // In-app recording (v0.8.0)
   REC_START: 'rec:start',

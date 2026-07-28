@@ -72,6 +72,8 @@ function commands() {
     command('Edit summary', 'takeaways decisions action items figures topics', () =>
       openSummaryEdit()
     ),
+    button('fill-answers-btn', 'Fill blank answers from the transcript',
+      'draft ai missing empty gaps'),
     command('Fix names', 'spelling merge attendees', () => openNameFix()),
     button('preview-pdf-btn', 'Preview the PDF', 'print look check page proof'),
     button('generate-pdf-btn', 'Generate PDF', 'print render document'),

@@ -7,6 +7,7 @@
 
 import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
 import { openModal, closeModal, isModalOpen } from './modalKit.js';
+import { offerAttendees } from './attendees.js';
 
 let ctx = null;
 let onCardsChanged = null;
@@ -28,18 +29,31 @@ function makeId() {
  * The single commit path for a new card. Returns the created card so callers
  * can reference it (the quick bar announces it; the modal keeps its id).
  * Persists and notifies — callers only decide what to do with focus.
+ *
+ * Every card is stamped with WHEN it was captured:
+ *   capturedAt  wall clock, always — the meeting's own timeline
+ *   atMs        milliseconds into the recording, when one is rolling
+ *
+ * atMs is the one that earns its keep: it is what lets the home server answer
+ * a blank question from the right ninety seconds of the transcript instead of
+ * hunting through the whole meeting. It is written once, at capture, because
+ * that is the only moment the app knows it.
  */
 export function addCard({ question, answer = '', participant = '' }) {
+  const atMs = typeof ctx.recElapsedMs === 'function' ? ctx.recElapsedMs() : null;
   const card = {
     id: makeId(),
     question: String(question || '').trim(),
     answer: String(answer || '').trim(),
     participant: String(participant || '').trim(),
+    capturedAt: new Date().toISOString(),
   };
+  if (typeof atMs === 'number') card.atMs = Math.round(atMs);
   if (!card.question) return null;
   ctx.state.cards.push(card);
   ctx.persist();
   onCardsChanged();
+  if (card.participant) offerAttendees([card.participant]);
   return card;
 }
 
@@ -149,12 +163,14 @@ function commit({ keepOpen }) {
   }
 
   if (editingCard) {
-    // Edit mode: mutate in place so the card keeps its id and position.
+    // Edit mode: mutate in place so the card keeps its id, position and the
+    // capture stamps that let the AI find its answer later.
     editingCard.question = question;
     editingCard.answer = answer;
     editingCard.participant = participant;
     ctx.persist();
     onCardsChanged();
+    if (participant) offerAttendees([participant]);
   } else {
     addCard({ question, answer, participant });
   }

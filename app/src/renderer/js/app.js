@@ -29,6 +29,8 @@ import { initAppUpdate } from './appUpdate.js';
 import { initCommandPalette } from './commandPalette.js';
 import { initSaveIndicator } from './saveIndicator.js';
 import { initShell } from './shell.js';
+import { initAttendees, resetAttendeePrompts } from './attendees.js';
+import { initAnswerFill } from './answerFill.js';
 import { isTypingTarget, anyModalOpen } from './keys.js';
 import { openModal, closeModal } from './modalKit.js';
 
@@ -135,9 +137,11 @@ function boot() {
   initStatus(ctx);
   initDetailsForm(ctx);
   initCardList(ctx, { onEditCard: (card) => openCardModal(card) });
+  initAttendees(ctx, { onChanged: () => renderDetailsForm(ctx) });
   initCapture(ctx, { onCardsChanged: () => renderCards(ctx) });
   initQuickCapture();
   initExtractReview(ctx, { onCardsAdded: () => renderCards(ctx) });
+  initAnswerFill(ctx, { onCardsChanged: () => updateButtons(ctx) });
   initGenerate(ctx);
   initRecorder(ctx); // after initGenerate — it drives the upload buttons' state
   initLiveTranscript(ctx);
@@ -160,6 +164,7 @@ function boot() {
   const fixNamesBtn = document.getElementById('fix-names-btn');
   if (fixNamesBtn) fixNamesBtn.addEventListener('click', () => openNameFix());
   initHistory(ctx, {
+    onStartFrom: (seed) => startNewMeeting(seed),
     onOpened: () => {
       ctx.renderAll();
       // A restored snapshot might still be mid-pipeline — pick polling back up.
@@ -251,7 +256,10 @@ function boot() {
     });
   }
 
-  document.getElementById('new-meeting-btn').addEventListener('click', () => {
+  // One reset, two entry points: the New meeting button, and History's "Start
+  // like this" (which hands over a seed of details/recipients/options to keep,
+  // and nothing else).
+  function startNewMeeting(seed) {
     if (typeof ctx.recActive === 'function' && ctx.recActive()) {
       showError('A recording is in progress — stop or discard it before starting a new meeting.');
       return;
@@ -267,13 +275,23 @@ function boot() {
     saveCurrentToHistory();
     // Replace contents in place — modules hold a reference to `state`.
     Object.assign(state, defaultState());
+    if (seed) {
+      if (seed.details) Object.assign(state.details, seed.details);
+      if (Array.isArray(seed.recipients)) state.recipients = seed.recipients;
+      if (seed.options) Object.assign(state.options, seed.options);
+    }
     ctx.persist();
     hideLivePane(); // a new meeting starts with a clean live-transcript pane
+    resetAttendeePrompts(); // a new roster, so ask about names again
     clearAllProblems(); // stale failure cards belong to the previous meeting
     ctx.renderAll();
     // Kill any interval still polling the previous meeting's job.
     maybeResumePolling();
-    setStatus('New meeting started.');
+    setStatus(
+      seed
+        ? 'New meeting started from a saved one — details and recipients carried over.'
+        : 'New meeting started.'
+    );
     if (previous) {
       showToast({
         kind: 'info',
@@ -291,7 +309,9 @@ function boot() {
         },
       });
     }
-  });
+  }
+
+  document.getElementById('new-meeting-btn').addEventListener('click', () => startNewMeeting(null));
 
   ctx.renderAll();
   // Only the launch-time refresh auto-opens Settings when unconfigured.

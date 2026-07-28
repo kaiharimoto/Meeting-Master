@@ -126,6 +126,14 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return homeClient.applyJobNames(jobId, mapping || {});
   });
 
+  handle(CHANNELS.JOB_DRAFT_ANSWERS, (jobId, questions, attendees) => {
+    if (!jobId) throw new Error('Upload the meeting first — answers are drafted from its transcript.');
+    return homeClient.draftAnswers(jobId, {
+      questions: Array.isArray(questions) ? questions : [],
+      attendees: Array.isArray(attendees) ? attendees : [],
+    });
+  });
+
   handle(CHANNELS.JOB_PROMPT, async (jobId) => {
     if (!jobId) throw new Error('No job to fetch a prompt for.');
     return { text: await homeClient.getJobPrompt(jobId) };

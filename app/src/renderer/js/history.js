@@ -18,11 +18,13 @@ const SNAPSHOT_FIELDS = [
 
 let ctx = null;
 let onOpened = null;
+let onStartFrom = null;
 let backdrop, listHost, saveBtn, closeBtn;
 
 export function initHistory(context, opts) {
   ctx = context;
   onOpened = (opts && opts.onOpened) || function () {};
+  onStartFrom = (opts && opts.onStartFrom) || function () {};
 
   backdrop = document.getElementById('history-modal');
   listHost = document.getElementById('history-list');
@@ -145,6 +147,15 @@ function renderList() {
     open.textContent = 'Open';
     open.addEventListener('click', () => openSnapshot(snap));
 
+    const reuse = document.createElement('button');
+    reuse.type = 'button';
+    reuse.className = 'btn btn-secondary btn-small';
+    reuse.textContent = 'Start like this';
+    reuse.title =
+      'Start a NEW meeting with this one\u2019s title, attendees and recipients — ' +
+      'and none of its content';
+    reuse.addEventListener('click', () => startFrom(snap));
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn btn-secondary btn-small history-del';
@@ -155,10 +166,44 @@ function renderList() {
       renderList();
     });
 
-    actions.append(open, del);
+    actions.append(open, reuse, del);
     row.append(info, actions);
     listHost.append(row);
   });
+}
+
+// The same people, the same title, the same distribution list, week after
+// week — and today none of it carries over, so a recurring review costs two
+// minutes of retyping before anyone has said anything. This copies the SETUP
+// and nothing else: no cards, no recording, no transcript, no summary, no job.
+function startFrom(snap) {
+  if (typeof ctx.recActive === 'function' && ctx.recActive()) {
+    showError('A recording is in progress — stop or discard it before starting a new meeting.');
+    return;
+  }
+  // app.js owns the reset (and snapshotting the outgoing meeting to History,
+  // exactly as "New meeting" does) — this only says what to seed it with.
+  const details = (snap.details && typeof snap.details === 'object') ? snap.details : {};
+  onStartFrom({
+    details: {
+      title: details.title || '',
+      // Today's meeting is today's, whatever the template says.
+      date: todayIso(),
+      time: details.time || '11:00',
+      attendees: Array.isArray(details.attendees) ? [...details.attendees] : [],
+    },
+    recipients: Array.isArray(snap.recipients) ? [...snap.recipients] : [],
+    options: snap.options && typeof snap.options === 'object' ? { ...snap.options } : null,
+  });
+  close();
+}
+
+// Local (not UTC) yyyy-mm-dd — the same rule app.js uses for a new meeting.
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
 }
 
 function openSnapshot(snap) {

@@ -226,6 +226,28 @@ async function applyJobNames(jobId, mapping) {
 
 /** POST /live/questions — mid-meeting Q&A flagging over a live-transcript
  *  window. Callers treat any failure as a silent skip (live is advisory). */
+/**
+ * Ask the server to draft answers for questions the operator captured but left
+ * blank. Each question carries WHEN it was captured, so the server can read the
+ * transcript around that moment instead of the whole thing.
+ * @param {string} jobId
+ * @param {{questions: Array<{id, question, atMs}>, attendees: string[]}} payload
+ */
+async function draftAnswers(jobId, payload) {
+  const { serverUrl, token } = requireServerConfig();
+  const res = await doFetch(
+    `${serverUrl}/jobs/${encodeURIComponent(jobId)}/answers`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'draft answers'
+  );
+  if (!res.ok) await throwHttpError(res, 'draft answers');
+  return res.json();
+}
+
 async function postLiveQuestions(payload) {
   const { base, headers } = requireServerConfig();
   const res = await doFetch(
@@ -254,4 +276,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions, draftAnswers };

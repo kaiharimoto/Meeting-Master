@@ -93,6 +93,10 @@ export function initRecorder(context) {
   // Other modules (generate.js button states, the New-meeting guard) read
   // this instead of importing us — keeps the module graph acyclic.
   ctx.recActive = () => status === 'recording' || status === 'paused' || status === 'stopping';
+  // Milliseconds into the recording right now, or null when nothing is
+  // rolling. capture.js stamps every card with this, which is what lets the
+  // home server answer a question from the right part of the transcript.
+  ctx.recElapsedMs = () => (ctx.recActive() ? currentActiveMs() : null);
 
   const supported =
     ctx.api &&
