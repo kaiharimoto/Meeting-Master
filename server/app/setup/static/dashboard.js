@@ -64,13 +64,31 @@
       $("#tab-" + t).hidden = t !== name;
     });
     $$(".tab").forEach(function (b) {
-      b.classList.toggle("active", b.getAttribute("data-tab") === name);
+      var on = b.getAttribute("data-tab") === name;
+      b.classList.toggle("active", on);
+      // Roving tabindex + aria-selected: the tablist is ONE tab stop and
+      // arrows move within it, which is what role="tablist" promises.
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
     });
     try { if (location.hash !== "#" + name) location.hash = "#" + name; } catch (e) {}
     if (name === "logs") scrollLogToEnd();
   }
   $$(".tab").forEach(function (b) {
     b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); });
+    b.addEventListener("keydown", function (e) {
+      var tabs = $$(".tab");
+      var i = tabs.indexOf(b);
+      var next = null;
+      if (e.key === "ArrowRight") next = tabs[(i + 1) % tabs.length];
+      else if (e.key === "ArrowLeft") next = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === "Home") next = tabs[0];
+      else if (e.key === "End") next = tabs[tabs.length - 1];
+      if (!next) return;
+      e.preventDefault();
+      showTab(next.getAttribute("data-tab"));
+      next.focus();
+    });
   });
   $("#banner-settings-link").addEventListener("click", function (e) {
     e.preventDefault();

@@ -175,7 +175,8 @@
             <span class="hint-chip">Saved to disk every 5 s — survives a crash</span>
           </div>
 
-          <div id="rec-preflight" class="rec-preflight" hidden></div>
+          <div id="rec-preflight" class="rec-preflight" role="status" aria-live="polite"
+               aria-label="Pre-flight checks" hidden></div>
           <div id="rec-guard" class="rec-guard" hidden>
             Not recording — nothing is being captured yet.
           </div>
@@ -267,7 +268,8 @@
 
           <div id="problem-host" class="problem-host" hidden></div>
 
-          <div id="status-line" class="status-line" role="status" aria-live="polite">
+          <div id="status-line" class="status-line" role="status" aria-live="polite"
+               aria-busy="false">
             <span id="status-spinner" class="spinner" hidden></span>
             <span id="status-text">Ready.</span>
           </div>
@@ -304,7 +306,7 @@
             Listening… questions the AI hears in the conversation will appear
             here. Approve the good ones whenever you have a moment.
           </p>
-          <div id="live-rail-list" class="live-rail-list"></div>
+          <div id="live-rail-list" class="live-rail-list" aria-live="polite"></div>
         </aside>
         </div><!-- /.meeting-columns -->
       </section>
@@ -619,7 +621,7 @@
       </div>
 
       <div class="field">
-        <label for="settings-zoom-select">UI size</label>
+        <label for="settings-zoom-select">Display zoom (<kbd>Ctrl</kbd> <kbd>+</kbd>/<kbd>&minus;</kbd>)</label>
         <select id="settings-zoom-select">
           <option value="">Auto — match the display</option>
           <option value="0.9">90%</option>
@@ -628,10 +630,37 @@
           <option value="1.25">125%</option>
         </select>
         <p class="settings-help">
-          Auto picks a comfortable size for the current display (bigger on
-          projectors and large monitors). <kbd>Ctrl</kbd>+<kbd>=</kbd> /
+          Scales the <strong>whole window</strong> — type, spacing, icons, the
+          sidebar. Auto picks a comfortable size for the current display (bigger
+          on projectors and large monitors). <kbd>Ctrl</kbd>+<kbd>=</kbd> /
           <kbd>Ctrl</kbd>+<kbd>-</kbd> adjust any time; <kbd>Ctrl</kbd>+<kbd>0</kbd>
           returns to Auto.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="settings-textsize-select">Text size</label>
+        <select id="settings-textsize-select">
+          <option value="0.9">Small (90%)</option>
+          <option value="1">Default</option>
+          <option value="1.12">Large (112%)</option>
+          <option value="1.25">Larger (125%)</option>
+        </select>
+        <p class="settings-help">
+          Scales <strong>type only</strong>, leaving the layout where it is —
+          separate from display zoom above, and they combine. No keyboard
+          shortcut, so it can't be changed by accident mid-meeting.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="settings-contrast-check" class="settings-check">
+          <input id="settings-contrast-check" type="checkbox" />
+          High contrast
+        </label>
+        <p class="settings-help">
+          Stronger ink, borders and accents. Applies on top of whichever theme
+          is active — light or dark — rather than replacing it.
         </p>
       </div>
 

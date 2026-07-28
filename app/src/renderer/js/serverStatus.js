@@ -29,6 +29,10 @@ function render() {
   const { key, label: text } = pillState(status);
   pill.dataset.status = key;
   label.textContent = text;
+  // The markup's aria-label was the static string "Home server status", so the
+  // button announced the same thing whether the server was up or down — while
+  // the coloured dot beside it carried the whole message.
+  pill.setAttribute('aria-label', `Home server: ${text}. Show details.`);
   if (popoverEl) renderPopover(); // keep an open popover live
 }
 

@@ -134,3 +134,40 @@ test('settings tab loads state and save posts the payload', async ({ page }) => 
   // Save routes back to Overview to show the code.
   await expect(page.locator('#tab-overview')).toBeVisible();
 });
+
+test('the dashboard tabs are a real tablist, not four buttons with a class', async ({ page }) => {
+  await page.goto(DASH_URL);
+
+  await expect(page.locator('.tabs')).toHaveAttribute('role', 'tablist');
+  const tabs = page.locator('.tab');
+  await expect(tabs).toHaveCount(4);
+
+  // Each tab names the panel it controls, and each panel names its tab back.
+  for (const name of ['overview', 'jobs', 'logs', 'settings']) {
+    const tab = page.locator(`#tabbtn-${name}`);
+    await expect(tab).toHaveAttribute('role', 'tab');
+    await expect(tab).toHaveAttribute('aria-controls', `tab-${name}`);
+    await expect(page.locator(`#tab-${name}`)).toHaveAttribute('role', 'tabpanel');
+    await expect(page.locator(`#tab-${name}`)).toHaveAttribute('aria-labelledby', `tabbtn-${name}`);
+  }
+
+  // One tab stop for the whole list; selection is announced, not just coloured.
+  await expect(page.locator('#tabbtn-overview')).toHaveAttribute('aria-selected', 'true');
+  const tabindexes = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.tab')).map((el) => el.tabIndex)
+  );
+  expect(tabindexes).toEqual([0, -1, -1, -1]);
+
+  // Arrows move between tabs, which is what role="tablist" promises.
+  await page.locator('#tabbtn-overview').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#tabbtn-jobs')).toBeFocused();
+  await expect(page.locator('#tabbtn-jobs')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#tab-jobs')).toBeVisible();
+  await expect(page.locator('#tab-overview')).toBeHidden();
+
+  await page.keyboard.press('End');
+  await expect(page.locator('#tabbtn-settings')).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // wraps
+  await expect(page.locator('#tabbtn-overview')).toBeFocused();
+});

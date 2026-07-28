@@ -4,11 +4,24 @@
 // live model — failures caught while they're still fixable, instead of by an
 // upload error after the meeting. Mic state is computed renderer-side
 // (enumerateDevices); the rest comes from the PREFLIGHT_GET IPC probe.
+//
+// The strip is a polite live region, so a chip that flips while you're
+// elsewhere on the screen announces itself. Each chip's STATE is carried in
+// text, not only in its glyph and colour — "✓" and green are invisible to a
+// screen reader and to anyone who can't separate the greens from the reds.
 
 let ctx = null;
 let host = null;
+// The last rendered strip, as a string. Re-rendering identical chips would
+// re-announce them on every screen entry; nothing changed, so nothing is said.
+let lastSignature = null;
 
 const LOW_DISK_BYTES = 500 * 1024 * 1024;
+
+// Spoken before the chip's label. "Optional" is the missing live model: a
+// choice not yet made, not a fault.
+const STATE_WORD = { ok: 'Ready', soft: 'Optional', warn: 'Problem' };
+const STATE_GLYPH = { ok: '✓', soft: '○', warn: '!' };
 
 export function initPreflight(context) {
   ctx = context;
@@ -77,14 +90,33 @@ export async function refreshPreflight() {
     }
   }
 
-  host.replaceChildren(
-    ...chips.map((chip) => {
-      const el = document.createElement('span');
-      el.className = `pf-chip ${chip.ok ? 'is-ok' : chip.soft ? 'is-soft' : 'is-warn'}`;
-      el.textContent = `${chip.ok ? '✓' : chip.soft ? '○' : '!'} ${chip.label}`;
-      if (chip.title) el.title = chip.title;
-      return el;
-    })
-  );
+  const signature = chips.map((c) => `${state(c)}:${c.label}:${c.title || ''}`).join('|');
+  if (signature === lastSignature) return;
+  lastSignature = signature;
+
+  host.replaceChildren(...chips.map(buildChip));
   host.hidden = chips.length === 0;
+}
+
+function state(chip) {
+  return chip.ok ? 'ok' : chip.soft ? 'soft' : 'warn';
+}
+
+function buildChip(chip) {
+  const key = state(chip);
+  const el = document.createElement('span');
+  el.className = `pf-chip is-${key === 'ok' ? 'ok' : key === 'soft' ? 'soft' : 'warn'}`;
+
+  const glyph = document.createElement('span');
+  glyph.className = 'pf-glyph';
+  glyph.setAttribute('aria-hidden', 'true'); // decorative: the word carries it
+  glyph.textContent = STATE_GLYPH[key];
+
+  const spoken = document.createElement('span');
+  spoken.className = 'sr-only';
+  spoken.textContent = `${STATE_WORD[key]} — `;
+
+  el.append(glyph, spoken, chip.label);
+  if (chip.title) el.title = chip.title;
+  return el;
 }

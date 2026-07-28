@@ -47,7 +47,12 @@ function updateActive() {
   };
   for (const [id, active] of Object.entries(states)) {
     const el = document.getElementById(id);
-    if (el) el.classList.toggle('active', Boolean(active));
+    if (!el) continue;
+    el.classList.toggle('active', Boolean(active));
+    // "active" was a class and nothing else — a screen reader had no way to
+    // know which of five identical buttons was the one you were on.
+    if (active) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   }
 }
 

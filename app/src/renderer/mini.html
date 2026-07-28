@@ -76,20 +76,37 @@
     #meter-fill { height: 100%; width: 0%; background: var(--meter); }
     .controls { justify-content: flex-end; }
     .controls .primary { font-weight: 600; }
+    button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    /* Visually hidden, still announced. */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dot { animation: none !important; }
+      * { transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
+  <!-- Accessible names, not glyphs: "Q" and "⤢" were the whole announcement
+       for two of these four buttons, the timer ticked silently, and the level
+       meter had no name at all. -->
   <div class="row">
     <span id="dot" class="dot" aria-hidden="true"></span>
-    <span id="timer">00:00</span>
+    <span id="timer" role="timer" aria-live="off" aria-label="Elapsed recording time">00:00</span>
     <span id="title"></span>
   </div>
-  <div id="meter"><div id="meter-fill"></div></div>
+  <div id="meter" role="img" aria-label="Microphone input level"><div id="meter-fill"></div></div>
   <div class="row controls">
-    <button id="q-btn" title="Open the app and capture a question">Q</button>
+    <button id="q-btn" title="Open the app and capture a question">
+      <span aria-hidden="true">Q</span><span class="sr-only">Capture a question in the app</span>
+    </button>
     <button id="pause-btn">Pause</button>
     <button id="stop-btn" class="primary">Stop</button>
-    <button id="expand-btn" title="Back to the full window">⤢</button>
+    <button id="expand-btn" title="Back to the full window">
+      <span aria-hidden="true">⤢</span><span class="sr-only">Back to the full window</span>
+    </button>
   </div>
   <script type="module" src="js/mini.js"></script>
 </body>

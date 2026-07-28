@@ -145,8 +145,15 @@ test('the modal scrim is theme-aware', () => {
 });
 
 test('the type, weight and spacing scales are defined', () => {
+  // Every step routes through --fs-scale, or the Settings "Text size" control
+  // would move some of the type and leave the rest behind.
+  assert.equal(LIGHT['--fs-scale'], '1', '--fs-scale must default to 1');
   for (const token of ['--fs-2xs', '--fs-xs', '--fs-sm', '--fs-base', '--fs-md', '--fs-lg']) {
-    assert.match(LIGHT[token], /^\d+(\.\d+)?px$/, `${token} missing or malformed`);
+    assert.match(
+      LIGHT[token],
+      /^calc\(\d+(\.\d+)?px \* var\(--fs-scale\)\)$/,
+      `${token} missing or not scaled`
+    );
   }
   for (const token of ['--lh-tight', '--lh-snug', '--lh-base', '--lh-loose']) {
     assert.ok(LIGHT[token], `${token} missing`);
@@ -161,4 +168,91 @@ test('the type, weight and spacing scales are defined', () => {
   });
   assert.equal(LIGHT['--r-pill'], '999px');
   assert.equal(LIGHT['--r-xs'], '4px');
+});
+
+// ---- High contrast --------------------------------------------------------
+//
+// data-contrast="high" composes with both themes, so both combinations get
+// checked. The bar is higher than AA on purpose: the mode exists for people for
+// whom AA is not enough, and shipping it at the same ratios as the default
+// theme would be a label rather than a feature.
+
+const HC_LIGHT = { ...LIGHT, ...tokenBlock(':root[data-contrast="high"] {') };
+const HC_DARK = {
+  ...DARK,
+  ...tokenBlock(':root[data-contrast="high"] {'),
+  ...tokenBlock(':root[data-theme="dark"][data-contrast="high"] {'),
+};
+
+for (const [name, tokens] of [['light', HC_LIGHT], ['dark', HC_DARK]]) {
+  test(`high contrast (${name}): body ink reaches AAA (7:1) and then some`, () => {
+    for (const surface of SURFACES) {
+      const ratio = contrast(tokens['--ink'], tokens[surface]);
+      assert.ok(
+        ratio >= 15,
+        `--ink on ${surface} is ${ratio.toFixed(2)}:1, want >= 15:1`
+      );
+    }
+  });
+
+  test(`high contrast (${name}): secondary inks clear AAA (7:1)`, () => {
+    for (const ink of ['--ink-soft', '--ink-faint']) {
+      for (const surface of SURFACES) {
+        const ratio = contrast(tokens[ink], tokens[surface]);
+        assert.ok(
+          ratio >= 7,
+          `${ink} on ${surface} is ${ratio.toFixed(2)}:1, want >= 7:1`
+        );
+      }
+    }
+  });
+
+  test(`high contrast (${name}): borders clear 4.5:1, not merely 3:1`, () => {
+    for (const border of ['--border', '--border-strong', '--border-control']) {
+      for (const surface of ['--bg', '--surface', '--surface-2']) {
+        const ratio = contrast(tokens[border], tokens[surface]);
+        assert.ok(
+          ratio >= 4.5,
+          `${border} on ${surface} is ${ratio.toFixed(2)}:1, want >= 4.5:1`
+        );
+      }
+    }
+  });
+
+  test(`high contrast (${name}): the accent stays legible as text`, () => {
+    for (const surface of ['--surface', '--surface-2', '--accent-soft']) {
+      const ratio = contrast(tokens['--accent'], tokens[surface]);
+      assert.ok(
+        ratio >= 4.5,
+        `--accent on ${surface} is ${ratio.toFixed(2)}:1, want >= 4.5:1`
+      );
+    }
+  });
+
+  test(`high contrast (${name}): status inks clear AA on their own fills`, () => {
+    for (const [ink, fill] of [
+      ['--success', '--success-soft'],
+      ['--danger', '--danger-soft'],
+      ['--warn-ink', '--warn-bg'],
+    ]) {
+      const ratio = contrast(tokens[ink], tokens[fill]);
+      assert.ok(
+        ratio >= 4.5,
+        `${ink} on ${fill} is ${ratio.toFixed(2)}:1, want >= 4.5:1`
+      );
+    }
+  });
+}
+
+test('high contrast only overrides — it never redefines the whole palette', () => {
+  const overrides = Object.keys(tokenBlock(':root[data-contrast="high"] {'));
+  // Separation tokens only. If this list grows to include layout or geometry,
+  // high contrast has quietly become a second theme.
+  for (const token of overrides) {
+    assert.match(
+      token,
+      /^--(ink|accent|border|scrim|success|danger|warn)/,
+      `${token} is not a separation token — high contrast should not set it`
+    );
+  }
 });

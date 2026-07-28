@@ -5,6 +5,7 @@
 // never RETURNED to the renderer (getFullConfig reports hasToken, not token).
 
 import { openModal, closeModal } from './modalKit.js';
+import { getContrast, setContrast, getTextScale, setTextScale } from './theme.js';
 
 let ctx = null;
 let onSaved = null;
@@ -100,6 +101,7 @@ export function initSettings(context, opts = {}) {
   micSelectEl = document.getElementById('settings-mic-select');
   openRecordingsBtn = document.getElementById('open-recordings-btn');
   zoomEl = document.getElementById('settings-zoom-select');
+  initAppearanceControls();
   liveSection = document.getElementById('settings-live-section');
   liveModelEl = document.getElementById('settings-live-model');
   liveDefaultEl = document.getElementById('settings-live-default');
@@ -260,6 +262,14 @@ export async function openSettings({ welcome = false } = {}) {
   syncSmtpVisibility();
   await populateMicSelect(cfg);
   await refreshLiveSection(cfg);
+  // Appearance preferences are renderer-only (localStorage, applied pre-paint
+  // by themeBoot.js), so they are read straight from theme.js rather than from
+  // the main process's config like everything else in this dialog.
+  const contrastEl = document.getElementById('settings-contrast-check');
+  if (contrastEl) contrastEl.checked = getContrast() === 'high';
+  const textSizeEl = document.getElementById('settings-textsize-select');
+  if (textSizeEl) textSizeEl.value = String(getTextScale());
+
   if (zoomEl) {
     const saved = cfg.uiZoom || '';
     // A Ctrl+= nudge can land between the preset steps — surface it honestly.
@@ -409,4 +419,20 @@ function clearError(el) {
 function clearErrors() {
   clearError(codeError);
   clearError(errorEl);
+}
+
+// High contrast and text size apply the moment they change — waiting for Save
+// would mean choosing a legibility setting you can't read yet. Neither is part
+// of the Save payload; both live in localStorage.
+function initAppearanceControls() {
+  const contrastEl = document.getElementById('settings-contrast-check');
+  if (contrastEl) {
+    contrastEl.addEventListener('change', () =>
+      setContrast(contrastEl.checked ? 'high' : 'normal')
+    );
+  }
+  const textSizeEl = document.getElementById('settings-textsize-select');
+  if (textSizeEl) {
+    textSizeEl.addEventListener('change', () => setTextScale(textSizeEl.value));
+  }
 }

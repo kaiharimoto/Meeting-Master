@@ -124,6 +124,8 @@ export function renderLiveFlags() {
   if (els.count) {
     els.count.hidden = n === 0;
     els.count.textContent = String(n);
+    // A bare numeral next to a heading reads as "1". Say what it counts.
+    els.count.setAttribute('aria-label', `${n} suggestion${n === 1 ? '' : 's'} waiting`);
   }
   if (els.empty) els.empty.hidden = n !== 0;
 

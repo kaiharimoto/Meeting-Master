@@ -49,6 +49,9 @@ export function setStatus(text, { busy = false, progress = null } = {}) {
   lineEl.classList.remove('is-error');
   textEl.textContent = text;
   spinnerEl.hidden = !busy;
+  // The spinner says "working" to everyone who can see it; aria-busy says it
+  // to everyone else, and tells assistive tech this region is mid-update.
+  lineEl.setAttribute('aria-busy', String(busy));
   setProgress(progress);
 }
 
@@ -77,5 +80,6 @@ export function showError(text) {
   lineEl.classList.add('is-error');
   textEl.textContent = text;
   spinnerEl.hidden = true;
+  lineEl.setAttribute('aria-busy', 'false');
   setProgress(null);
 }

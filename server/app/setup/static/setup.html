@@ -45,15 +45,22 @@
   </div>
   <div id="saved-banner" class="banner">Settings saved. Your connection code is on the Overview tab.</div>
 
-  <nav class="tabs" aria-label="Dashboard sections">
-    <button class="tab active" data-tab="overview" type="button">Overview</button>
-    <button class="tab" data-tab="jobs" type="button">Jobs</button>
-    <button class="tab" data-tab="logs" type="button">Logs</button>
-    <button class="tab" data-tab="settings" type="button">Settings</button>
+  <!-- Real tab semantics: these were four buttons with a class, so nothing
+       announced which one was current or what it controlled. Arrow-key
+       navigation lives in dashboard.js. -->
+  <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button class="tab active" data-tab="overview" type="button" role="tab"
+            id="tabbtn-overview" aria-selected="true" aria-controls="tab-overview">Overview</button>
+    <button class="tab" data-tab="jobs" type="button" role="tab"
+            id="tabbtn-jobs" aria-selected="false" aria-controls="tab-jobs" tabindex="-1">Jobs</button>
+    <button class="tab" data-tab="logs" type="button" role="tab"
+            id="tabbtn-logs" aria-selected="false" aria-controls="tab-logs" tabindex="-1">Logs</button>
+    <button class="tab" data-tab="settings" type="button" role="tab"
+            id="tabbtn-settings" aria-selected="false" aria-controls="tab-settings" tabindex="-1">Settings</button>
   </nav>
 
   <!-- ================= OVERVIEW ================= -->
-  <section class="tab-panel" id="tab-overview">
+  <section class="tab-panel" id="tab-overview" role="tabpanel" aria-labelledby="tabbtn-overview" tabindex="0">
     <div class="cards-grid">
       <div class="card stat-card">
         <div class="stat-head">Server</div>
@@ -189,7 +196,7 @@
   </section>
 
   <!-- ================= JOBS ================= -->
-  <section class="tab-panel" id="tab-jobs" hidden>
+  <section class="tab-panel" id="tab-jobs" role="tabpanel" aria-labelledby="tabbtn-jobs" tabindex="0" hidden>
     <div class="card">
       <h2>Jobs</h2>
       <p class="hint">Every meeting this server has processed, updating live.</p>
@@ -198,7 +205,7 @@
   </section>
 
   <!-- ================= LOGS ================= -->
-  <section class="tab-panel" id="tab-logs" hidden>
+  <section class="tab-panel" id="tab-logs" role="tabpanel" aria-labelledby="tabbtn-logs" tabindex="0" hidden>
     <div class="card">
       <h2>Server log</h2>
       <div class="log-toolbar">
@@ -210,7 +217,7 @@
   </section>
 
   <!-- ================= SETTINGS ================= -->
-  <section class="tab-panel" id="tab-settings" hidden>
+  <section class="tab-panel" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" tabindex="0" hidden>
     <div class="card">
       <h2>Email delivery</h2>
       <p class="hint">Finished meeting notes are emailed from a Gmail account using an App Password.</p>

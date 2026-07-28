@@ -111,6 +111,14 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 10. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
 
+**Accessibility.** Settings carries two controls that stay out of each other's
+way: **Text size** scales type only (90/100/112/125%), while **Display zoom**
+(`Ctrl` `+`/`−`) scales the whole window — they combine, and text size has no
+keyboard shortcut so it can't be nudged mid-meeting. **High contrast** applies
+on top of whichever theme is active rather than replacing it: stronger ink,
+borders and accents in both light and dark. Every preference is applied before
+the first paint, so nothing flashes on launch.
+
 **Fitting the window.** The Meeting screen goes two-column as soon as the panels
 have room for it — working column (Q&A, Generate) on the left, context column
 (Details, Record) on the right — so a docked laptop stops reading like a phone.

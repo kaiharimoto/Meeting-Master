@@ -303,7 +303,23 @@ button.small { padding: 6px 11px; font-size: 13px; }
 .toast.show { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 0.01ms !important; }
+  /* Transitions were covered; animations were not, so the spinners and pulses
+     kept running for exactly the people who asked them not to. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* The dashboard had NO focus style at all — it is driven by keyboard as much
+   as the app is. Mirrors app.css's rule. */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* Link styled as a small button (dashboard actions the APP intercepts). */
