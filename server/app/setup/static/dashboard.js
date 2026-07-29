@@ -22,6 +22,10 @@
   // AI engine tuning fields share one edited-flag map + numeric parsing.
   var AI_FIELDS = ["ollamaUrl", "numCtx", "summaryNumPredict",
                    "summaryTemperature", "extractNumPredict", "extractTemperature"];
+  // Live-suggestion fields work the same way, off state.liveParams. The
+  // checkbox is listed separately because it round-trips .checked, not .value.
+  var LIVE_FIELDS = ["liveModel", "liveIntervalSec", "liveWindowChars",
+                     "liveTimeoutSec", "liveKeepAliveMin", "liveExtractNumPredict"];
   var editedAi = {};
 
   function toast(msg) {
@@ -197,6 +201,15 @@
       if (el && !editedAi[f] && document.activeElement !== el)
         el.value = ai[f] != null ? ai[f] : "";
     });
+    var live = state.liveParams || {};
+    LIVE_FIELDS.forEach(function (f) {
+      var el = $("#" + f);
+      if (el && !editedAi[f] && document.activeElement !== el)
+        el.value = live[f] != null ? live[f] : "";
+    });
+    var liveOn = $("#liveSuggestions");
+    if (liveOn && !editedAi.liveSuggestions)
+      liveOn.checked = live.liveSuggestions !== false;
     if (!editedWhisper && document.activeElement !== $("#whisperModel")) $("#whisperModel").value = state.whisperModel || "";
 
     // Dependency detection.
@@ -308,7 +321,16 @@
       extractNumPredict: parseInt($("#extractNumPredict").value, 10) || null,
       extractTemperature: $("#extractTemperature").value === "" ? null : parseFloat($("#extractTemperature").value),
       whisperModel: $("#whisperModel").value.trim() || null,
-      githubToken: $("#githubToken").value
+      githubToken: $("#githubToken").value,
+      liveSuggestions: $("#liveSuggestions").checked,
+      // Blank is meaningful (fall back to the summary model), so send "" —
+      // never null, which would mean "leave whatever is saved".
+      liveModel: $("#liveModel").value.trim(),
+      liveIntervalSec: parseInt($("#liveIntervalSec").value, 10) || null,
+      liveWindowChars: parseInt($("#liveWindowChars").value, 10) || null,
+      liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
+      liveKeepAliveMin: $("#liveKeepAliveMin").value === "" ? null : parseInt($("#liveKeepAliveMin").value, 10),
+      liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null
     };
     fetch("/setup/save", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -510,9 +532,13 @@
   $("#smtpUser").addEventListener("input", function () { editedUser = true; });
   $("#smtpFrom").addEventListener("input", function () { editedFrom = true; });
   $("#ollamaModel").addEventListener("input", function () { editedOllama = true; });
-  AI_FIELDS.forEach(function (f) {
+  AI_FIELDS.concat(LIVE_FIELDS).forEach(function (f) {
     var el = $("#" + f);
     if (el) el.addEventListener("input", function () { editedAi[f] = true; });
+  });
+  var liveOnBox = $("#liveSuggestions");
+  if (liveOnBox) liveOnBox.addEventListener("change", function () {
+    editedAi.liveSuggestions = true;
   });
 
   // ---- AI helpers: installed-model picker, suggested context, live test ----
@@ -584,6 +610,71 @@
         aiResult("Test request failed — is the server still running?", "var(--danger)");
       });
   });
+  // ---- Live suggestions: prove the mid-meeting path end to end -------------
+  // Runs the REAL live request over a fixed scripted conversation that contains
+  // exactly one answered question and one genuine forward-looking lesson, so an
+  // empty result is a finding rather than an ambiguity.
+  function liveResult(text, color) {
+    var el = $("#live-test-result");
+    el.textContent = text;
+    el.style.color = color || "var(--ink-soft)";
+  }
+  var liveTestBtn = $("#live-test");
+  if (liveTestBtn) liveTestBtn.addEventListener("click", function () {
+    liveResult("Asking the model for live suggestions — a cold model load can take a minute…");
+    liveTestBtn.disabled = true;
+    fetch("/setup/live-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        liveModel: $("#liveModel").value.trim(),
+        liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
+        liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null,
+      }),
+    }).then(function (r) { return r.json(); })
+      .then(function (p) {
+        liveTestBtn.disabled = false;
+        var secs = (p.latencyMs / 1000).toFixed(1);
+        if (!p.ok) {
+          liveResult("✗ " + p.model + " failed after " + secs + "s: " +
+                     (p.error || "unknown error") +
+                     " — try a smaller live model, or raise the give-up time.",
+                     "var(--danger)");
+          return;
+        }
+        var nq = (p.questions || []).length, ni = (p.insights || []).length;
+        var found = nq + " question" + (nq === 1 ? "" : "s") + " and " +
+                    ni + " insight" + (ni === 1 ? "" : "s");
+        if (nq === 0 && ni === 0) {
+          // The model answered, but found nothing in a sample that contains
+          // both — a real result, and a real problem worth naming.
+          liveResult("⚠ " + p.model + " answered in " + secs + "s but found " +
+                     "nothing in the sample conversation, which does contain a " +
+                     "question and a lesson. This model is a poor fit for live " +
+                     "suggestions — try a different one.", "var(--danger)");
+          return;
+        }
+        var msg = "✓ " + p.model + " found " + found + " in " + secs + "s.";
+        if (p.slowerThanInterval) {
+          msg += " That is SLOWER than the " + p.intervalSec + "s interval, so " +
+                 "asks would pile up — raise the interval or use a smaller live " +
+                 "model.";
+          liveResult(msg, "var(--warn-ink)");
+          return;
+        }
+        if (!p.enabled) {
+          liveResult(msg + " Live suggestions are currently switched OFF — tick " +
+                     "the box above and Save to use them.", "var(--warn-ink)");
+          return;
+        }
+        liveResult(msg + " Save to keep these settings.", "var(--success)");
+      })
+      .catch(function () {
+        liveTestBtn.disabled = false;
+        liveResult("Test request failed — is the server still running?", "var(--danger)");
+      });
+  });
+
   $("#whisperModel").addEventListener("input", function () { editedWhisper = true; });
   $("#copy").addEventListener("click", function () {
     var text = $("#code").textContent;

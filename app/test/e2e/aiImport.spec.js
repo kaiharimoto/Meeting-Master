@@ -14,6 +14,7 @@ const INDEX_URL = pathToFileURL(
 
 const AI_REPLY = {
   keyTakeaways: ['Q3 launch slips to November', 'Budget approved'],
+  keyInsights: ['Lock the launch scope before the budget review, not after.'],
   decisions: ['Ship the beta to internal users first'],
   actionItems: [
     { task: 'Draft rollout plan', owner: 'Alice', due: 'Nov 15', priority: 'high' },
@@ -70,6 +71,9 @@ test('summary editor imports pasted AI JSON (with fences and chatter)', async ({
 
   await expect(page.locator('#sum-takeaways')).toHaveValue(
     'Q3 launch slips to November\nBudget approved'
+  );
+  await expect(page.locator('#sum-insights')).toHaveValue(
+    'Lock the launch scope before the budget review, not after.'
   );
   await expect(page.locator('#sum-decisions')).toHaveValue('Ship the beta to internal users first');
   await expect(page.locator('#sum-topics')).toHaveValue('Launch timing\nPricing');

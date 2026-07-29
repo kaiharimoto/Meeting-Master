@@ -2,9 +2,10 @@
 
 // Verifies the PDF template's contract against the pinned mockMeeting.json
 // fixture: the ruled Q&A table (13pt text, medical-blue Q index) and the
-// structured presentation-style summary — Key Takeaways (accent-numbered),
-// Decisions, Action Items, Key Figures, and Topics Discussed (outline accent
-// chips) — plus a non-transparent accent rule (printBackground) and a real
+// structured presentation-style summary — Key Takeaways (accent-numbered), Key
+// Insights (arrow markers), Decisions, Action Items, Key Figures, and Topics
+// Discussed (outline accent chips) — plus a non-transparent accent rule
+// (printBackground) and a real
 // multi-kB PDF. The documented nine-step type scale is asserted against the
 // computed sizes, and a long fixture exercises pagination.
 //
@@ -53,14 +54,16 @@ test('print template renders the fixture with the contracted typography', async 
 
   // ---- Contents index (page 1) -----------------------------------------------
   await expect(page.locator('#contents')).toBeVisible();
-  // Q&A + the five populated summary sections = six rows.
-  await expect(page.locator('.toc-row')).toHaveCount(6);
+  // Q&A + the six populated summary sections = seven rows.
+  await expect(page.locator('.toc-row')).toHaveCount(7);
+  await expect(page.locator('.toc-name').nth(2)).toHaveText('Key Insights');
 
   // ---- Structured summary deck -----------------------------------------------
 
-  // Five accent section kickers: Takeaways, Decisions, Action Items, Figures, Topics.
+  // Six accent section kickers: Takeaways, Insights, Decisions, Action Items,
+  // Figures, Topics.
   const headings = page.locator('.sum-heading');
-  await expect(headings).toHaveCount(5);
+  await expect(headings).toHaveCount(6);
   await expect(headings.nth(0)).toHaveText('Key Takeaways');
   const headingColor = await headings
     .first()
@@ -74,6 +77,27 @@ test('print template renders the fixture with the contracted typography', async 
   await expect(takeaways.first()).toContainText(
     fixture.summary.keyTakeaways[0].slice(0, 24)
   );
+
+  // Key Insights: its own section, right after the takeaways it must not be
+  // confused with, and glossed on the page so a reader who has never seen the
+  // app knows what separates the two.
+  await expect(headings.nth(1)).toContainText('Key Insights');
+  await expect(page.locator('.sum-insights .sum-heading-note')).toHaveText(
+    'to apply going forward'
+  );
+  const insights = page.locator('.insight');
+  await expect(insights).toHaveCount(fixture.summary.keyInsights.length);
+  await expect(insights.first()).toContainText(fixture.summary.keyInsights[0].slice(0, 24));
+  // The forward-pointing arrow marker is a character, not a colour, so it
+  // survives a grayscale print.
+  const marker = await insights.first().evaluate((el) =>
+    getComputedStyle(el, '::before').content
+  );
+  expect(marker).toContain('→');
+  // Insights are NOT a reworded copy of the takeaways.
+  const takeawayTexts = await page.locator('.takeaway-text').allTextContents();
+  const insightTexts = await page.locator('.insight-text').allTextContents();
+  expect(insightTexts.some((i) => takeawayTexts.includes(i))).toBe(false);
 
   // Decisions render their full list.
   await expect(page.locator('.decision')).toHaveCount(fixture.summary.decisions.length);
@@ -133,6 +157,7 @@ test('the documented type scale is the type scale that renders', async ({ page }
     ['.detail-value', 12],
     ['.takeaway-text', 12],
     ['.decision-text', 12],
+    ['.insight-text', 12],
     ['.ai-task', 11],
     ['.figure-text', 11],
     ['.colophon-title', 11],

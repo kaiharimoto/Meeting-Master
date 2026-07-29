@@ -10,9 +10,9 @@ audio file…** if you prefer. After the meeting, the app uploads the recording
 over Tailscale to an always-on home PC,
 where a FastAPI job service normalizes the audio with ffmpeg, transcribes it
 with whisper.cpp (Vulkan build on an AMD RX 7900 XTX), and with a local Ollama
-model (`gemma4:26b`) both writes a structured summary (Key Takeaways /
-Decisions / Action Items / Key Figures / Topics) and extracts candidate Q&A pairs for the
-operator to approve. The laptop then renders a print-perfect PDF locally (Neue
+model (`gemma4:26b`) both writes a structured summary (Key Takeaways / Key
+Insights / Decisions / Action Items / Key Figures / Topics) and extracts
+candidate Q&A pairs for the operator to approve. The laptop then renders a print-perfect PDF locally (Neue
 Haas Grotesk, medical-blue accent, ruled Q&A table + presentation-style summary
 deck) and sends it back to the home PC, which emails it via Gmail SMTP to a
 preset recipient list. No cloud AI, no third-party services — just your two
@@ -61,12 +61,19 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 3. With **Live transcript (beta)** enabled (Record panel checkbox; model
    downloaded once via Settings → Live transcription), a rolling draft
    transcript appears while people talk — whisper.cpp running on the laptop's
-   own GPU. When the home server is reachable over Tailscale, its AI also
-   flags **live question candidates** in the Q&A panel: click **Approve** to
-   turn one into a card (or **Dismiss** it) without breaking your flow. The
-   draft is advisory; the full-quality transcript still comes after the
-   meeting, and anything the live pass missed is caught by the post-meeting
-   question detection.
+   own GPU. When the home server is reachable over Tailscale, its AI also feeds
+   a **Live suggestions** rail beside the Q&A panel, with two kinds of
+   suggestion: **questions** it heard being answered (click **Approve** to turn
+   one into a card) and **key insights** — lessons worth carrying forward
+   (click **Keep** to add one to Key Insights in the summary and the PDF).
+   Either can be **Dismiss**ed, and nothing is added without you. The rail also
+   carries a one-line status, so a home server that is slow, unreachable, or
+   switched off never looks like a quiet meeting. Everything about the loop
+   (on/off, which model, how often, how patient) is configured in one place:
+   the home server dashboard's **Settings → Live suggestions**. The draft is
+   advisory; the full-quality transcript still comes after the meeting, and
+   anything the live pass missed is caught by the post-meeting question
+   detection.
 4. Two ways to capture, both always available:
    * **Fast** — type straight into the bar at the top of the Q&A panel and press
      **Enter**. The cursor stays put, so a run of questions is one continuous
@@ -118,8 +125,10 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    ones are flagged **check this one** and start unticked, every answer is
    editable before you accept it, and a question the transcript genuinely never
    answered is simply left blank.
-   Optionally click **Edit summary** to tweak the Key Takeaways, Decisions,
-   Action Items, Key Figures, and Topics before printing. Click **Preview** to
+   Optionally click **Edit summary** to tweak the Key Takeaways, Key Insights,
+   Decisions, Action Items, Key Figures, and Topics before printing. (Key
+   Takeaways record what happened at the meeting; Key Insights are the lessons
+   to apply next time — they print as separate sections.) Click **Preview** to
    see the printed document in its own window — the same template, fonts, paper
    size and margins the PDF will use, so it is a proof rather than an
    impression; press Preview again after an edit and the same window refreshes.
@@ -208,7 +217,7 @@ Full walk-throughs: [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md) and
 | `app/test/e2e/` | Playwright test suite |
 | `server/` | FastAPI home AI server (port 8080; `python -m app.main` in a dev checkout) |
 | `server/app/pipeline/` | normalize (ffmpeg) → transcribe (whisper.cpp) → summarize + extract Q&A (Ollama) |
-| `server/app/routes/` | `/health`, `/jobs`, live monitoring (`/events` SSE, `/logs/tail`), update feed (`/updates/laptop/*`) |
+| `server/app/routes/` | `/health`, `/jobs`, mid-meeting suggestions (`/live/config`, `/live/warmup`, `/live/questions`), live monitoring (`/events` SSE, `/logs/tail`), update feed (`/updates/laptop/*`) |
 | `server/app/mailer/` | Gmail SMTP sender |
 | `server/tests/` | pytest suite (with fake ffmpeg/whisper stubs) |
 | `installer/` | Sidecar packaging: PyInstaller spec + bundled `bin/` (ffmpeg, whisper) |

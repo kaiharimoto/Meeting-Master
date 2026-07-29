@@ -57,6 +57,29 @@ class ExtractedQuestion(BaseModel):
     confidence: str = "high"
 
 
+class LiveSuggestions(BaseModel):
+    """What the mid-meeting live path offers the operator (POST /live/questions).
+
+    Two kinds of suggestion, both advisory and both approved one at a time in
+    the laptop's side rail:
+
+    * ``questions`` — Q&A pairs already answered in the conversation, which
+      become ordinary meeting cards when approved.
+    * ``insights`` — lessons worth carrying forward, which become Key Insights
+      in the summary/PDF when kept. NOT a summary of what happened (that is the
+      post-meeting Key Takeaways' job).
+
+    Nothing here is ever added automatically, and nothing here is persisted
+    server-side: the live path is stateless and the post-meeting pipeline over
+    the full transcript remains the quality backstop.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    questions: list[ExtractedQuestion] = Field(default_factory=list)
+    insights: list[str] = Field(default_factory=list)
+
+
 class AnsweredQuestion(BaseModel):
     """An answer the AI drafted for a question the OPERATOR captured.
 
@@ -93,12 +116,21 @@ class ActionItem(BaseModel):
 
 class MeetingSummary(BaseModel):
     """Structured, presentation-style summary rendered as a bulleted "deck" in
-    the PDF: Key Takeaways, Decisions, Action Items (owner/due/priority), Key
-    Figures, and Topics. String lists hold short self-contained bullets."""
+    the PDF: Key Takeaways, Key Insights, Decisions, Action Items
+    (owner/due/priority), Key Figures, and Topics. String lists hold short
+    self-contained bullets.
+
+    keyTakeaways vs keyInsights is a deliberate, load-bearing distinction:
+    takeaways RECORD the meeting (what happened, what was concluded), insights
+    are LESSONS carried forward (what to do differently, what this teaches for
+    next time). Never merge the two — a reader skims takeaways to remember the
+    meeting and insights to act beyond it.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     keyTakeaways: list[str] = Field(default_factory=list)
+    keyInsights: list[str] = Field(default_factory=list)
     decisions: list[str] = Field(default_factory=list)
     actionItems: list[ActionItem] = Field(default_factory=list)
     keyFigures: list[str] = Field(default_factory=list)

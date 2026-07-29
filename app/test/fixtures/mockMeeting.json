@@ -63,6 +63,11 @@
       "A 30-minute P1 incident response window was secured (from 2 hours), contingent on adopting the vendor's new incident intake API.",
       "The data migration has a hard deadline of November 15th, with a two-week buffer before the legacy platform is decommissioned."
     ],
+    "keyInsights": [
+      "Open renewal talks a full quarter earlier — this one was settled two days before the deadline because nobody chased the vendor.",
+      "Tie every SLA concession to the integration work it depends on, so the commitment and its cost are agreed together.",
+      "Budget a buffer before decommissioning a legacy platform, not after the migration date."
+    ],
     "decisions": [
       "Accept the 12% renewal, locked for 24 months with no mid-term adjustments.",
       "Adopt the vendor's incident intake API to secure the 30-minute P1 SLA."

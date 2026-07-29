@@ -867,22 +867,6 @@ kbd {
   margin-bottom: 4px;
 }
 
-/* A checkbox and its label on one line — .field label is block by default,
-   which would put the box on its own row above the words. */
-.settings-check {
-  display: inline-flex !important;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-bottom: 0 !important;
-  cursor: pointer;
-}
-
-.settings-check input {
-  width: auto !important;
-  margin: 0;
-  accent-color: var(--accent);
-}
-
 .field input,
 .field textarea,
 .field select,
@@ -911,6 +895,52 @@ kbd {
 
 .field textarea {
   resize: vertical;
+}
+
+/* ---------- Checkbox rows ----------
+   ONE definition for every "box + words on one line" control (live transcript,
+   computer audio, high contrast, Follow). Two rules from above would otherwise
+   wreck them, which is exactly how the live-transcription checkboxes ended up
+   misaligned: `.field label` is display:block (box on its own row above the
+   words) and `.field input` is width:100% + padding + border (the box stretched
+   across the whole panel). Both selectors carry a type, so these must too —
+   winning on specificity rather than the !important the old rule needed (and
+   which the .rec-loopback rows never had, hence the misalignment). */
+
+.field input[type="checkbox"],
+.field input[type="radio"],
+.settings-check input[type="checkbox"],
+.rec-loopback input[type="checkbox"],
+.log-follow input[type="checkbox"] {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  /* Nudge the box onto the first line's optical centre (cap-height, not the
+     line box) — the same 2px correction .extract-check-wrap uses. */
+  margin: 2px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+  transition: none;
+}
+
+.field label.settings-check,
+.field label.rec-loopback,
+.field label.log-follow,
+.settings-check,
+.rec-loopback,
+.log-follow {
+  display: inline-flex;
+  /* Top-aligned, not centered: these labels wrap on narrow windows, and a box
+     centered against two lines of text reads as belonging to neither. */
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-bottom: 0;
+  /* These words label a control, not a field below them — so body weight, not
+     the semibold `.field label` heading weight. */
+  font-weight: var(--fw-regular);
+  cursor: pointer;
 }
 
 .field-invalid {
@@ -2300,13 +2330,10 @@ kbd {
   margin-bottom: 10px;
 }
 
+/* Layout comes from the shared checkbox-row rule; this is the typography. */
 .log-follow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
   font-size: var(--fs-xs);
   color: var(--ink-soft);
-  cursor: pointer;
   user-select: none;
 }
 
@@ -2440,13 +2467,10 @@ kbd {
   padding: 9px 12px;
 }
 
+/* Layout comes from the shared checkbox-row rule; this is the typography. */
 .rec-loopback {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
   font-size: var(--fs-sm);
   color: var(--ink-soft);
-  cursor: pointer;
 }
 
 /* Sidebar dot: the recording stays visible from any screen. */
@@ -2650,10 +2674,68 @@ kbd {
   background: var(--accent);
   animation: rec-pulse 1.6s ease-in-out infinite;
 }
+
+/* The loop's status line: one quiet sentence, never a toast. Muted by default
+   so a healthy "asking the home server…" is ignorable; only a real problem
+   ("switched off", "not answering") takes any colour. */
+.live-rail-status {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+.live-rail-status[data-state="error"] {
+  color: var(--warn-ink);
+}
+.live-rail-status[data-state="off"] {
+  color: var(--ink-soft);
+}
+
 .live-rail-list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+}
+
+/* Key insights: their own group under the questions, so approving a question
+   never means scrolling past a lesson (and the two are never confused). */
+.live-rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+.live-rail-subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.live-rail-subnote {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-faint);
+}
+/* An arrow marker, the same forward-looking cue the PDF's Key Insights use. */
+.live-insight-row .live-flag-q {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: var(--sp-2);
+  font-weight: var(--fw-regular);
+}
+.live-insight-row .live-flag-q::before {
+  content: "\2192";
+  color: var(--accent);
+  font-weight: var(--fw-bold);
 }
 
 /* Compact suggestion card, stacked for the narrow rail. */

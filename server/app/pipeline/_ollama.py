@@ -105,6 +105,8 @@ async def chat_json(
     *,
     num_predict: int,
     temperature: float,
+    model: str | None = None,
+    keep_alive: str | None = None,
 ):
     """One /api/chat turn constrained to JSON output, parsed defensively.
 
@@ -112,9 +114,15 @@ async def chat_json(
     supported, unlike a full JSON-schema which needs a recent Ollama). The
     concrete SHAPE is still the model's choice, so callers must tolerate
     missing keys. Returns the parsed value (dict/list) or raises ValueError.
+
+    ``model`` overrides OLLAMA_MODEL (the live path may run a smaller, faster
+    model), and ``keep_alive`` asks Ollama to hold it in VRAM afterwards so a
+    repeated call doesn't pay the load cost again. NOTE: num_ctx is deliberately
+    NOT overridable — changing it forces Ollama to reload the model, which
+    mid-meeting would stall every other stage.
     """
     payload = {
-        "model": settings.OLLAMA_MODEL,
+        "model": model or settings.OLLAMA_MODEL,
         "stream": False,
         "format": "json",
         "options": {
@@ -127,6 +135,8 @@ async def chat_json(
             {"role": "user", "content": user_prompt},
         ],
     }
+    if keep_alive:
+        payload["keep_alive"] = keep_alive
     url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
     resp = await client.post(url, json=payload)
     resp.raise_for_status()

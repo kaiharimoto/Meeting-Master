@@ -248,7 +248,40 @@ async function draftAnswers(jobId, payload) {
   return res.json();
 }
 
-async function postLiveQuestions(payload) {
+/** GET /live/config — how this server wants the mid-meeting loop driven. */
+async function getLiveConfig() {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/config`,
+    { headers, signal: AbortSignal.timeout(15000) },
+    'reading the live-suggestion settings'
+  );
+  if (!res.ok) await throwHttpError(res, 'reading the live-suggestion settings');
+  return res.json();
+}
+
+/** POST /live/warmup — load the live model before the meeting's first ask. */
+async function postLiveWarmup(timeoutMs) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/warmup`,
+    { method: 'POST', headers, signal: AbortSignal.timeout(timeoutMs || 120000) },
+    'warming up the live AI model'
+  );
+  if (!res.ok) await throwHttpError(res, 'warming up the live AI model');
+  return res.json();
+}
+
+/**
+ * POST /live/questions — one mid-meeting ask: recent transcript in, candidate
+ * Q&A pairs + key insights out.
+ *
+ * The timeout is passed IN (from GET /live/config) and is deliberately longer
+ * than the server's own budget. A client that gives up first turns a slow but
+ * working server into a permanent failure: every tick records an error, the
+ * loop backs off, and the operator sees nothing for the whole meeting.
+ */
+async function postLiveQuestions(payload, timeoutMs) {
   const { base, headers } = requireServerConfig();
   const res = await doFetch(
     `${base}/live/questions`,
@@ -256,11 +289,11 @@ async function postLiveQuestions(payload) {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(timeoutMs || 110000),
     },
-    'flagging live questions'
+    'asking for live suggestions'
   );
-  if (!res.ok) await throwHttpError(res, 'flagging live questions');
+  if (!res.ok) await throwHttpError(res, 'asking for live suggestions');
   return res.json();
 }
 
@@ -276,4 +309,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions, draftAnswers };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions, getLiveConfig, postLiveWarmup, draftAnswers };

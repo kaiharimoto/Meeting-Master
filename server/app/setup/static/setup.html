@@ -314,6 +314,64 @@
       <div class="taskmsg" id="ai-test-result"></div>
     </div>
 
+    <div class="card">
+      <h2>Live suggestions (during the meeting)</h2>
+      <p class="hint">
+        While the laptop is recording with the live transcript on, it asks this
+        server every so often for questions it heard being answered and key
+        insights worth carrying forward. The note-taker approves them one at a
+        time in a side panel. Everything about the loop is configured here — the
+        laptop reads these settings at the start of each meeting.
+      </p>
+      <label class="check-row" for="liveSuggestions">
+        <input id="liveSuggestions" type="checkbox" />
+        Send live suggestions to the laptop during meetings
+      </label>
+      <div class="row2">
+        <div>
+          <label for="liveModel">Live model (blank = the summary model)</label>
+          <input id="liveModel" type="text" autocomplete="off"
+                 placeholder="e.g. a smaller, faster installed model" list="ollama-model-list" />
+        </div>
+        <div>
+          <label for="liveIntervalSec">Ask every (seconds)</label>
+          <input id="liveIntervalSec" type="number" min="15" max="600" step="5" placeholder="45" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="liveTimeoutSec">Give up after (seconds)</label>
+          <input id="liveTimeoutSec" type="number" min="15" max="600" step="5" placeholder="90" />
+        </div>
+        <div>
+          <label for="liveWindowChars">Transcript window (characters)</label>
+          <input id="liveWindowChars" type="number" min="500" max="12000" step="500" placeholder="4000" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="liveKeepAliveMin">Keep the model loaded (minutes)</label>
+          <input id="liveKeepAliveMin" type="number" min="0" max="1440" step="5" placeholder="30" />
+        </div>
+        <div>
+          <label for="liveExtractNumPredict">Max output tokens per ask</label>
+          <input id="liveExtractNumPredict" type="number" min="128" max="4096" placeholder="600" />
+        </div>
+      </div>
+      <p class="hint">
+        Suggestions arriving late is the usual complaint, and the cause is
+        almost always a big summary model answering slower than the interval.
+        Fix it by naming a smaller <strong>live model</strong> above, or by
+        raising the interval. Keeping the model loaded avoids paying for a cold
+        start on every ask.
+      </p>
+      <div class="sub">
+        <button class="ghost small" id="live-test" type="button"
+                title="Run a real live-suggestion request over a fixed sample conversation">Test live suggestions</button>
+      </div>
+      <div class="taskmsg" id="live-test-result"></div>
+    </div>
+
     <div class="card savebar">
       <div class="actions">
         <button id="save" type="button">Save &amp; Finish</button>

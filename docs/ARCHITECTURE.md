@@ -185,6 +185,7 @@ Job record shape:
   },
   "summary": {
     "keyTakeaways": ["str"],
+    "keyInsights": ["str"],
     "decisions": ["str"],
     "actionItems": [ { "task": "str", "owner": "str", "due": "str", "priority": "high|normal|low" } ],
     "keyFigures": ["str"],
@@ -230,6 +231,40 @@ Job record shape:
 
   An empty `answer` means the window did not contain one — the laptop leaves
   that card blank rather than inventing something.
+
+### Mid-meeting live suggestions
+
+Three bearer-gated endpoints the laptop drives WHILE a meeting is being
+recorded, all stateless (no job, no store, nothing persisted). The post-meeting
+pipeline over the full transcript stays the quality backstop, so every failure
+here is degradable.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /live/config` | How to drive the loop: `{enabled, intervalSec, windowChars, timeoutSec, clientTimeoutSec, model, insights}`. Fetched once per session. |
+| `POST /live/warmup` | Loads the live model into VRAM (`keep_alive`) so the first ask doesn't pay for it. Never raises — `{ok, model, latencyMs, error}` IS the diagnosis. |
+| `POST /live/questions` | `{transcriptWindow, attendees, alreadyFlagged, alreadyInsights}` → `{questions: [ExtractedQuestion], insights: ["str"]}`. Ollama unreachable/garbled → `502`; empty window → `422`. |
+
+`insights` are candidate **Key Insights** — lessons to apply going forward,
+which become the summary's `keyInsights` when the operator keeps one. They are
+not a running summary of the meeting; that is the post-meeting `keyTakeaways`.
+
+Two rules this feature is built around, both learned from it not working:
+
+- **The server owns the configuration.** Everything (on/off, `LIVE_MODEL`,
+  interval, window, timeout, keep-alive, token budget) lives in `server.env` and
+  is edited on the dashboard's **Settings → Live suggestions**, with a **Test
+  live suggestions** button that runs the real path over a fixed sample
+  conversation. The laptop has no live-suggestion settings of its own — it asks.
+- **`clientTimeoutSec` > `timeoutSec`, always.** The laptop must be the more
+  patient of the two. It was not: a hard-coded 45 s client timeout against a
+  60 s server budget meant a home PC running a big model failed *every* ask
+  from the client side while answering fine — three failures, then a two-minute
+  backoff, and the feature was dead for the rest of the meeting. Nothing on
+  screen said so either, which is why the rail now carries a status line.
+
+When `LIVE_SUGGESTIONS` is false, `/live/config` answers `enabled: false`
+(a normal answer, not an error) and the other two return `503`.
 
 ### `POST /jobs/{id}/pdf`
 

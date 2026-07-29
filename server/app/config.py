@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.18.0"
+APP_VERSION = "0.19.0"
 
 
 def config_home() -> Path:
@@ -117,16 +117,40 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "gemma4:26b"
     NUM_CTX: int = 32768
-    # Structured summary output (Key Takeaways / Decisions / Action Items /
-    # Key Figures / Topics) — five sections including a table need real room.
+    # Structured summary output (Key Takeaways / Key Insights / Decisions /
+    # Action Items / Key Figures / Topics) — six sections including a table need
+    # real room.
     SUMMARY_NUM_PREDICT: int = 1400
     SUMMARY_TEMPERATURE: float = 0.3
     # Q&A extraction returns a JSON list — size it for a meeting's worth of
     # question/answer pairs; keep the temperature low for faithful extraction.
     EXTRACT_NUM_PREDICT: int = 1500
     EXTRACT_TEMPERATURE: float = 0.2
-    # Mid-meeting live question flagging (POST /live/questions): a small
-    # window and a small answer budget so results come back in seconds.
+
+    # --- Mid-meeting live suggestions (POST /live/questions) ---
+    # Q&A pairs AND key insights the operator can approve while the meeting is
+    # still running. The LAPTOP asks this server how to drive the loop (GET
+    # /live/config), so the whole feature is configured HERE, in one place, on
+    # the dashboard's Settings tab.
+    LIVE_SUGGESTIONS: bool = True
+    # Blank means "use OLLAMA_MODEL". Point this at a SMALLER installed model
+    # when the summary model can't answer inside a meeting — a tick that takes
+    # longer than the interval is a tick the operator never sees.
+    LIVE_MODEL: str = ""
+    # How often the laptop asks (seconds), and how much of its rough live
+    # transcript it sends. A small window keeps the round-trip in seconds.
+    LIVE_INTERVAL_SEC: int = 45
+    LIVE_WINDOW_CHARS: int = 4000
+    # Server-side budget for one live call. The laptop derives its own HTTP
+    # timeout from this (this + margin) so the client can never give up on a
+    # request the server is still working on — the bug that made live
+    # suggestions look permanently broken.
+    LIVE_TIMEOUT_SEC: int = 90
+    # Keep the live model resident in VRAM between ticks. A cold model load is
+    # the single biggest reason a mid-meeting call blows its budget.
+    LIVE_KEEP_ALIVE_MIN: int = 30
+    # A small answer budget so results come back while the conversation is
+    # still on the same subject.
     LIVE_EXTRACT_NUM_PREDICT: int = 600
 
     # --- Email (Gmail SMTP with an App Password) ---
@@ -171,6 +195,17 @@ class Settings(BaseSettings):
         return _resolve(self.EMAIL_TEMPLATE_PATH)
 
     @property
+    def live_model(self) -> str:
+        """The model the mid-meeting live path uses (falls back to the summary
+        model). Always read the live model through here."""
+        return self.LIVE_MODEL.strip() or self.OLLAMA_MODEL
+
+    @property
+    def live_keep_alive(self) -> str:
+        """Ollama ``keep_alive`` for live calls, as a duration string."""
+        return f"{max(0, int(self.LIVE_KEEP_ALIVE_MIN))}m"
+
+    @property
     def is_configured(self) -> bool:
         """Configured enough to leave setup mode and accept jobs."""
         return bool(self.BEARER_TOKEN.strip())
@@ -186,6 +221,12 @@ WRITABLE_KEYS = (
     "SUMMARY_TEMPERATURE",
     "EXTRACT_NUM_PREDICT",
     "EXTRACT_TEMPERATURE",
+    "LIVE_SUGGESTIONS",
+    "LIVE_MODEL",
+    "LIVE_INTERVAL_SEC",
+    "LIVE_WINDOW_CHARS",
+    "LIVE_TIMEOUT_SEC",
+    "LIVE_KEEP_ALIVE_MIN",
     "LIVE_EXTRACT_NUM_PREDICT",
     "WHISPER_MODEL_DEFAULT",
     "SMTP_USER",

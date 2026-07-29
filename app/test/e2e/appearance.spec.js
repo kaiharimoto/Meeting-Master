@@ -194,3 +194,58 @@ test('every step of the type scale moves with the control', async ({ page }) => 
   // every step has to move, and by the same factor.
   after.forEach((px, i) => expect(px / before[i]).toBeCloseTo(1.25, 3));
 });
+
+test('every checkbox row puts its box on the same line as its words', async ({ page }) => {
+  // Regression: `.field input` (width:100% + padding + border, for text inputs)
+  // also matched checkboxes, so the ones inside a field — "Live transcript",
+  // "Also record computer audio", "Turn the live transcript on by default" —
+  // rendered as a panel-wide padded box with the label stranded beside it. The
+  // high-contrast row escaped it with an !important the others never had.
+  await page.goto(INDEX_URL);
+  await page.locator('#settings-btn').click();
+
+  const metrics = await page.evaluate(() => {
+    const ids = [
+      'rec-live-check',
+      'rec-loopback-check',
+      'settings-live-default',
+      'settings-contrast-check',
+      'log-follow-check',
+    ];
+    // These rows are revealed by feature detection (whisper-cli present,
+    // Windows loopback capture) or live on another screen; the styling under
+    // test is the same either way.
+    ids.forEach((id) => {
+      let node = document.getElementById(id);
+      while (node && node !== document.body) {
+        if (node.hasAttribute && node.hasAttribute('hidden')) node.removeAttribute('hidden');
+        node = node.parentElement;
+      }
+    });
+    return ids.map((id) => {
+      const box = document.getElementById(id);
+      const row = box.closest('label');
+      const b = box.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      return {
+        id,
+        display: getComputedStyle(row).display,
+        width: Math.round(b.width),
+        height: Math.round(b.height),
+        // The box sits at the row's leading edge, on its first line.
+        indent: Math.round(b.left - r.left),
+        firstLineOffset: Math.round(b.top - r.top),
+      };
+    });
+  });
+
+  for (const m of metrics) {
+    // A checkbox, not a stretched text field: one consistent square box.
+    expect(m.width, `${m.id} box width`).toBe(15);
+    expect(m.height, `${m.id} box height`).toBe(15);
+    // Box and words on one line, box first.
+    expect(m.display, `${m.id} row layout`).toMatch(/flex/);
+    expect(m.indent, `${m.id} box indent`).toBe(0);
+    expect(m.firstLineOffset, `${m.id} vertical alignment`).toBeLessThanOrEqual(4);
+  }
+});

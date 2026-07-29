@@ -160,6 +160,18 @@ async def build_state() -> dict:
             "extractNumPredict": settings.EXTRACT_NUM_PREDICT,
             "extractTemperature": settings.EXTRACT_TEMPERATURE,
         },
+        # Mid-meeting live suggestions. Configured here and ONLY here — the
+        # laptop reads these off GET /live/config at the start of a meeting.
+        "liveParams": {
+            "liveSuggestions": settings.LIVE_SUGGESTIONS,
+            "liveModel": settings.LIVE_MODEL,
+            "liveModelEffective": settings.live_model,
+            "liveIntervalSec": settings.LIVE_INTERVAL_SEC,
+            "liveWindowChars": settings.LIVE_WINDOW_CHARS,
+            "liveTimeoutSec": settings.LIVE_TIMEOUT_SEC,
+            "liveKeepAliveMin": settings.LIVE_KEEP_ALIVE_MIN,
+            "liveExtractNumPredict": settings.LIVE_EXTRACT_NUM_PREDICT,
+        },
         "deps": await bootstrap.detect(),
         "tasks": bootstrap.all_task_states(),
         "updates": _updates_snapshot(),
@@ -190,6 +202,16 @@ class SaveBody(BaseModel):
     summaryTemperature: float | None = None
     extractNumPredict: int | None = None
     extractTemperature: float | None = None
+    # Mid-meeting live suggestions — None means "leave as saved".
+    liveSuggestions: bool | None = None
+    # "" is a MEANINGFUL value here (fall back to the summary model), so this
+    # one is distinguished from "not sent" by None, not by emptiness.
+    liveModel: str | None = None
+    liveIntervalSec: int | None = None
+    liveWindowChars: int | None = None
+    liveTimeoutSec: int | None = None
+    liveKeepAliveMin: int | None = None
+    liveExtractNumPredict: int | None = None
 
 
 # --- Routes -----------------------------------------------------------------
@@ -319,6 +341,26 @@ async def save(body: SaveBody) -> dict:
     if body.extractTemperature is not None:
         values["EXTRACT_TEMPERATURE"] = _clamp(float(body.extractTemperature), 0.0, 2.0)
 
+    # Live suggestions. The clamps matter more here than elsewhere: these run
+    # while a meeting is in progress, so a too-short interval or too-tight
+    # timeout produces a loop that fails every tick instead of a slow one.
+    if body.liveSuggestions is not None:
+        values["LIVE_SUGGESTIONS"] = "true" if body.liveSuggestions else "false"
+    if body.liveModel is not None:
+        values["LIVE_MODEL"] = body.liveModel.strip()
+    if body.liveIntervalSec is not None:
+        values["LIVE_INTERVAL_SEC"] = _clamp(int(body.liveIntervalSec), 15, 600)
+    if body.liveWindowChars is not None:
+        values["LIVE_WINDOW_CHARS"] = _clamp(int(body.liveWindowChars), 500, 12000)
+    if body.liveTimeoutSec is not None:
+        values["LIVE_TIMEOUT_SEC"] = _clamp(int(body.liveTimeoutSec), 15, 600)
+    if body.liveKeepAliveMin is not None:
+        values["LIVE_KEEP_ALIVE_MIN"] = _clamp(int(body.liveKeepAliveMin), 0, 1440)
+    if body.liveExtractNumPredict is not None:
+        values["LIVE_EXTRACT_NUM_PREDICT"] = _clamp(
+            int(body.liveExtractNumPredict), 128, 4096
+        )
+
     config.write_env(values)
     log.info("Setup saved (server is now configured=%s)", config.get_settings().is_configured)
     return await build_state()
@@ -432,6 +474,80 @@ async def setup_ollama_models() -> dict:
             "quant": details.get("quantization_level") or "",
         })
     return {"models": [m for m in models if m["name"]]}
+
+
+class LiveTestBody(BaseModel):
+    """Overrides for a live-suggestions test run, so the operator can prove a
+    setting works BEFORE saving it. None => use what is saved."""
+
+    liveModel: str | None = None
+    liveTimeoutSec: int | None = None
+    liveExtractNumPredict: int | None = None
+
+
+# A short scripted excerpt with exactly one answered question and one genuine
+# forward-looking lesson in it. Fixed text so the test measures the MODEL, not
+# the meeting — and so a plausible-looking empty result is a real failure.
+_LIVE_TEST_WINDOW = (
+    "Priya: Before we go on — what did the renewal quote come back at? "
+    "Marcus: Twelve percent up, locked for twenty-four months. "
+    "Priya: Twelve? We only found that out this morning. "
+    "Marcus: Yes, the vendor sat on it for three weeks and we did not chase "
+    "them, so we are agreeing to it with two days left before the deadline. "
+    "Priya: Right. We cannot be in this position again next year."
+)
+
+
+@router.post("/live-test")
+async def setup_live_test(body: LiveTestBody) -> dict:
+    """Run the REAL mid-meeting live path over a fixed scripted excerpt.
+
+    The one honest answer to "live suggestions don't work": it uses the same
+    prompt, model, timeout and parsing a real meeting does, and reports what
+    came back — how long it took, how many questions and insights, and the
+    exact error if any. Never raises; the result IS the diagnosis.
+    """
+    import time
+
+    from ..pipeline import extract
+
+    settings = config.get_settings()
+    overrides: dict = {}
+    if body.liveModel is not None:
+        overrides["LIVE_MODEL"] = body.liveModel.strip()
+    if body.liveTimeoutSec:
+        overrides["LIVE_TIMEOUT_SEC"] = max(15, min(600, int(body.liveTimeoutSec)))
+    if body.liveExtractNumPredict:
+        overrides["LIVE_EXTRACT_NUM_PREDICT"] = max(
+            128, min(4096, int(body.liveExtractNumPredict))
+        )
+    if overrides:
+        settings = settings.model_copy(update=overrides)
+
+    start = time.monotonic()
+    result = None
+    error = None
+    try:
+        result = await extract.run_live(
+            _LIVE_TEST_WINDOW, ["Priya", "Marcus"], [], [], settings
+        )
+    except Exception as exc:
+        error = str(exc)
+        log.warning("Live suggestions test failed: %s", exc)
+    latency_ms = int((time.monotonic() - start) * 1000)
+    return {
+        "ok": error is None,
+        "enabled": settings.LIVE_SUGGESTIONS,
+        "model": settings.live_model,
+        "latencyMs": latency_ms,
+        "intervalSec": settings.LIVE_INTERVAL_SEC,
+        # A run that is slower than the interval means every tick lands on top
+        # of the previous one — worth saying out loud, not just timing.
+        "slowerThanInterval": latency_ms > settings.LIVE_INTERVAL_SEC * 1000,
+        "questions": [q.model_dump() for q in (result.questions if result else [])],
+        "insights": list(result.insights) if result else [],
+        "error": error,
+    }
 
 
 class AiTestBody(BaseModel):

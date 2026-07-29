@@ -1,15 +1,21 @@
 // In-app summary editor. Lets the operator review and adjust the AI summary
-// (Key Takeaways, Decisions, Action Items, Key Figures, Topics) BEFORE the PDF
-// is generated — the same "you're in control of what goes out" idea as the
-// question-approval step. Edits ctx.state.summary in place.
+// (Key Takeaways, Key Insights, Decisions, Action Items, Key Figures, Topics)
+// BEFORE the PDF is generated — the same "you're in control of what goes out"
+// idea as the question-approval step. Edits ctx.state.summary in place.
+//
+// Key Takeaways vs Key Insights is a real distinction, not a synonym pair:
+// takeaways record what happened at the meeting, insights are the lessons to
+// apply afterwards. Both ship as their own PDF section.
 
 import { openModal, closeModal } from './modalKit.js';
+import { withKeptInsights, reconcileKept } from './liveInsights.js';
 
 let ctx = null;
 let onSaved = null;
 
-let backdrop, takeawaysEl, decisionsEl, actionsHost, figuresEl, topicsEl,
-  ownerOptions, addActionBtn, saveBtn, cancelBtn, importText, importBtn, importNote;
+let backdrop, takeawaysEl, insightsEl, decisionsEl, actionsHost, figuresEl,
+  topicsEl, ownerOptions, addActionBtn, saveBtn, cancelBtn, importText,
+  importBtn, importNote;
 
 const PRIORITIES = ['high', 'normal', 'low'];
 
@@ -19,6 +25,7 @@ export function initSummaryEdit(context, opts) {
 
   backdrop = document.getElementById('summary-modal');
   takeawaysEl = document.getElementById('sum-takeaways');
+  insightsEl = document.getElementById('sum-insights');
   decisionsEl = document.getElementById('sum-decisions');
   actionsHost = document.getElementById('sum-actions');
   figuresEl = document.getElementById('sum-figures');
@@ -153,15 +160,16 @@ export function parseAiSummary(rawText) {
     .filter(Boolean);
   const summary = {
     keyTakeaways: stringList(data, ['keyTakeaways', 'key_takeaways']),
+    keyInsights: stringList(data, ['keyInsights', 'key_insights', 'insights']),
     decisions: stringList(data, ['decisions', 'decisionsMade']),
     actionItems,
     keyFigures: stringList(data, ['keyFigures', 'key_figures', 'figures']),
     topics: stringList(data, ['topics', 'topicsDiscussed']),
   };
   if (
-    !summary.keyTakeaways.length && !summary.decisions.length &&
-    !summary.actionItems.length && !summary.keyFigures.length && !summary.topics.length &&
-    !questions.length
+    !summary.keyTakeaways.length && !summary.keyInsights.length &&
+    !summary.decisions.length && !summary.actionItems.length &&
+    !summary.keyFigures.length && !summary.topics.length && !questions.length
   ) {
     throw new Error('The JSON parsed but contained no summary sections or questions.');
   }
@@ -173,6 +181,9 @@ async function applyImport() {
   try {
     const s = parseAiSummary(importText.value);
     takeawaysEl.value = linesToText(s.keyTakeaways);
+    // Insights kept from the live rail lead — an import must not silently drop
+    // what the operator picked by hand during the meeting.
+    insightsEl.value = linesToText(withKeptInsights(ctx.state, s.keyInsights));
     decisionsEl.value = linesToText(s.decisions);
     figuresEl.value = linesToText(s.keyFigures);
     topicsEl.value = linesToText(s.topics);
@@ -199,6 +210,7 @@ export function openSummaryEdit() {
   if (importNote) importNote.textContent = '';
   const s = currentSummary();
   takeawaysEl.value = linesToText(s.keyTakeaways);
+  insightsEl.value = linesToText(s.keyInsights);
   decisionsEl.value = linesToText(s.decisions);
   figuresEl.value = linesToText(s.keyFigures);
   topicsEl.value = linesToText(s.topics);
@@ -286,8 +298,13 @@ function collectActions() {
 }
 
 function save() {
+  const insights = textToLines(insightsEl.value);
+  // An insight edited out here stays out: forget it as a kept one, or the next
+  // AI run would re-assert it and quietly undo the edit.
+  reconcileKept(ctx.state, insights);
   ctx.state.summary = {
     keyTakeaways: textToLines(takeawaysEl.value),
+    keyInsights: insights,
     decisions: textToLines(decisionsEl.value),
     actionItems: collectActions(),
     keyFigures: textToLines(figuresEl.value),

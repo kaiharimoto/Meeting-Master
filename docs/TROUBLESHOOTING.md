@@ -202,6 +202,45 @@ passes `preferCSSPageSize: true` to keep the `@page` margins). If you've
 touched `app/src/main/pdf.js`, check those options are still there;
 `print.css` additionally sets `print-color-adjust: exact` as belt-and-braces.
 
+## Live suggestions never appear during a meeting
+
+The rail beside the Q&A panel now tells you which of these it is — read its
+status line first (it is one quiet sentence under the heading, deliberately not
+a popup).
+
+- **"Live suggestions are switched off on the home server."** Turn them on:
+  dashboard → **Settings** → **Live suggestions** → tick the box → **Save**.
+- **"The home server's AI is not answering…" / "Last request failed…"** The ask
+  reached the server and failed. Click **Test live suggestions** on that same
+  card — it runs the real request over a fixed sample and reports the actual
+  error, the model, and the latency.
+- **"Live suggestions are paused — … Retrying every 2 minutes."** Three failures
+  in a row. Almost always the model being too slow to answer inside a meeting.
+- **The rail never appears at all.** Suggestions ride on the live transcript, so
+  **Live transcript (beta)** must be ticked in the Record panel (and its model
+  downloaded via Settings → Live transcription). No live transcript, nothing to
+  ask about.
+- **Nothing but "Listening…" for the whole meeting.** The loop only asks when
+  there is *new* transcript text since the last successful ask, and a real
+  meeting often genuinely contains no answered questions for minutes at a time.
+  Confirm the draft transcript itself is filling up.
+
+Two settings do most of the work when it is slow (dashboard → Settings → Live
+suggestions):
+
+- **Live model** — blank means the summary model, which is sized for quality
+  after the meeting, not for answering during one. Naming a smaller installed
+  model here is the single most effective fix.
+- **Ask every** — raise it above the measured latency. An ask that takes longer
+  than the interval lands on top of the next one.
+
+Historical note, in case you are reading an older build's behaviour: before
+v0.19.0 the laptop gave up after 45 seconds while the server allowed itself 60,
+so a home PC running a big model failed *every* ask from the client side while
+answering perfectly well — and nothing on screen said so. The laptop now
+derives its timeout from the server's (`GET /live/config`) and is always the
+more patient of the two.
+
 ## Summary covers only the end of the meeting
 
 Classic silent-truncation symptom: the model only ever saw the tail of the

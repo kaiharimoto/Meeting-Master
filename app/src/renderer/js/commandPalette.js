@@ -69,7 +69,7 @@ function commands() {
       const host = document.getElementById('extract-review');
       return Boolean(host) && !host.hidden;
     }),
-    command('Edit summary', 'takeaways decisions action items figures topics', () =>
+    command('Edit summary', 'takeaways insights decisions action items figures topics', () =>
       openSummaryEdit()
     ),
     button('fill-answers-btn', 'Fill blank answers from the transcript',

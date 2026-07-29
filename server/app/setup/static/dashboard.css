@@ -178,6 +178,17 @@ input[type=text], input[type=email], input[type=password], textarea {
   color: var(--ink); border-radius: var(--r-sm); padding: 10px 12px; font: inherit;
 }
 input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+/* A checkbox and its words on one line — `label` is display:block above, which
+   would strand the box on its own row. Same treatment as .log-follow. */
+.check-row {
+  display: inline-flex; align-items: flex-start; gap: 8px;
+  margin: 14px 0 6px; font-weight: 400; cursor: pointer;
+}
+.check-row input[type=checkbox] {
+  flex: none; width: 15px; height: 15px; margin-top: 2px; accent-color: var(--accent);
+}
+.log-follow input[type=checkbox] { flex: none; accent-color: var(--accent); }
 textarea { resize: vertical; min-height: 60px; }
 textarea.tpl { min-height: 150px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
 .note { font-size: 12px; color: var(--warn-ink); margin-top: 6px; }

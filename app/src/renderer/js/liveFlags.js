@@ -1,22 +1,33 @@
-// Live question suggestions — the peripheral rail beside the Meeting screen.
+// Live suggestions — the peripheral rail beside the Meeting screen.
 //
-// Candidates flagged mid-meeting by the home server (LIVE_EVENT
+// Suggestions flagged mid-meeting by the home server (LIVE_EVENT
 // {type:'flag-candidates'}) collect in a sticky side rail the operator can
 // MONITOR while typing questions manually: it never reflows the main column,
 // never grabs focus, never announces itself, and stays visible (and mouse-
 // clickable) above the capture modal's backdrop. New arrivals just bump the
 // counter and glide in.
 //
-// Approve turns a suggestion into an ordinary editable card; Dismiss
-// remembers the question (per meeting) so neither the live loop nor the
-// post-meeting extraction re-surfaces it. Un-actioned suggestions are merged
-// into the post-meeting review by captureExtracted() — nothing vanishes.
+// Two kinds of suggestion, each with its own destination:
+//   * Questions — Approve turns one into an ordinary editable card.
+//   * Key insights — Keep adds one to the summary's Key Insights, which is its
+//     own section in the PDF (lessons to apply going forward, as distinct from
+//     Key Takeaways' record of what happened).
+//
+// Dismiss remembers the item (per meeting) so neither the live loop nor the
+// post-meeting extraction re-surfaces it. Un-actioned questions are merged into
+// the post-meeting review by captureExtracted() — nothing vanishes.
+//
+// The rail also carries the loop's status line ({type:'flag-status'}). It is
+// deliberately understated — no toast, no focus, aria-live off — but it is
+// there: before it existed, a home server that was unreachable, switched off,
+// or simply slow all looked exactly like a quiet meeting.
 
 import { setStatus } from './status.js';
 import { showToast } from './toast.js';
 import { normQ, isDuplicate } from './extractReview.js';
 import { addCard } from './capture.js';
 import { updateButtons } from './generate.js';
+import { liveFlagsState, normI, keepInsight } from './liveInsights.js';
 
 let ctx = null;
 let els = null;
@@ -24,15 +35,11 @@ let els = null;
 // The rail shows while a live session runs (even when empty, so the operator
 // knows it is listening) and whenever suggestions are pending.
 let liveSessionActive = false;
+// Last {state, message} from the flagging loop, rendered as the status line.
+let loopStatus = null;
 
 function flagsState() {
-  if (!ctx.state.liveFlags || typeof ctx.state.liveFlags !== 'object') {
-    ctx.state.liveFlags = { pending: [], dismissed: [] };
-  }
-  const lf = ctx.state.liveFlags;
-  if (!Array.isArray(lf.pending)) lf.pending = [];
-  if (!Array.isArray(lf.dismissed)) lf.dismissed = [];
-  return lf;
+  return liveFlagsState(ctx.state);
 }
 
 export function initLiveFlags(context) {
@@ -42,6 +49,9 @@ export function initLiveFlags(context) {
     list: document.getElementById('live-rail-list'),
     count: document.getElementById('live-rail-count'),
     empty: document.getElementById('live-rail-empty'),
+    status: document.getElementById('live-rail-status'),
+    insightGroup: document.getElementById('live-rail-insight-group'),
+    insightList: document.getElementById('live-rail-insights'),
     screen: document.getElementById('screen-meeting'),
   };
   if (!els.rail || !els.list) return;
@@ -49,9 +59,14 @@ export function initLiveFlags(context) {
   if (ctx.api && typeof ctx.api.onLiveEvent === 'function') {
     ctx.api.onLiveEvent((payload) => {
       if (!payload) return;
-      if (payload.type === 'flag-candidates') addCandidates(payload.questions);
-      else if (payload.type === 'stopped') {
+      if (payload.type === 'flag-candidates') {
+        addCandidates(payload.questions, payload.insights);
+      } else if (payload.type === 'flag-status') {
+        loopStatus = { state: payload.state || '', message: payload.message || '' };
+        renderLiveFlags();
+      } else if (payload.type === 'stopped') {
         liveSessionActive = false;
+        loopStatus = null;
         renderLiveFlags();
       }
     });
@@ -69,34 +84,61 @@ export function initLiveFlags(context) {
   renderLiveFlags();
 }
 
-function addCandidates(questions) {
-  const list = Array.isArray(questions) ? questions : [];
-  if (list.length === 0) return;
+function addCandidates(questions, insights) {
   const lf = flagsState();
-  const cardQs = (ctx.state.cards || []).map((c) => normQ(c.question)).filter(Boolean);
-  const pendingQs = lf.pending.map((p) => normQ(p.question));
-
   let added = 0;
-  for (const q of list) {
-    if (!q || !q.question) continue;
-    const nq = normQ(q.question);
-    if (!nq) continue;
-    const dupe =
-      cardQs.some((e) => isDuplicate(nq, e)) ||
-      pendingQs.some((e) => isDuplicate(nq, e)) ||
-      lf.dismissed.some((e) => isDuplicate(nq, e));
-    if (dupe) continue;
-    lf.pending.push({
-      question: String(q.question || ''),
-      answer: String(q.answer || ''),
-      answerer: String(q.answerer || ''),
-      directedTo: String(q.directedTo || ''),
-      confidence: q.confidence === 'high' ? 'high' : 'low',
-      isNew: true, // one-shot arrival animation
-    });
-    pendingQs.push(nq);
-    added += 1;
+
+  const list = Array.isArray(questions) ? questions : [];
+  if (list.length > 0) {
+    const cardQs = (ctx.state.cards || []).map((c) => normQ(c.question)).filter(Boolean);
+    const pendingQs = lf.pending.map((p) => normQ(p.question));
+    for (const q of list) {
+      if (!q || !q.question) continue;
+      const nq = normQ(q.question);
+      if (!nq) continue;
+      const dupe =
+        cardQs.some((e) => isDuplicate(nq, e)) ||
+        pendingQs.some((e) => isDuplicate(nq, e)) ||
+        lf.dismissed.some((e) => isDuplicate(nq, e));
+      if (dupe) continue;
+      lf.pending.push({
+        question: String(q.question || ''),
+        answer: String(q.answer || ''),
+        answerer: String(q.answerer || ''),
+        directedTo: String(q.directedTo || ''),
+        confidence: q.confidence === 'high' ? 'high' : 'low',
+        isNew: true, // one-shot arrival animation
+      });
+      pendingQs.push(nq);
+      added += 1;
+    }
   }
+
+  // Insights are plain strings; dedupe against what is pending, already kept,
+  // dismissed, or already in the summary (the AI can re-notice its own point).
+  const insightList = Array.isArray(insights) ? insights : [];
+  if (insightList.length > 0) {
+    const summary = ctx.state.summary;
+    const inSummary =
+      summary && typeof summary === 'object' && Array.isArray(summary.keyInsights)
+        ? summary.keyInsights.map(normI)
+        : [];
+    const known = new Set([
+      ...lf.pendingInsights.map(normI),
+      ...lf.dismissedInsights.map(normI),
+      ...lf.keptInsights.map(normI),
+      ...inSummary,
+    ]);
+    for (const raw of insightList) {
+      const text = String(raw || '').trim();
+      const key = normI(text);
+      if (!text || !key || known.has(key)) continue;
+      known.add(key);
+      lf.pendingInsights.push(text);
+      added += 1;
+    }
+  }
+
   if (added > 0) {
     ctx.persist();
     renderLiveFlags();
@@ -111,13 +153,18 @@ function addCandidates(questions) {
 export function renderLiveFlags() {
   if (!els || !els.rail) return;
   const lf = flagsState();
-  const n = lf.pending.length;
+  const nQ = lf.pending.length;
+  const nI = lf.pendingInsights.length;
+  const n = nQ + nI;
 
   const show = liveSessionActive || n > 0;
   els.rail.hidden = !show;
   if (els.screen) els.screen.classList.toggle('has-rail', show);
   if (!show) {
     els.list.replaceChildren();
+    if (els.insightList) els.insightList.replaceChildren();
+    if (els.insightGroup) els.insightGroup.hidden = true;
+    if (els.status) els.status.hidden = true;
     return;
   }
 
@@ -127,11 +174,36 @@ export function renderLiveFlags() {
     // A bare numeral next to a heading reads as "1". Say what it counts.
     els.count.setAttribute('aria-label', `${n} suggestion${n === 1 ? '' : 's'} waiting`);
   }
-  if (els.empty) els.empty.hidden = n !== 0;
+  renderStatus();
+  // The "listening…" explainer only earns its space while nothing is pending
+  // and nothing more urgent (an error, "switched off") is being said.
+  const statusOwnsTheSpace = Boolean(
+    loopStatus && (loopStatus.state === 'off' || loopStatus.state === 'error')
+  );
+  if (els.empty) els.empty.hidden = n !== 0 || statusOwnsTheSpace;
 
   refreshDatalist();
   els.list.replaceChildren();
   lf.pending.forEach((candidate, index) => els.list.append(buildRow(candidate, index)));
+
+  if (els.insightGroup && els.insightList) {
+    els.insightGroup.hidden = nI === 0;
+    els.insightList.replaceChildren();
+    lf.pendingInsights.forEach((text, index) =>
+      els.insightList.append(buildInsightRow(text, index))
+    );
+  }
+}
+
+function renderStatus() {
+  if (!els.status) return;
+  if (!loopStatus || !loopStatus.message) {
+    els.status.hidden = true;
+    return;
+  }
+  els.status.hidden = false;
+  els.status.textContent = loopStatus.message;
+  els.status.dataset.state = loopStatus.state || '';
 }
 
 // The shared answerer datalist lives in the extract modal's markup; options
@@ -248,6 +320,73 @@ function buildRow(candidate, index) {
   });
 
   actions.append(approve, dismiss);
+  row.append(actions);
+  return row;
+}
+
+// An insight row: the lesson, then Keep / Dismiss. Keep writes it straight into
+// the summary's Key Insights (and remembers it, so the post-meeting summary
+// can't overwrite the operator's own choice).
+function buildInsightRow(text, index) {
+  const row = document.createElement('div');
+  row.className = 'live-flag-row live-insight-row';
+
+  const body = document.createElement('div');
+  body.className = 'live-flag-q';
+  body.textContent = text;
+  row.append(body);
+
+  const actions = document.createElement('div');
+  actions.className = 'live-flag-actions';
+
+  const keep = document.createElement('button');
+  keep.type = 'button';
+  keep.className = 'btn btn-primary btn-small';
+  keep.textContent = 'Keep';
+  keep.title = 'Add this to Key Insights in the summary and the PDF';
+  keep.addEventListener('click', () => {
+    const lf = flagsState();
+    lf.pendingInsights.splice(index, 1);
+    keepInsight(ctx.state, text);
+    ctx.persist();
+    renderLiveFlags();
+    updateButtons(ctx);
+    setStatus('Insight added to Key Insights.');
+  });
+
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'btn btn-secondary btn-small';
+  dismiss.textContent = 'Dismiss';
+  dismiss.addEventListener('click', () => {
+    const lf = flagsState();
+    const key = normI(text);
+    if (key && !lf.dismissedInsights.includes(key)) lf.dismissedInsights.push(key);
+    lf.pendingInsights.splice(index, 1);
+    ctx.persist();
+    renderLiveFlags();
+    showToast({
+      kind: 'info',
+      title: 'Insight dismissed',
+      message: text,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          const state = flagsState();
+          state.dismissedInsights = state.dismissedInsights.filter((d) => d !== key);
+          state.pendingInsights.splice(
+            Math.min(index, state.pendingInsights.length),
+            0,
+            text
+          );
+          ctx.persist();
+          renderLiveFlags();
+        },
+      },
+    });
+  });
+
+  actions.append(keep, dismiss);
   row.append(actions);
   return row;
 }

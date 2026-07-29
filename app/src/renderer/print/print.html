@@ -192,7 +192,8 @@
     }
 
     // Render data.summary, either the structured object
-    // {keyTakeaways, decisions, actionItems, keyFigures, topics} or (legacy) a string.
+    // {keyTakeaways, keyInsights, decisions, actionItems, keyFigures, topics}
+    // or (legacy) a string.
     function renderSummary(host, summary) {
       host.textContent = '';
 
@@ -215,13 +216,14 @@
       host.classList.remove('is-prose');
       summary = summary || {};
       var takeaways = cleanStrings(summary.keyTakeaways);
+      var insights = cleanStrings(summary.keyInsights);
       var decisions = cleanStrings(summary.decisions);
       var actions = cleanActions(summary.actionItems);
       var figures = cleanStrings(summary.keyFigures);
       var topics = cleanStrings(summary.topics);
 
-      if (!takeaways.length && !decisions.length && !actions.length &&
-          !figures.length && !topics.length) {
+      if (!takeaways.length && !insights.length && !decisions.length &&
+          !actions.length && !figures.length && !topics.length) {
         return renderSummaryPlaceholder(host);
       }
 
@@ -243,6 +245,33 @@
         }
       );
       if (key) host.appendChild(key);
+
+      // Key Insights — arrow markers: lessons pointing FORWARD, out of this
+      // meeting and into the next one. Deliberately distinct from Key
+      // Takeaways above (what happened) and set in the same weight, since a
+      // reader looking for "what do we do differently" comes here.
+      var ins = buildSummarySection(
+        'Key Insights', 'sum-insights', insights, 'ul',
+        function (text) {
+          var li = document.createElement('li');
+          li.className = 'insight';
+          var body = document.createElement('span');
+          body.className = 'insight-text';
+          body.textContent = text;
+          li.appendChild(body);
+          return li;
+        }
+      );
+      if (ins) {
+        var note = ins.querySelector('.sum-heading');
+        // A one-line gloss on paper: nobody reading the PDF has seen the UI
+        // copy that explains how insights differ from takeaways.
+        var kicker = document.createElement('span');
+        kicker.className = 'sum-heading-note';
+        kicker.textContent = 'to apply going forward';
+        note.appendChild(kicker);
+        host.appendChild(ins);
+      }
 
       // Decisions — filled accent markers (agreed = settled).
       var dec = buildSummarySection(
@@ -311,6 +340,7 @@
       var entries = [['Questions & Answers', cards.length]];
       if (summary && typeof summary === 'object') {
         entries.push(['Key Takeaways', cleanStrings(summary.keyTakeaways).length]);
+        entries.push(['Key Insights', cleanStrings(summary.keyInsights).length]);
         entries.push(['Decisions', cleanStrings(summary.decisions).length]);
         entries.push(['Action Items', cleanActions(summary.actionItems).length]);
         entries.push(['Key Figures', cleanStrings(summary.keyFigures).length]);

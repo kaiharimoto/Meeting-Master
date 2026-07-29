@@ -76,10 +76,14 @@ def test_full_pipeline(client):
 
     assert "stub transcript" in record["transcript"]["text"]
 
-    # Summary is a structured deck: takeaways / decisions / action items /
-    # figures / topics.
+    # Summary is a structured deck: takeaways / insights / decisions / action
+    # items / figures / topics.
     summary = record["summary"]
     assert summary["keyTakeaways"] == CANNED_SUMMARY_SECTIONS["keyTakeaways"]
+    # Key Insights is its OWN section, not a rewording of the takeaways: it
+    # reaches the PDF separately (lessons to apply, vs a record of the meeting).
+    assert summary["keyInsights"] == CANNED_SUMMARY_SECTIONS["keyInsights"]
+    assert summary["keyInsights"] != summary["keyTakeaways"]
     assert summary["decisions"] == CANNED_SUMMARY_SECTIONS["decisions"]
     assert summary["topics"] == CANNED_SUMMARY_SECTIONS["topics"]
     assert summary["keyFigures"] == CANNED_SUMMARY_SECTIONS["keyFigures"]

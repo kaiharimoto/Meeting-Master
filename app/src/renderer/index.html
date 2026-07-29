@@ -292,10 +292,12 @@
              aria-label="Suggestions rail width"
              aria-valuemin="240" aria-valuemax="460" aria-valuenow="300"></div>
 
-        <!-- Live question suggestions: a peripheral rail the operator can
-             monitor while typing questions — it never reflows the main
-             column, and it stays visible above the capture modal's dim. -->
-        <aside id="live-rail" class="live-rail" aria-label="Live question suggestions" hidden>
+        <!-- Live suggestions: a peripheral rail the operator can monitor while
+             typing questions — it never reflows the main column, and it stays
+             visible above the capture modal's dim. Two kinds of suggestion:
+             answered questions (become cards) and key insights (become Key
+             Insights in the summary + PDF). -->
+        <aside id="live-rail" class="live-rail" aria-label="Live suggestions" hidden>
           <div class="live-rail-head">
             <h2>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -303,11 +305,23 @@
               <span id="live-rail-count" class="live-rail-count" hidden>0</span>
             </h2>
           </div>
+          <!-- What the loop is doing right now. Quiet by design (aria-live off,
+               no toast): the operator is in a meeting. But never blank —
+               "asking", "unreachable" and "switched off" must be tellable
+               apart without opening a log. -->
+          <p id="live-rail-status" class="live-rail-status" aria-live="off" hidden></p>
           <p id="live-rail-empty" class="live-rail-empty" hidden>
-            Listening… questions the AI hears in the conversation will appear
-            here. Approve the good ones whenever you have a moment.
+            Listening… questions the AI hears being answered, and insights worth
+            keeping, appear here. Approve the good ones whenever you have a moment.
           </p>
           <div id="live-rail-list" class="live-rail-list" aria-live="polite"></div>
+          <div id="live-rail-insight-group" class="live-rail-group" hidden>
+            <h3 class="live-rail-subhead">
+              Key insights
+              <span class="live-rail-subnote">lessons to apply later</span>
+            </h3>
+            <div id="live-rail-insights" class="live-rail-list" aria-live="polite"></div>
+          </div>
         </aside>
         </div><!-- /.meeting-columns -->
       </section>
@@ -506,6 +520,16 @@
       <div class="field">
         <label for="sum-takeaways">Key Takeaways</label>
         <textarea id="sum-takeaways" rows="4" placeholder="One takeaway per line"></textarea>
+        <p class="settings-help">What happened — the outcomes and conclusions of this meeting.</p>
+      </div>
+
+      <div class="field">
+        <label for="sum-insights">Key Insights</label>
+        <textarea id="sum-insights" rows="3" placeholder="One insight per line"></textarea>
+        <p class="settings-help">
+          Lessons to apply going forward — what to do differently next time.
+          Not a second copy of the takeaways above.
+        </p>
       </div>
 
       <div class="field">
@@ -707,6 +731,12 @@
           Runs on this laptop's GPU while you record. The live transcript is a
           draft — the final transcript is still produced by the home server
           after the meeting.
+        </p>
+        <p class="settings-help">
+          The <strong>Live suggestions</strong> rail (questions and key insights
+          heard mid-meeting) rides on this transcript, and is configured on the
+          home server's dashboard under <strong>Settings → Live
+          suggestions</strong> — including which model answers and how often.
         </p>
       </div>
 

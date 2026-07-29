@@ -1,8 +1,10 @@
 'use strict';
 
 // The in-app summary editor: the operator can adjust the AI summary (takeaways,
-// decisions, action items, figures, topics) before generating the PDF. Verifies
-// the editor loads the current summary and round-trips edits back into state.
+// insights, decisions, action items, figures, topics) before generating the PDF.
+// Verifies the editor loads the current summary and round-trips edits back into
+// state — including Key Insights, which is its own section (lessons to apply)
+// and not a rewording of Key Takeaways (what happened).
 
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -21,6 +23,7 @@ const SEED = {
   transcript: null,
   summary: {
     keyTakeaways: ['First takeaway.', 'Second takeaway.'],
+    keyInsights: ['Start the review a week earlier next time.'],
     decisions: ['Approved the plan.'],
     actionItems: [{ task: 'Ship it', owner: 'Alice', due: 'Friday', priority: 'high' }],
     keyFigures: ['$10k budget'],
@@ -49,6 +52,9 @@ test('the editor loads the summary and round-trips edits', async ({ page }) => {
 
   // Loads the seeded content.
   await expect(page.locator('#sum-takeaways')).toHaveValue(/First takeaway\./);
+  await expect(page.locator('#sum-insights')).toHaveValue(
+    'Start the review a week earlier next time.'
+  );
   await expect(page.locator('#sum-decisions')).toHaveValue('Approved the plan.');
   const rows = page.locator('.action-edit-row');
   await expect(rows).toHaveCount(1);
@@ -57,6 +63,9 @@ test('the editor loads the summary and round-trips edits', async ({ page }) => {
 
   // Edit: add a takeaway line and a second action item.
   await page.locator('#sum-takeaways').fill('First takeaway.\nSecond takeaway.\nThird takeaway.');
+  await page.locator('#sum-insights').fill(
+    'Start the review a week earlier next time.\nKeep the vendor on a written timeline.'
+  );
   await page.getByRole('button', { name: 'Add action item' }).click();
   const newRow = page.locator('.action-edit-row').nth(1);
   await newRow.locator('.ae-task').fill('Review contract');
@@ -67,6 +76,55 @@ test('the editor loads the summary and round-trips edits', async ({ page }) => {
   // Reopen — the edits persisted into state and reload into the editor.
   await page.getByRole('button', { name: 'Edit summary' }).click();
   await expect(page.locator('#sum-takeaways')).toHaveValue(/Third takeaway\./);
+  await expect(page.locator('#sum-insights')).toHaveValue(/written timeline\./);
   await expect(page.locator('.action-edit-row')).toHaveCount(2);
   await expect(page.locator('.action-edit-row').nth(1).locator('.ae-task')).toHaveValue('Review contract');
+});
+
+test('insights kept from the live rail survive an AI summary landing on top', async ({ page }) => {
+  // The operator keeps an insight mid-meeting; later the home server's own
+  // summary REPLACES state.summary. The hand-picked insight must not vanish
+  // with it — and it must lead, since a person chose it.
+  await page.evaluate(async () => {
+    const { keepInsight, applyKeptInsights } = await import('./js/liveInsights.js');
+    const state = { summary: { keyTakeaways: ['t'], keyInsights: [] }, liveFlags: {} };
+    keepInsight(state, 'Chase the vendor before the deadline next time.');
+    // The server's summary arrives and overwrites everything.
+    state.summary = { keyTakeaways: ['AI takeaway'], keyInsights: ['An AI insight.'] };
+    applyKeptInsights(state);
+    window.__result = state;
+  });
+  const state = await page.evaluate(() => window.__result);
+  expect(state.summary.keyInsights).toEqual([
+    'Chase the vendor before the deadline next time.',
+    'An AI insight.',
+  ]);
+  expect(state.liveFlags.keptInsights).toEqual([
+    'Chase the vendor before the deadline next time.',
+  ]);
+});
+
+test('an insight edited out is forgotten, so a later AI run cannot re-assert it', async ({ page }) => {
+  // Without this, deleting a kept insight in the editor would only hold until
+  // the next AI run put it back — an edit that silently undoes itself.
+  const result = await page.evaluate(async () => {
+    const { keepInsight, reconcileKept, applyKeptInsights } = await import(
+      './js/liveInsights.js'
+    );
+    const state = { summary: {}, liveFlags: {} };
+    keepInsight(state, 'Kept then deleted.');
+    keepInsight(state, 'Kept and kept.');
+
+    // The operator saves the editor having deleted the first one.
+    const edited = ['Kept and kept.'];
+    reconcileKept(state, edited);
+    state.summary = { keyInsights: edited };
+
+    // A later AI run replaces the summary wholesale.
+    state.summary = { keyInsights: ['An AI insight.'] };
+    applyKeptInsights(state);
+    return { kept: state.liveFlags.keptInsights, insights: state.summary.keyInsights };
+  });
+  expect(result.kept).toEqual(['Kept and kept.']);
+  expect(result.insights).toEqual(['Kept and kept.', 'An AI insight.']);
 });

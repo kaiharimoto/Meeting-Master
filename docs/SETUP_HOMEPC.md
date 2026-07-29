@@ -53,6 +53,30 @@ connection code in **Overview**.
   Google shows a 16-character password once; paste it into the App Password
   field. The setup page links to these steps too.
 
+### a2. Live suggestions during meetings (optional)
+
+The **Settings** tab's **Live suggestions** card controls what the laptop is
+offered *while a meeting is running*: questions the AI hears being answered, and
+key insights worth carrying forward. This is the only place it is configured —
+the laptop asks this server for these settings at the start of each meeting.
+
+Defaults work, with one thing worth checking: the summary model (`gemma4:26b`)
+is sized for quality after the meeting, not for answering inside one. If
+suggestions arrive late or not at all:
+
+1. Click **Test live suggestions**. It runs the real request over a fixed sample
+   conversation that contains one answered question and one lesson, and reports
+   what came back and how long it took — including "slower than the interval",
+   which means asks would pile up on each other.
+2. If it is slow, put a **smaller installed model** in the **Live model** field
+   (blank = use the summary model) and test again, or raise **Ask every**.
+3. Leave **Keep the model loaded** at 30 minutes. A cold model load is the
+   usual reason a mid-meeting ask runs out of time.
+
+Untick **Send live suggestions to the laptop during meetings** to switch the
+feature off; the laptop then says so in its rail instead of looking broken, and
+the post-meeting AI still finds everything.
+
 ### b. Install the dependencies (guided)
 
 The page has **Install** buttons for each dependency. Click them and wait for

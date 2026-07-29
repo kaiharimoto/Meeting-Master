@@ -23,12 +23,14 @@
  *    9.5pt  EVERY uppercase micro-label: topbar, detail labels, contents head,
  *           section kickers, table head, legend, participant, topic chips
  *
- * The summary is a structured "deck": Key Takeaways (accent-numbered), then
- * Decisions (filled accent markers), Action Items (ruled table with priority
- * dots), and a lower band of Key Figures beside Topics Discussed (outline
- * accent chips). A legacy plain-string summary falls back to 2-column prose
- * via #summary-body.is-prose. The e2e print spec asserts .question at 13pt,
- * the accent .sum-heading kicker, and the takeaway/decision/action/figure/
+ * The summary is a structured "deck": Key Takeaways (accent-numbered), Key
+ * Insights (arrow markers — lessons to apply in future, as opposed to the
+ * takeaways' record of what happened), then Decisions (filled accent markers),
+ * Action Items (ruled table with priority dots), and a lower band of Key
+ * Figures beside Topics Discussed (outline accent chips). A legacy
+ * plain-string summary falls back to 2-column prose via
+ * #summary-body.is-prose. The e2e print spec asserts .question at 13pt, the
+ * accent .sum-heading kicker, and the takeaway/insight/decision/action/figure/
  * topic counts.
  *
  * NOTE: no @font-face here — src/main/pdf.js injects Neue Haas Grotesk at
@@ -334,6 +336,44 @@ section#summary {
   font-weight: 400;
   color: var(--ink);
 }
+
+/* A lowercase gloss after a section kicker ("to apply going forward") — the
+   only non-uppercase text allowed in a .sum-heading. */
+.sum-heading-note {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+}
+
+/* Key Insights — arrow markers pointing out of the meeting and into the next
+   one. Same 12pt body weight as the takeaways they must not be confused with;
+   the marker and the heading gloss carry the difference. */
+.sum-insights { margin-bottom: 28pt; }
+
+.sum-insights .sum-list {
+  margin-top: 14pt;
+  display: grid;
+  gap: 10pt;
+}
+
+.insight {
+  display: grid;
+  grid-template-columns: 12pt 1fr;
+  column-gap: 11pt;
+  align-items: start;
+  break-inside: avoid;
+}
+
+.insight::before {
+  content: "\2192"; /* → — survives grayscale printing, unlike a color cue */
+  font-size: 12pt;
+  line-height: 1.4;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.insight-text { font-size: 12pt; line-height: 1.4; color: var(--ink); }
 
 /* Decisions — filled accent markers: settled, agreed points. */
 .sum-decisions { margin-bottom: 28pt; }

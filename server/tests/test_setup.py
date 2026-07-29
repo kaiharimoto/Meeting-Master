@@ -10,6 +10,7 @@ import base64
 import importlib
 import json
 import os
+import sys
 import types
 
 import pytest
@@ -32,6 +33,24 @@ def no_tools(monkeypatch):
     yield
 
 
+def _clear_all_settings_caches():
+    """Clear EVERY live reference to get_settings' cache, not just app.config's.
+
+    reload(app.config) rebinds config.get_settings to a fresh lru_cache, but the
+    modules that did ``from ..config import get_settings`` (routes, auth,
+    worker) still hold the PREVIOUS function object — and its populated cache.
+    Clearing only the reloaded one leaves those serving pre-reload settings, so
+    a later test could save a setting, see it through /setup/state (which reads
+    the module attribute) and NOT through a route (which holds a stale name).
+    reload mutates the module in place, so the old function's globals are the
+    restored ones by the time this runs.
+    """
+    for module in list(sys.modules.values()):
+        fn = getattr(module, "get_settings", None)
+        if fn is not None and hasattr(fn, "cache_clear"):
+            fn.cache_clear()
+
+
 @pytest.fixture()
 def fresh_home(tmp_path):
     """Reload app.config against an empty tmp home with no inherited secrets,
@@ -49,7 +68,7 @@ def fresh_home(tmp_path):
         os.environ.pop(k, None)
     os.environ["MEETING_MASTER_HOME"] = str(tmp_path)
     importlib.reload(config_mod)
-    config_mod.get_settings.cache_clear()
+    _clear_all_settings_caches()
     try:
         yield config_mod, tmp_path
     finally:
@@ -59,7 +78,7 @@ def fresh_home(tmp_path):
             else:
                 os.environ[k] = v
         importlib.reload(config_mod)
-        config_mod.get_settings.cache_clear()
+        _clear_all_settings_caches()
 
 
 def _setup_app() -> FastAPI:
@@ -243,6 +262,87 @@ def test_save_ai_params_persists_and_clamps(client, tmp_path, monkeypatch):
     assert after["aiParams"]["numCtx"] == 16384
     # (ollamaUrl in state reflects the env-var override the test harness sets,
     # so the file assertion above is the persistence proof for that field.)
+
+
+def test_save_live_params_persists_and_clamps(client):
+    """Live suggestions are configured on the dashboard and nowhere else, so
+    save -> state -> GET /live/config must agree — with clamps, since these
+    numbers drive a loop that runs during a meeting."""
+    from fastapi.testclient import TestClient
+
+    from app.config import get_settings
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40013))
+    before = local.get("/setup/state").json()
+    assert before["liveParams"]["liveSuggestions"] is True
+
+    resp = local.post("/setup/save", json={
+        "recipients": before.get("recipients") or [],
+        "emailTemplate": before.get("emailTemplate") or "",
+        "liveSuggestions": True,
+        "liveModel": "small-live-model",
+        "liveIntervalSec": 5,          # clamped up to 15
+        "liveWindowChars": 99999,      # clamped down to 12000
+        "liveTimeoutSec": 120,
+        "liveKeepAliveMin": 0,         # a real value, not "unset"
+        "liveExtractNumPredict": 800,
+    })
+    assert resp.status_code == 200, resp.text
+
+    settings = get_settings()
+    assert settings.LIVE_MODEL == "small-live-model"
+    assert settings.live_model == "small-live-model"
+    assert settings.LIVE_INTERVAL_SEC == 15
+    assert settings.LIVE_WINDOW_CHARS == 12000
+    assert settings.LIVE_TIMEOUT_SEC == 120
+    assert settings.LIVE_KEEP_ALIVE_MIN == 0
+    assert settings.LIVE_EXTRACT_NUM_PREDICT == 800
+
+    after = local.get("/setup/state").json()["liveParams"]
+    assert after["liveModel"] == "small-live-model"
+    assert after["liveModelEffective"] == "small-live-model"
+    assert after["liveIntervalSec"] == 15
+
+    # What the laptop actually reads. The cache clear is an artifact of this
+    # test process, not of the product: an earlier test reloaded app.config
+    # (see fresh_home), so the routes hold a different get_settings function
+    # from the one write_env clears. A real server never reloads its config
+    # module, and there write_env's own cache clear is sufficient.
+    _clear_all_settings_caches()
+    cfg = client.get("/live/config", headers={"Authorization": "Bearer test-token"}).json()
+    assert cfg["intervalSec"] == 15 and cfg["windowChars"] == 12000
+    assert cfg["clientTimeoutSec"] > cfg["timeoutSec"] == 120
+
+    # Blank means "use the summary model" — a meaningful value, not "unset".
+    assert local.post("/setup/save", json={
+        "recipients": [], "emailTemplate": before.get("emailTemplate") or "",
+        "liveModel": "",
+    }).status_code == 200
+    settings = get_settings()
+    assert settings.LIVE_MODEL == "" and settings.live_model == settings.OLLAMA_MODEL
+
+
+def test_live_test_endpoint_reports_what_came_back(client):
+    """The dashboard's "Test live suggestions" runs the REAL live path over a
+    fixed sample and never raises — the payload is the diagnosis."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40014))
+    result = local.post("/setup/live-test", json={}).json()
+    assert set(result) >= {
+        "ok", "enabled", "model", "latencyMs", "intervalSec",
+        "slowerThanInterval", "questions", "insights", "error",
+    }
+    assert result["ok"] is True and result["error"] is None
+    # The sample conversation contains an answered question AND a lesson, so a
+    # working model finds both.
+    assert len(result["questions"]) >= 1 and len(result["insights"]) >= 1
+
+    remote = TestClient(app, client=("203.0.113.9", 40015))
+    assert remote.post("/setup/live-test", json={}).status_code == 403
 
 
 def test_ai_helper_endpoints(client):

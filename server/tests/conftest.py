@@ -22,6 +22,9 @@ CANNED_SUMMARY = "A concise test summary of the meeting."
 # summarize/extract stages make (branched on a marker in the request body).
 CANNED_SUMMARY_SECTIONS = {
     "keyTakeaways": ["A key decision was reached.", "Budget was approved."],
+    # Distinct from keyTakeaways on purpose: takeaways record the meeting,
+    # insights are the lessons to apply next time (see MeetingSummary).
+    "keyInsights": ["Start renewal talks a quarter earlier next time."],
     "decisions": ["Approved the vendor renewal at 12%."],
     "actionItems": [
         {
@@ -34,6 +37,9 @@ CANNED_SUMMARY_SECTIONS = {
     "keyFigures": ["12% price increase, locked 24 months"],
     "topics": ["Pricing", "Timeline"],
 }
+# The mid-meeting live path asks for questions AND insights in one reply.
+CANNED_LIVE_INSIGHTS = ["Chase the vendor before the deadline next time."]
+
 CANNED_QUESTIONS = [
     {
         "question": "What is the renewal price?",
@@ -87,6 +93,14 @@ class _FakeOllamaHandler(BaseHTTPRequestHandler):
         # the broader extraction branch below would otherwise swallow it.
         if "written down by the note-taker" in request:
             content = json.dumps(CANNED_ANSWER)
+        elif "health check" in request:
+            # Warmup (POST /live/warmup) and the dashboard's "Test AI now".
+            content = json.dumps({"ok": True})
+        elif "STILL IN PROGRESS" in request:
+            # Live suggestions: the same Q&A shape plus insights.
+            content = json.dumps(
+                {"questions": CANNED_QUESTIONS, "insights": CANNED_LIVE_INSIGHTS}
+            )
         elif "answerer" in request:
             content = json.dumps({"questions": CANNED_QUESTIONS})
         elif "keyTakeaways" in request:
