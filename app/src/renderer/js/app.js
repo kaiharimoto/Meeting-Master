@@ -73,9 +73,17 @@ function defaultState() {
     // Finished in-app recording attached to this meeting (see recorder.js):
     // {recId, filePath, durationMs, bytes, finishedAt, source} or null.
     recording: null,
-    // Mid-meeting live question candidates (liveFlags.js): pending rows and
-    // dismissed question keys (normQ strings) — both per meeting.
-    liveFlags: { pending: [], dismissed: [] },
+    // Mid-meeting live suggestions (liveFlags.js), all per meeting: pending
+    // question rows, dismissed question keys (normQ strings), pending insight
+    // strings, dismissed insight keys, and the insights the operator kept
+    // (which are re-asserted onto the summary — see liveInsights.js).
+    liveFlags: {
+      pending: [],
+      dismissed: [],
+      pendingInsights: [],
+      dismissedInsights: [],
+      keptInsights: [],
+    },
   };
 }
 

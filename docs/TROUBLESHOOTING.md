@@ -216,14 +216,25 @@ a popup).
   error, the model, and the latency.
 - **"Live suggestions are paused — … Retrying every 2 minutes."** Three failures
   in a row. Almost always the model being too slow to answer inside a meeting.
+- **"The home server's GPU is busy processing another meeting."** A previous
+  meeting is still being transcribed or summarised on the same GPU. Nothing is
+  broken: live suggestions stand aside so both aren't slowed down, and resume by
+  themselves when the job finishes.
+- **"Nothing new heard for N min — still listening."** The loop only asks when
+  there is enough new draft transcript to be worth a GPU call, and it is telling
+  you how long it has been quiet. If the meeting is definitely talking, the live
+  *transcript* is the thing to check, not suggestions.
 - **The rail never appears at all.** Suggestions ride on the live transcript, so
   **Live transcript (beta)** must be ticked in the Record panel (and its model
   downloaded via Settings → Live transcription). No live transcript, nothing to
   ask about.
-- **Nothing but "Listening…" for the whole meeting.** The loop only asks when
-  there is *new* transcript text since the last successful ask, and a real
-  meeting often genuinely contains no answered questions for minutes at a time.
-  Confirm the draft transcript itself is filling up.
+- **Suggestions appear but you never see them.** The rail lives on the Meeting
+  screen. While you are on Activity or the Dashboard, the count rides on the
+  sidebar's **Meeting** item instead — click it to triage.
+- **Nothing but "Listening…" for the whole meeting.** A real meeting often
+  genuinely contains no answered questions for minutes at a time. After five
+  quiet minutes the rail says how long it has been quiet, so a working-but-quiet
+  loop is distinguishable from a stuck one.
 
 Two settings do most of the work when it is slow (dashboard → Settings → Live
 suggestions):

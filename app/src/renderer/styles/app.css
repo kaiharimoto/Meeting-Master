@@ -1536,6 +1536,39 @@ kbd {
   margin-bottom: 8px;
 }
 
+/* Live insights still awaiting a decision, offered where Key Insights is
+   actually decided. Framed as a quiet aside, not a second input. */
+.insight-offers {
+  margin-top: var(--sp-2);
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.insight-offers-head {
+  margin: 0 0 6px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.insight-offer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 4px 0;
+}
+.insight-offer + .insight-offer {
+  border-top: 1px solid var(--border);
+}
+.insight-offer-text {
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  color: var(--ink);
+}
+
 /* Four fixed pixel tracks plus 1fr meant the task field got whatever the other
    460px left over — under 100px in the modal's own width. Every track can now
    give, and the task field keeps a floor. */
@@ -2487,6 +2520,31 @@ kbd {
   border-radius: 50%;
   background: var(--danger);
   animation: rec-pulse 1.6s ease-in-out infinite;
+}
+
+/* Suggestions waiting while the rail is off-screen (the operator is on Activity
+   or the Dashboard). Sits left of the recording dot so the two never collide. */
+.nav-item {
+  position: relative;
+}
+.nav-badge {
+  position: absolute;
+  top: 6px;
+  right: 24px;
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  line-height: 17px;
+  text-align: center;
+}
+/* Nothing is pulsing for attention: with no recording running there is no dot
+   to sit beside, so the badge takes the dot's place. */
+.nav-item:not(.is-recording) .nav-badge {
+  right: 10px;
 }
 
 /* ---- Live mid-meeting transcription ---------------------------------------- */

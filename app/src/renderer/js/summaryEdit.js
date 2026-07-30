@@ -8,14 +8,19 @@
 // apply afterwards. Both ship as their own PDF section.
 
 import { openModal, closeModal } from './modalKit.js';
-import { withKeptInsights, reconcileKept } from './liveInsights.js';
+import {
+  withKeptInsights,
+  reconcileKept,
+  liveFlagsState,
+  keepInsight,
+} from './liveInsights.js';
 
 let ctx = null;
 let onSaved = null;
 
 let backdrop, takeawaysEl, insightsEl, decisionsEl, actionsHost, figuresEl,
   topicsEl, ownerOptions, addActionBtn, saveBtn, cancelBtn, importText,
-  importBtn, importNote;
+  importBtn, importNote, offersHost, offersList;
 
 const PRIORITIES = ['high', 'normal', 'low'];
 
@@ -34,6 +39,9 @@ export function initSummaryEdit(context, opts) {
   addActionBtn = document.getElementById('sum-add-action');
   saveBtn = document.getElementById('sum-save-btn');
   cancelBtn = document.getElementById('sum-cancel-btn');
+
+  offersHost = document.getElementById('sum-insight-offers');
+  offersList = document.getElementById('sum-insight-offer-list');
 
   importText = document.getElementById('sum-import-text');
   importBtn = document.getElementById('sum-import-btn');
@@ -225,6 +233,8 @@ export function openSummaryEdit() {
     })
   );
 
+  renderInsightOffers();
+
   actionsHost.replaceChildren();
   const items = Array.isArray(s.actionItems) ? s.actionItems : [];
   if (items.length === 0) {
@@ -234,6 +244,50 @@ export function openSummaryEdit() {
   }
 
   openModal(backdrop, takeawaysEl);
+}
+
+/**
+ * Live insights the operator never got round to actioning.
+ *
+ * The rail keeps them after the meeting, but it is behind this dialog — and
+ * this dialog is where Key Insights is decided, seconds before the PDF is
+ * generated. Offering them here is the difference between "still available"
+ * and "actually seen". Adding one moves it into the textarea AND remembers it
+ * as kept, so it survives a later AI run like any other kept insight.
+ */
+function renderInsightOffers() {
+  if (!offersHost || !offersList) return;
+  const pending = liveFlagsState(ctx.state).pendingInsights;
+  offersHost.hidden = pending.length === 0;
+  offersList.replaceChildren();
+  pending.forEach((text) => {
+    const row = document.createElement('div');
+    row.className = 'insight-offer';
+
+    const body = document.createElement('span');
+    body.className = 'insight-offer-text';
+    body.textContent = text;
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'btn btn-secondary btn-small';
+    add.textContent = 'Add';
+    add.addEventListener('click', () => {
+      const lines = textToLines(insightsEl.value);
+      if (!lines.includes(text)) lines.push(text);
+      insightsEl.value = lines.join('\n');
+      const lf = liveFlagsState(ctx.state);
+      lf.pendingInsights = lf.pendingInsights.filter((i) => i !== text);
+      keepInsight(ctx.state, text);
+      ctx.persist();
+      // The rail loses the row it no longer owns.
+      document.dispatchEvent(new CustomEvent('mm:liveflags'));
+      renderInsightOffers();
+    });
+
+    row.append(body, add);
+    offersList.append(row);
+  });
 }
 
 function buildActionRow(a) {

@@ -141,3 +141,36 @@ def test_ollama_unreachable_is_a_502(client, monkeypatch):
         assert warm.json()["ok"] is False and warm.json()["error"]
     finally:
         get_settings.cache_clear()  # monkeypatch restores the env for later tests
+
+
+def test_a_busy_gpu_is_a_409_not_a_failure(client):
+    """A live ask must stand aside for a pipeline job on the same GPU.
+
+    Two models wanting the same VRAM makes both slow, and with a separate
+    LIVE_MODEL it can thrash Ollama into reloading between calls. 409 (not 502)
+    so the laptop shows "busy, retrying" rather than counting a failure and
+    backing off for doing the right thing.
+    """
+    from app.main import store
+    from app.models import JobState, MeetingDetails, MeetingMeta
+
+    job = store.create(MeetingMeta(details=MeetingDetails(title="Busy GPU")))
+    try:
+        for busy in (JobState.transcribing, JobState.summarizing):
+            store.update(job, state=busy)
+            for resp in (
+                client.post("/live/questions", json=_payload(), headers=AUTH),
+                client.post("/live/warmup", headers=AUTH),
+            ):
+                assert resp.status_code == 409, resp.text
+                detail = resp.json()["detail"]
+                assert busy.value in detail and "busy" in detail
+
+        # A finished job blocks nothing…
+        store.update(job, state=JobState.ready)
+        assert client.post("/live/questions", json=_payload(), headers=AUTH).status_code == 200
+        # …nor does one still in ffmpeg, which is brief CPU work.
+        store.update(job, state=JobState.normalizing)
+        assert client.post("/live/questions", json=_payload(), headers=AUTH).status_code == 200
+    finally:
+        store.update(job, state=JobState.failed)  # keep later tests' lists sane

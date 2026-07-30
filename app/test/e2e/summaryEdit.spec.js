@@ -128,3 +128,56 @@ test('an insight edited out is forgotten, so a later AI run cannot re-assert it'
   expect(result.kept).toEqual(['Kept and kept.']);
   expect(result.insights).toEqual(['Kept and kept.', 'An AI insight.']);
 });
+
+test('insights left waiting in the rail are offered where Key Insights is decided', async ({
+  page,
+}) => {
+  // The rail keeps un-actioned insights after the meeting, but it sits BEHIND
+  // this dialog — and this dialog is the last thing touched before the PDF is
+  // generated. Offering them here is the difference between "still available"
+  // somewhere and actually seen.
+  // A second init script, layered over beforeEach's: that one re-seeds
+  // localStorage on every navigation, so writing the state and reloading would
+  // just get it overwritten.
+  await page.addInitScript((seed) => {
+    localStorage.setItem(
+      'meetingmaster.meeting.v1',
+      JSON.stringify({
+        ...seed,
+        liveFlags: {
+          pending: [],
+          dismissed: [],
+          pendingInsights: [
+            'Chase the vendor a quarter earlier.',
+            'Rehearse the failover.',
+          ],
+          dismissedInsights: [],
+          keptInsights: [],
+        },
+      })
+    );
+  }, SEED);
+  await page.reload();
+
+  await page.getByRole('button', { name: 'Edit summary' }).click();
+  const offers = page.locator('#sum-insight-offers');
+  await expect(offers).toBeVisible();
+  await expect(page.locator('.insight-offer')).toHaveCount(2);
+
+  // Adding one moves it into the field and out of the rail's pending list.
+  await page.locator('.insight-offer', { hasText: 'Chase the vendor' })
+    .getByRole('button', { name: 'Add' })
+    .click();
+  await expect(page.locator('#sum-insights')).toHaveValue(/Chase the vendor a quarter earlier\./);
+  await expect(page.locator('.insight-offer')).toHaveCount(1);
+  await page.locator('#sum-save-btn').click();
+
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('meetingmaster.meeting.v1'))
+  );
+  expect(saved.summary.keyInsights).toContain('Chase the vendor a quarter earlier.');
+  // Remembered as kept, so a later AI summary can't drop it…
+  expect(saved.liveFlags.keptInsights).toEqual(['Chase the vendor a quarter earlier.']);
+  // …and the one still untouched is still waiting, not silently discarded.
+  expect(saved.liveFlags.pendingInsights).toEqual(['Rehearse the failover.']);
+});

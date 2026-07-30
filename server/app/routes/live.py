@@ -15,16 +15,20 @@ is being recorded:
 Stateless by design — no job, no store, nothing persisted. If these are
 unreachable the laptop degrades quietly (it shows why in its side rail) and the
 post-meeting extraction (routes/jobs.py pipeline) remains the quality backstop.
+
+Three answers the laptop must be able to tell apart, hence three status codes:
+``503`` the feature is switched off, ``409`` the GPU is busy with a pipeline job
+(retry, don't back off), ``502`` the AI genuinely failed.
 """
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..auth import verify_token
 from ..config import get_settings
-from ..models import LiveSuggestions
+from ..models import JobState, LiveSuggestions
 from ..pipeline import extract
 from .jobs import require_configured
 
@@ -55,6 +59,38 @@ def _require_enabled() -> None:
                 "suggestions)."
             ),
         )
+
+
+# Stages that are already using the GPU this server shares with the live path.
+# (normalizing is ffmpeg on the CPU and brief, so it doesn't count.)
+_GPU_BUSY_STATES = frozenset({JobState.transcribing, JobState.summarizing})
+
+
+def _require_gpu_free(request: Request) -> None:
+    """Decline — politely and distinguishably — while a job holds the GPU.
+
+    A live ask and a pipeline job are two different models wanting the same
+    VRAM: mid-meeting asks landing on top of a post-meeting transcription (or a
+    previous meeting's summary) make BOTH slow, and with a separate LIVE_MODEL
+    they can thrash Ollama into unloading and reloading between every call.
+
+    409, deliberately, and never 502: the laptop must show "busy, will retry"
+    and NOT count this as a failure — a backoff here would punish the operator
+    for the server doing exactly what it should be doing.
+    """
+    store = getattr(request.app.state, "store", None)
+    if store is None:
+        return
+    for record in store.list():
+        if record.state in _GPU_BUSY_STATES:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "The home server's GPU is busy processing another meeting "
+                    f"({record.state.value}) — live suggestions resume when it "
+                    "finishes."
+                ),
+            )
 
 
 class LiveQuestionsRequest(BaseModel):
@@ -89,7 +125,7 @@ async def live_config() -> dict:
 
 
 @router.post("/live/warmup")
-async def live_warmup() -> dict:
+async def live_warmup(request: Request) -> dict:
     """Pin the live model in VRAM before the ticks start.
 
     Never raises: the laptop calls this at the start of a meeting and must not
@@ -99,6 +135,7 @@ async def live_warmup() -> dict:
     import time
 
     _require_enabled()
+    _require_gpu_free(request)
     settings = get_settings()
     start = time.monotonic()
     error = None
@@ -116,8 +153,11 @@ async def live_warmup() -> dict:
 
 
 @router.post("/live/questions", response_model=LiveSuggestions)
-async def live_questions(body: LiveQuestionsRequest) -> LiveSuggestions:
+async def live_questions(
+    request: Request, body: LiveQuestionsRequest
+) -> LiveSuggestions:
     _require_enabled()
+    _require_gpu_free(request)
     window = body.transcriptWindow.strip()
     if not window:
         raise HTTPException(status_code=422, detail="transcriptWindow is empty.")

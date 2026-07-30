@@ -55,7 +55,17 @@ async function throwHttpError(res, what) {
   }
   if (body.length > BODY_SNIPPET_LIMIT) body = `${body.slice(0, BODY_SNIPPET_LIMIT)}…`;
   const detail = body ? ` — ${body}` : '';
-  throw new Error(`Home server returned ${res.status} while ${what}${detail}`);
+  const err = new Error(`Home server returned ${res.status} while ${what}${detail}`);
+  // Callers that must ACT on the status (the live loop treats 409 "GPU busy"
+  // and 503 "switched off" as normal, not as failures to back off from) get it
+  // as a number instead of having to pattern-match the message.
+  err.status = res.status;
+  try {
+    err.detail = String(JSON.parse(body).detail || '');
+  } catch {
+    err.detail = ''; // not a FastAPI error envelope — the message carries it
+  }
+  throw err;
 }
 
 /**

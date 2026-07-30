@@ -271,3 +271,109 @@ test('the status line says which of "asking", "unreachable" and "off" is happeni
   await page.evaluate(() => window.__liveCbs.forEach((cb) => cb({ type: 'stopped' })));
   await expect(page.locator('#live-rail')).toBeHidden();
 });
+
+test('a near-duplicate insight, reworded, is not offered a second time', async ({ page }) => {
+  // The live loop re-notices the same lesson every few minutes and words it
+  // differently each time; exact-match filtering let every rewording through.
+  await pushCandidates(page, [], ['Chase the vendor a quarter earlier next renewal.']);
+  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(1);
+
+  await pushCandidates(page, [], ['Chase the vendor a quarter earlier next renewal!']);
+  await pushCandidates(page, [], ['chase the vendor a quarter earlier, next renewal']);
+  await page.waitForTimeout(200);
+  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(1);
+});
+
+test('the rail is bounded: an untriaged meeting drops the oldest, keeps the newest', async ({
+  page,
+}) => {
+  // 90 minutes of suggestions nobody actions must not grow the rail (or the
+  // saved meeting) without limit.
+  // Genuinely different sentences. Near-identical ones are (correctly) merged by
+  // the duplicate filter, so a template with one word swapped would prove
+  // nothing about the cap — every part of these varies.
+  const VERBS = ['Automate', 'Escalate', 'Document', 'Rehearse', 'Delegate',
+    'Timebox', 'Publish', 'Retire', 'Audit', 'Consolidate', 'Shadow', 'Batch',
+    'Pre-approve', 'Archive', 'Rotate', 'Benchmark', 'Simplify', 'Standardise',
+    'Decouple', 'Instrument'];
+  const NOUNS = ['invoice reconciliation', 'vendor breaches', 'runbook gaps',
+    'failover drills', 'contract redlines', 'design debates', 'release notes',
+    'legacy dashboards', 'access grants', 'duplicate tickets', 'new joiners',
+    'status updates', 'travel spend', 'stale branches', 'on-call duty',
+    'query latency', 'approval chains', 'incident templates',
+    'shared credentials', 'queue depth'];
+  const insights = VERBS.map((verb, i) => `${verb} ${NOUNS[i]} before next quarter.`);
+  for (const insight of insights) await pushCandidates(page, [], [insight]);
+
+  const rows = page.locator('#live-rail-insights .live-insight-row');
+  await expect(rows).toHaveCount(8);
+  // The newest survive — they are the ones still relevant to what is being said.
+  await expect(rows.last()).toContainText(insights.at(-1));
+  await expect(rows.first()).toContainText(insights[insights.length - 8]);
+  // …and the earliest are gone rather than accumulating forever.
+  await expect(page.locator('#live-rail-insights')).not.toContainText(insights[0]);
+
+  const questions = VERBS.map((verb, i) => ({
+    question: `Should we ${verb.toLowerCase()} ${NOUNS[i]}?`,
+    answer: `Yes, ${NOUNS[i]} needs it.`,
+    answerer: 'Bob',
+    confidence: 'high',
+  }));
+  for (const q of questions) await pushCandidates(page, [q]);
+  await expect(page.locator('#live-rail-list .live-flag-row')).toHaveCount(12);
+});
+
+test('suggestions arriving while off the Meeting screen show a count on the sidebar', async ({
+  page,
+}) => {
+  // The rail lives on the Meeting screen. Without this, opening Activity to
+  // check the server means suggestions pile up somewhere the operator can't see.
+  await page.locator('#nav-activity').click();
+  await expect(page.locator('#screen-meeting')).toBeHidden();
+
+  await pushCandidates(page, [Q1], [I1]);
+  const badge = page.locator('#nav-meeting .nav-badge');
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText('2');
+  await expect(badge).toHaveAttribute('aria-label', '2 live suggestions waiting');
+
+  // Back on the Meeting screen the rail itself is the count; the badge retires.
+  await page.locator('#nav-meeting').click();
+  await expect(page.locator('#live-rail')).toBeVisible();
+  await expect(badge).toHaveCount(0);
+});
+
+test('the status line only interrupts a screen reader when something is wrong', async ({
+  page,
+}) => {
+  const status = page.locator('#live-rail-status');
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('mm:live-start')));
+
+  // Routine states repeat every interval for the whole meeting — announcing
+  // them would talk over the conversation being transcribed.
+  await pushStatus(page, 'asking', 'Asking the home server…');
+  await expect(status).toHaveAttribute('aria-live', 'off');
+  await pushStatus(page, 'quiet', 'Nothing new heard for 6 min — still listening.');
+  await expect(status).toHaveAttribute('aria-live', 'off');
+
+  // A real problem is worth saying out loud.
+  await pushStatus(page, 'error', 'The home server’s AI is not answering.');
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+  await pushStatus(page, 'off', 'Live suggestions are switched off on the home server.');
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+});
+
+test('a busy home server reads as waiting, not as an error', async ({ page }) => {
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('mm:live-start')));
+  await pushStatus(
+    page,
+    'waiting',
+    "The home server's GPU is busy processing another meeting (transcribing)."
+  );
+  const status = page.locator('#live-rail-status');
+  await expect(status).toHaveAttribute('data-state', 'waiting');
+  await expect(status).toContainText('busy processing another meeting');
+  // Not styled as a failure, and not announced as one.
+  await expect(status).toHaveAttribute('aria-live', 'off');
+  await expect(page.locator('#toast-region .toast')).toHaveCount(0);
+});

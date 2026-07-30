@@ -67,8 +67,11 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    one into a card) and **key insights** — lessons worth carrying forward
    (click **Keep** to add one to Key Insights in the summary and the PDF).
    Either can be **Dismiss**ed, and nothing is added without you. The rail also
-   carries a one-line status, so a home server that is slow, unreachable, or
-   switched off never looks like a quiet meeting. Everything about the loop
+   carries a one-line status, so a home server that is slow, unreachable, busy
+   with another meeting, or switched off never looks like a quiet meeting — and
+   while you are on another screen the waiting count rides on the sidebar's
+   Meeting item. Insights you never got round to are offered again in
+   **Edit summary**, where Key Insights is finalised. Everything about the loop
    (on/off, which model, how often, how patient) is configured in one place:
    the home server dashboard's **Settings → Live suggestions**. The draft is
    advisory; the full-quality transcript still comes after the meeting, and

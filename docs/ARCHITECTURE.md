@@ -245,11 +245,20 @@ here is degradable.
 | `POST /live/warmup` | Loads the live model into VRAM (`keep_alive`) so the first ask doesn't pay for it. Never raises — `{ok, model, latencyMs, error}` IS the diagnosis. |
 | `POST /live/questions` | `{transcriptWindow, attendees, alreadyFlagged, alreadyInsights}` → `{questions: [ExtractedQuestion], insights: ["str"]}`. Ollama unreachable/garbled → `502`; empty window → `422`. |
 
+Three answers the laptop must tell apart, hence three status codes — a single
+"it failed" would make the loop punish the server for behaving correctly:
+
+| Code | Meaning | What the laptop does |
+| --- | --- | --- |
+| `503` | Switched off on the dashboard | Says so in the rail and stops asking |
+| `409` | A pipeline job holds the GPU | "Busy, retrying" — retries on the normal cadence, does **not** count a failure |
+| `502` | The AI genuinely failed | Reports it; three in a row drop to a 2-minute backoff |
+
 `insights` are candidate **Key Insights** — lessons to apply going forward,
 which become the summary's `keyInsights` when the operator keeps one. They are
 not a running summary of the meeting; that is the post-meeting `keyTakeaways`.
 
-Two rules this feature is built around, both learned from it not working:
+Four rules this feature is built around, all learned from it not working:
 
 - **The server owns the configuration.** Everything (on/off, `LIVE_MODEL`,
   interval, window, timeout, keep-alive, token budget) lives in `server.env` and
@@ -262,6 +271,24 @@ Two rules this feature is built around, both learned from it not working:
   from the client side while answering fine — three failures, then a two-minute
   backoff, and the feature was dead for the rest of the meeting. Nothing on
   screen said so either, which is why the rail now carries a status line.
+- **Warm up, THEN ask.** The laptop awaits `/live/warmup` before scheduling its
+  first ask. An ask fired during a cold model load queues behind that load
+  inside Ollama and can burn its whole timeout waiting — which made the first
+  suggestion of the meeting, the one that tells the operator this works at all,
+  the single most likely to fail.
+- **Never compete with the pipeline for the GPU.** `/live/questions` and
+  `/live/warmup` answer `409` while any job is `transcribing` or `summarizing`.
+  A live ask and a pipeline stage are two models wanting the same VRAM; with a
+  separate `LIVE_MODEL` they can thrash Ollama into unloading and reloading
+  between every call, making both slow. (`normalizing` is brief CPU ffmpeg work
+  and doesn't count.)
+
+Asks also skip the network when there is nothing to ask about: fewer than ~200
+new characters of draft transcript since the last successful ask, and the tick
+is spent on a status line instead. The window sent is anchored just before where
+the previous ask ended (with ~600 characters of overlap so a Q&A pair split
+across two asks survives whole) rather than being a blind tail slice — less
+prompt, and far less already-mined text to filter back out as duplicates.
 
 When `LIVE_SUGGESTIONS` is false, `/live/config` answers `enabled: false`
 (a normal answer, not an error) and the other two return `503`.

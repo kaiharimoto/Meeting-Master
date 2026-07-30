@@ -18,9 +18,15 @@
 // the post-meeting review by captureExtracted() — nothing vanishes.
 //
 // The rail also carries the loop's status line ({type:'flag-status'}). It is
-// deliberately understated — no toast, no focus, aria-live off — but it is
-// there: before it existed, a home server that was unreachable, switched off,
-// or simply slow all looked exactly like a quiet meeting.
+// deliberately understated — no toast, never focus — but it IS there: before it
+// existed, a home server that was unreachable, switched off, or simply slow all
+// looked exactly like a quiet meeting. It is announced to screen readers only
+// when something is actually wrong, so a routine "asking…" every 45 seconds
+// doesn't talk over the meeting.
+//
+// The rail lives on the Meeting screen, so while the operator is on Activity or
+// the Dashboard a count rides on the sidebar's Meeting item instead — the same
+// job the recording dot does for a running recording.
 
 import { setStatus } from './status.js';
 import { showToast } from './toast.js';
@@ -28,6 +34,13 @@ import { normQ, isDuplicate } from './extractReview.js';
 import { addCard } from './capture.js';
 import { updateButtons } from './generate.js';
 import { liveFlagsState, normI, keepInsight } from './liveInsights.js';
+
+// A 90-minute meeting nobody triages would otherwise grow an unbounded rail
+// (and an unbounded localStorage record). Past these, the OLDEST pending
+// suggestion is dropped: the newest are the ones still relevant to what is
+// being said, and anything dropped is re-found by the post-meeting pass.
+const MAX_PENDING_QUESTIONS = 12;
+const MAX_PENDING_INSIGHTS = 8;
 
 let ctx = null;
 let els = null;
@@ -53,6 +66,7 @@ export function initLiveFlags(context) {
     insightGroup: document.getElementById('live-rail-insight-group'),
     insightList: document.getElementById('live-rail-insights'),
     screen: document.getElementById('screen-meeting'),
+    navMeeting: document.getElementById('nav-meeting'),
   };
   if (!els.rail || !els.list) return;
 
@@ -80,6 +94,10 @@ export function initLiveFlags(context) {
   // captureExtracted() (post-meeting reconciliation) empties pending and
   // fires this so the rail clears without an import cycle.
   document.addEventListener('mm:liveflags', renderLiveFlags);
+
+  // Leaving or returning to the Meeting screen moves the count between the rail
+  // and the sidebar badge.
+  document.addEventListener('mm:screen', renderLiveFlags);
 
   renderLiveFlags();
 }
@@ -116,6 +134,8 @@ function addCandidates(questions, insights) {
 
   // Insights are plain strings; dedupe against what is pending, already kept,
   // dismissed, or already in the summary (the AI can re-notice its own point).
+  // Fuzzily, like questions — the same lesson comes back worded differently
+  // every few minutes, and an exact-match filter lets every rewording through.
   const insightList = Array.isArray(insights) ? insights : [];
   if (insightList.length > 0) {
     const summary = ctx.state.summary;
@@ -123,23 +143,31 @@ function addCandidates(questions, insights) {
       summary && typeof summary === 'object' && Array.isArray(summary.keyInsights)
         ? summary.keyInsights.map(normI)
         : [];
-    const known = new Set([
+    const known = [
       ...lf.pendingInsights.map(normI),
       ...lf.dismissedInsights.map(normI),
       ...lf.keptInsights.map(normI),
       ...inSummary,
-    ]);
+    ];
     for (const raw of insightList) {
       const text = String(raw || '').trim();
       const key = normI(text);
-      if (!text || !key || known.has(key)) continue;
-      known.add(key);
+      if (!text || !key) continue;
+      if (known.some((seen) => isDuplicate(key, seen))) continue;
+      known.push(key);
       lf.pendingInsights.push(text);
       added += 1;
     }
   }
 
   if (added > 0) {
+    // Cap AFTER the additions, so the newest always get in.
+    if (lf.pending.length > MAX_PENDING_QUESTIONS) {
+      lf.pending.splice(0, lf.pending.length - MAX_PENDING_QUESTIONS);
+    }
+    if (lf.pendingInsights.length > MAX_PENDING_INSIGHTS) {
+      lf.pendingInsights.splice(0, lf.pendingInsights.length - MAX_PENDING_INSIGHTS);
+    }
     ctx.persist();
     renderLiveFlags();
     // The arrival animation is one-shot: clear the marker after render so a
@@ -160,6 +188,7 @@ export function renderLiveFlags() {
   const show = liveSessionActive || n > 0;
   els.rail.hidden = !show;
   if (els.screen) els.screen.classList.toggle('has-rail', show);
+  renderNavBadge(n);
   if (!show) {
     els.list.replaceChildren();
     if (els.insightList) els.insightList.replaceChildren();
@@ -201,9 +230,37 @@ function renderStatus() {
     els.status.hidden = true;
     return;
   }
+  const state = loopStatus.state || '';
   els.status.hidden = false;
   els.status.textContent = loopStatus.message;
-  els.status.dataset.state = loopStatus.state || '';
+  els.status.dataset.state = state;
+  // Announce the states that mean something is wrong (or off); stay silent for
+  // the routine ones, which repeat every interval for the whole meeting.
+  const worthSaying = state === 'error' || state === 'off';
+  els.status.setAttribute('aria-live', worthSaying ? 'polite' : 'off');
+}
+
+// A count on the sidebar's Meeting item while the rail itself is off-screen.
+// Without it, suggestions pile up unseen the moment the operator opens Activity
+// to check the server — and the rail is the only place they exist.
+function renderNavBadge(n) {
+  const nav = els.navMeeting;
+  if (!nav) return;
+  const onMeetingScreen = !(els.screen && els.screen.hidden);
+  const show = n > 0 && !onMeetingScreen;
+  let badge = nav.querySelector('.nav-badge');
+  if (!show) {
+    if (badge) badge.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'nav-badge';
+    nav.append(badge);
+  }
+  badge.textContent = String(n);
+  badge.title = `${n} live suggestion${n === 1 ? '' : 's'} waiting`;
+  badge.setAttribute('aria-label', badge.title);
 }
 
 // The shared answerer datalist lives in the extract modal's markup; options
