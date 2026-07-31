@@ -329,7 +329,7 @@ async def run(
     context = _ollama.meeting_context(meeting)
     num_predict = settings.EXTRACT_NUM_PREDICT
     temperature = settings.EXTRACT_TEMPERATURE
-    budget_tokens = _ollama.input_budget_tokens(settings, num_predict)
+    budget_tokens = _ollama.input_budget_tokens(settings, num_predict, "Q&A extraction")
 
     async with httpx.AsyncClient(timeout=_ollama.DEFAULT_TIMEOUT) as client:
         if _ollama.estimate_tokens(transcript_text) <= budget_tokens:

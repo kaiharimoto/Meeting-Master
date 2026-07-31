@@ -294,6 +294,20 @@ button.small { padding: 6px 11px; font-size: 13px; }
 }
 .job-progress > i { display: block; height: 100%; background: var(--accent); transition: width 0.4s ease; }
 
+/* ---- Fit to your GPU ---- */
+
+.fit-row {
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: 11px 13px; margin-top: 10px; background: var(--surface-2);
+}
+.fit-row.is-current { border-color: var(--accent); }
+.fit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.fit-name { font-weight: 700; font-size: 14px; }
+.fit-verdict { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.fit-facts { margin-top: 3px; font-size: 12.5px; color: var(--ink-soft); }
+.fit-note { margin-top: 5px; font-size: 12.5px; color: var(--ink-faint); line-height: 1.45; }
+.fit-actions { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* ---- Log view ---- */
 
 .log-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }

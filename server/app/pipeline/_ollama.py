@@ -26,6 +26,14 @@ _ASCII_CHARS_PER_TOKEN = 3
 # Headroom reserved for the system prompt, meeting context, and chat framing.
 PROMPT_OVERHEAD_TOKENS = 1000
 
+# The least transcript a chunk may carry and still be worth sending. Below this
+# the map-reduce split stops being a safeguard and becomes a catastrophe: at
+# NUM_CTX=2048 with SUMMARY_NUM_PREDICT=1400 the budget goes NEGATIVE, the old
+# `max(budget, 1)` turned that into one-token chunks, and a 60k-character
+# transcript became 20,000 sequential Ollama calls each seeing three characters.
+# It never errored — it just never finished, which is the worst way to fail.
+MIN_INPUT_BUDGET_TOKENS = 1024
+
 # Generation can take minutes for a long transcript on a local model, hence the
 # generous read timeout (connect stays snappy).
 DEFAULT_TIMEOUT = httpx.Timeout(600.0, connect=10.0)
@@ -53,9 +61,28 @@ def split_by_token_budget(text: str, budget_tokens: int) -> list[str]:
     return chunks or [text]
 
 
-def input_budget_tokens(settings: Settings, num_predict: int) -> int:
-    """How many transcript tokens fit alongside the prompt + reserved output."""
-    return settings.NUM_CTX - num_predict - PROMPT_OVERHEAD_TOKENS
+def input_budget_tokens(settings: Settings, num_predict: int, stage: str = "AI") -> int:
+    """How many transcript tokens fit alongside the prompt + reserved output.
+
+    Raises when the three numbers leave no usable room, naming all three: the
+    context window is the setting people reach for when a model won't fit in
+    VRAM, and lowering it far enough silently inverts this arithmetic. Failing
+    here is loud, immediate, and tells the operator exactly which number to
+    change — the alternative was a job that hung forever splitting the
+    transcript into one-token pieces.
+    """
+    budget = settings.NUM_CTX - num_predict - PROMPT_OVERHEAD_TOKENS
+    if budget < MIN_INPUT_BUDGET_TOKENS:
+        needed = num_predict + PROMPT_OVERHEAD_TOKENS + MIN_INPUT_BUDGET_TOKENS
+        raise ValueError(
+            f"The context window is too small for the {stage} stage: NUM_CTX="
+            f"{settings.NUM_CTX} minus {num_predict} reserved output tokens and "
+            f"{PROMPT_OVERHEAD_TOKENS} for the prompt leaves {budget} for the "
+            f"transcript. Raise the context window to at least {needed}, or "
+            f"lower the stage's max output tokens. (Dashboard → Settings → AI "
+            f"models; 'Fit to your GPU' suggests values that work on your card.)"
+        )
+    return budget
 
 
 def meeting_context(meeting: MeetingMeta) -> str:

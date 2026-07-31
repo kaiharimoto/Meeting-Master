@@ -399,3 +399,86 @@ def test_server_update_install_is_reachable(client, monkeypatch):
 
     # An unknown component is still a 404, not a silent no-op.
     assert local.post("/setup/install/not-a-component").status_code == 404
+
+
+def test_model_fit_measures_installed_models_against_the_card(client):
+    """"Fit to your GPU" answers the question the dashboard could not: what
+    should I run on THIS card, and how much context can I afford."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40017))
+    data = local.get("/setup/model-fit?vramGB=24").json()
+    assert data["error"] is None, data["error"]
+    assert data["vramGB"] == 24.0 and data["kvCache"] == "f16"
+
+    by_name = {m["name"]: m for m in data["models"]}
+    fits, huge = by_name["fits-well:27b"], by_name["too-big:70b"]
+
+    # The 16 GB model fits with a real context; the 40 GB one cannot, and must
+    # never come back with a recommendation attached.
+    assert fits["verdict"] in {"comfortable", "tight"}
+    assert fits["recommendedCtx"] >= 4096
+    assert fits["quantization"] == "Q4_K_M" and fits["paramSize"] == "27B"
+    assert fits["kvMBPer1k"] > 0
+    assert huge["verdict"] == "too big" and huge["recommendedCtx"] == 0
+
+    # Ranked so the usable one leads.
+    assert data["models"][0]["name"] == "fits-well:27b"
+
+    # And what Ollama ACTUALLY has resident, including a partial GPU load.
+    assert data["loaded"] and data["loaded"][0]["fullyOnGpu"] is False
+    assert data["loaded"][0]["onGpuPercent"] == 75
+
+    # Quantizing the cache buys context on the same hardware.
+    q8 = local.get("/setup/model-fit?vramGB=24&kvCache=q8_0").json()
+    q8_fits = {m["name"]: m for m in q8["models"]}["fits-well:27b"]
+    assert q8["kvCache"] == "q8_0"
+    assert q8_fits["maxCtx"] > fits["maxCtx"]
+
+    # A smaller card changes the verdict, which is the whole point.
+    small = local.get("/setup/model-fit?vramGB=8").json()
+    assert {m["name"]: m for m in small["models"]}["fits-well:27b"]["verdict"] == "too big"
+
+    remote = TestClient(app, client=("203.0.113.9", 40018))
+    assert remote.get("/setup/model-fit").status_code == 403
+
+
+def test_save_rejects_a_context_too_small_for_its_own_output(client):
+    """The relationship between NUM_CTX and the reserved output tokens is what
+    breaks, and it breaks into a job that never finishes — so it is refused at
+    the door, naming the fix."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    local = TestClient(app, client=("127.0.0.1", 40019))
+    before = local.get("/setup/state").json()
+    base = {
+        "recipients": before.get("recipients") or [],
+        "emailTemplate": before.get("emailTemplate") or "",
+    }
+
+    # 2048 context with 1400 reserved for the summary leaves NOTHING: the old
+    # code turned that into one-token chunks and 20,000 sequential Ollama calls.
+    resp = local.post("/setup/save", json={**base, "numCtx": 2048, "summaryNumPredict": 1400})
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert "too small for the summary stage" in detail
+    assert "Use at least" in detail
+
+    # The Q&A stage is checked too, not just the first one. Both output caps are
+    # sent explicitly: an earlier test in this file leaves a large summary cap
+    # saved, which would otherwise trip the summary branch first.
+    resp = local.post("/setup/save", json={
+        **base, "numCtx": 4096, "summaryNumPredict": 1400, "extractNumPredict": 3000,
+    })
+    assert resp.status_code == 422
+    assert "Q&A extraction" in resp.json()["detail"]
+
+    # A workable pair saves normally.
+    assert local.post(
+        "/setup/save",
+        json={**base, "numCtx": 8192, "summaryNumPredict": 1400, "extractNumPredict": 1500},
+    ).status_code == 200

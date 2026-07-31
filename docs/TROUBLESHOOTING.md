@@ -275,15 +275,36 @@ transcript because the context window was too small.
   `options.num_ctx` (it does — `server/app/pipeline/summarize.py`). The
   OpenAI-compatible `/v1` endpoint **ignores** `num_ctx` and truncates at the
   default 2048 tokens.
-- The server sets `NUM_CTX=32768`. **Verify what Ollama actually loaded:** while
-  a summarize stage is running, run `ollama ps` on the home PC — the `CONTEXT`
-  column must show `32768`. If it shows `2048`/`4096`, an old Ollama version or
-  a modified request payload is dropping the option.
-- A bigger context needs more VRAM; if `ollama ps` shows a CPU/GPU split, the
-  model no longer fits — see the next section.
+- The server sets `NUM_CTX=32768`. **Verify what Ollama actually loaded:** the
+  dashboard's Settings tab → **Fit to your GPU** shows a "Loaded right now" line
+  with the context and the percentage of the model on the GPU (the same thing
+  `ollama ps` reports, without the terminal). If the context shows `2048`/`4096`,
+  an old Ollama version or a modified request payload is dropping the option.
+- A bigger context needs more VRAM. **Anything under 100% on the GPU means
+  layers spilled to the CPU** — that is the real cause of most "the AI is slow"
+  reports, and the fix is a smaller context or a smaller model, both of which
+  that panel will size for you.
 - Transcripts that still exceed the 32k window are handled by the chunked
   map-reduce fallback in `summarize.py` (summarize portions, then summarize
   the summaries) — slower, but nothing is dropped.
+
+## "The context window is too small for the … stage"
+
+The three numbers have to add up: `NUM_CTX` must hold the tokens a stage
+reserves for its **answer**, plus the prompt, plus some transcript. Lower the
+context far enough (or raise a stage's max output tokens far enough) and there
+is nothing left for the meeting.
+
+The AI stage now fails immediately with a message naming all three numbers and
+the minimum that would work, and the dashboard refuses to *save* such a
+combination in the first place. Fix it by raising the context window (Settings →
+Fit to your GPU suggests one that fits your card) or lowering that stage's max
+output tokens.
+
+Before v0.19.2 this did not error — it hung. The budget went negative, the
+transcript was split into one-token pieces, and a 60,000-character meeting
+became 20,000 sequential Ollama calls each seeing three characters. If you ever
+saw an AI stage run for hours with the GPU busy and no progress, that was this.
 
 ## Transcription failed or produced garbage
 

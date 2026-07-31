@@ -77,6 +77,79 @@ Untick **Send live suggestions to the laptop during meetings** to switch the
 feature off; the laptop then says so in its rail instead of looking broken, and
 the post-meeting AI still finds everything.
 
+### a3. Choosing a model for your GPU
+
+Open **Settings → Fit to your GPU**, enter your card's memory, and click
+**Measure my models**. It reads each installed model's real layer and head
+counts and works out the largest context window that fits, then lets you apply
+the answer in one click. Use that rather than any rule of thumb below — it is
+measuring *your* models on *your* card.
+
+**Why a parameter count tells you nothing useful.** Two things fill graphics
+memory:
+
+| | Size |
+| --- | --- |
+| **Weights** | Fixed per model + quantization. A 4-bit ~30B model is roughly 16–20 GB. |
+| **KV cache** | `2 x layers x kv_heads x head_dim x bytes` **per token of context**. |
+
+The second one is why "a 27B model needs a 16k context" is not a real rule: the
+cache cost per token depends on the model's attention shape, and two models of
+identical size can differ **four-fold**. A model with many key/value heads can
+easily want more memory for a 32k context than for its own weights. The panel
+prints that number per model ("MB per 1k ctx") so you can see which side of
+your budget is the problem.
+
+**Picking a quantization.** Every stage of this pipeline demands strictly
+structured JSON, and instruction-following is the first thing to degrade as
+quantization gets aggressive:
+
+- **Q4_K_M** — the sensible default. Best quality per gigabyte, and reliable at
+  producing the JSON these prompts ask for.
+- **Q5_K_M / Q6_K** — a little better, noticeably larger. Only worth it if the
+  panel still says "fits comfortably" afterwards.
+- **Q3 and below** — avoid. It saves memory by damaging exactly the ability
+  this program depends on; a summary stage that returns malformed JSON is worse
+  than a smaller model that returns good JSON.
+
+**On a 24 GB card** (an RX 7900 XTX, say) two configurations work well, and the
+panel will tell you which of your installed models land where:
+
+1. **One mid-size model** in the ~14–32B class at Q4_K_M (~9–20 GB), with
+   whatever context is left over. Best summary quality.
+2. **A mid-size model for the summary plus a small fast one for live
+   suggestions** (Settings → Live suggestions → Live model). The live path runs
+   *during* the meeting and is judged on latency, not depth, so a 7–8B model
+   there is usually the right trade — and it stops the big model being asked to
+   answer inside 45 seconds.
+
+**A smaller context is not worse notes.** Transcripts longer than the window are
+summarized in overlapping chunks and merged, so lowering the context costs time
+on a long recording, not accuracy. Given the choice between a big context that
+spills onto the CPU and a smaller one that fits entirely in VRAM, the smaller
+one is faster *and* better.
+
+**Getting more context out of the same card.** Setting these two in Ollama's own
+environment (Windows user variables, then restart Ollama) roughly halves the
+cache:
+
+```
+OLLAMA_FLASH_ATTENTION=1
+OLLAMA_KV_CACHE_TYPE=q8_0
+```
+
+Both are required — without flash attention Ollama keeps an f16 cache. Support
+varies by GPU backend, so treat it as something to verify rather than assume:
+select `q8_0` in the panel's **KV cache precision** dropdown to see what it
+would buy, apply the change, then use **Test AI now** and check the
+"Loaded right now" line reports 100% on the GPU.
+
+**The line that tells you the truth.** Everything above is arithmetic. The
+"Loaded right now" readout under the panel is a measurement — it reports what
+Ollama actually did, including the percentage of the model sitting on the GPU.
+Anything below 100% means layers spilled to the CPU, which is the real cause of
+almost every "the AI is so slow" report.
+
 ### b. Install the dependencies (guided)
 
 The page has **Install** buttons for each dependency. Click them and wait for

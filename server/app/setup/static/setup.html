@@ -318,12 +318,47 @@
         Ollama-compatible server on this machine or your network.
       </p>
       <div class="sub">
-        <button class="ghost small" id="ai-suggest" type="button"
-                title="Pick a context window sized to the selected model">Suggest settings</button>
         <button class="ghost small" id="ai-test" type="button"
                 title="Run a tiny real request through the model with the context window above">Test AI now</button>
       </div>
       <div class="taskmsg" id="ai-test-result"></div>
+    </div>
+
+    <div class="card" id="fit-card">
+      <h2>Fit to your GPU</h2>
+      <p class="hint">
+        What fills graphics memory is the model's <strong>weights</strong> plus
+        its <strong>KV cache</strong>, and the cache cost per token comes from
+        the model's own layer and head counts — not from its parameter count. So
+        this reads those numbers off each installed model and works out the
+        largest context window that actually fits your card.
+      </p>
+      <div class="row2">
+        <div>
+          <label for="fit-vram">Your GPU memory (GB)</label>
+          <input id="fit-vram" type="number" min="2" max="256" step="1" value="24" />
+        </div>
+        <div>
+          <label for="fit-kv">KV cache precision</label>
+          <select id="fit-kv">
+            <option value="f16">f16 — default, no setup</option>
+            <option value="q8_0">q8_0 — about half the cache, needs Ollama flags</option>
+            <option value="q4_0">q4_0 — about a quarter, needs Ollama flags</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="fit-kv-note" hidden>
+        A quantized KV cache needs both <code>OLLAMA_FLASH_ATTENTION=1</code> and
+        <code>OLLAMA_KV_CACHE_TYPE</code> set in Ollama's own environment (a
+        Windows user variable, then restart Ollama). Without them Ollama keeps
+        using f16 and these numbers will be optimistic.
+      </p>
+      <div class="sub">
+        <button class="ghost small" id="fit-refresh" type="button">Measure my models</button>
+        <span class="st" id="fit-status"></span>
+      </div>
+      <div id="fit-loaded" class="taskmsg" hidden></div>
+      <div id="fit-table"></div>
     </div>
 
     <div class="card">

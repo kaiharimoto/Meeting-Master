@@ -361,9 +361,44 @@ async def save(body: SaveBody) -> dict:
             int(body.liveExtractNumPredict), 128, 4096
         )
 
+    # A context window has to leave room for the OUTPUT it reserves plus the
+    # prompt, or there is nothing left for the transcript. Clamping each number
+    # into its own range (above) can't catch that — the relationship between
+    # them is what breaks, and it breaks into a job that never finishes rather
+    # than one that fails. Reject it here, naming the fix.
+    _reject_impossible_context(values, settings)
+
     config.write_env(values)
     log.info("Setup saved (server is now configured=%s)", config.get_settings().is_configured)
     return await build_state()
+
+
+def _reject_impossible_context(values: dict, saved) -> None:
+    """422 when NUM_CTX can't hold its own reserved output plus a transcript."""
+    from ..pipeline import _ollama
+
+    num_ctx = int(values.get("NUM_CTX", saved.NUM_CTX))
+    stages = (
+        ("summary", int(values.get("SUMMARY_NUM_PREDICT", saved.SUMMARY_NUM_PREDICT))),
+        ("Q&A extraction", int(values.get("EXTRACT_NUM_PREDICT", saved.EXTRACT_NUM_PREDICT))),
+    )
+    for stage, num_predict in stages:
+        needed = (
+            num_predict
+            + _ollama.PROMPT_OVERHEAD_TOKENS
+            + _ollama.MIN_INPUT_BUDGET_TOKENS
+        )
+        if num_ctx < needed:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"A context window of {num_ctx} tokens is too small for the "
+                    f"{stage} stage, which reserves {num_predict} tokens for its "
+                    f"answer. Use at least {needed}, or lower that stage's max "
+                    f"output tokens. ('Fit to your GPU' below suggests a context "
+                    f"window that works on your card.)"
+                ),
+            )
 
 
 @router.post("/install/{component}")
@@ -474,6 +509,83 @@ async def setup_ollama_models() -> dict:
             "quant": details.get("quantization_level") or "",
         })
     return {"models": [m for m in models if m["name"]]}
+
+
+@router.get("/model-fit")
+async def setup_model_fit(vramGB: float = 24.0, kvCache: str = "f16") -> dict:
+    """Which installed models fit this GPU, and at what context window.
+
+    Answers the question the dashboard could not answer before: not "is there an
+    update" or "does the model load", but "what should I actually run on this
+    card, and how much context can I afford". Computed from each model's real
+    layer/head metadata (/api/show) plus what Ollama has resident now (/api/ps),
+    so it stays correct for models this code has never heard of.
+
+    Never raises: Ollama being down is a normal answer here (empty list), not an
+    error page in the middle of the Settings tab.
+    """
+    import asyncio
+
+    import httpx
+
+    from . import modelfit
+
+    settings = config.get_settings()
+    vram_bytes = int(max(2.0, min(256.0, vramGB)) * modelfit.GB)
+    cache_type = kvCache if kvCache in modelfit.KV_CACHE_BYTES else "f16"
+    base = settings.OLLAMA_URL.rstrip("/")
+    result: dict = {
+        "vramGB": round(vram_bytes / modelfit.GB, 1),
+        "kvCache": cache_type,
+        "models": [],
+        "loaded": [],
+        "currentModel": settings.OLLAMA_MODEL,
+        "liveModel": settings.live_model,
+        "numCtx": settings.NUM_CTX,
+        "minUsableCtx": modelfit.MIN_USABLE_CTX,
+        "error": None,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
+            tags = (await client.get(f"{base}/api/tags")).json()
+            installed = [m for m in (tags.get("models") or []) if m.get("name")]
+
+            # /api/show per model, concurrently — a dozen installed models
+            # would otherwise make the Settings tab wait a second per model.
+            async def describe(entry: dict) -> dict:
+                try:
+                    resp = await client.post(f"{base}/api/show", json={"model": entry["name"]})
+                    resp.raise_for_status()
+                    return resp.json()
+                except Exception:
+                    return {}
+
+            shown = await asyncio.gather(*(describe(m) for m in installed))
+            for entry, info in zip(installed, shown):
+                details = {**(entry.get("details") or {}), **(info.get("details") or {})}
+                result["models"].append(
+                    modelfit.plan_model(
+                        name=entry["name"],
+                        weights_bytes=int(entry.get("size") or 0),
+                        model_info=info.get("model_info") or {},
+                        vram_bytes=vram_bytes,
+                        cache_type=cache_type,
+                        quantization=str(details.get("quantization_level") or ""),
+                        param_size=str(details.get("parameter_size") or ""),
+                    )
+                )
+            result["models"] = modelfit.rank(result["models"])
+
+            try:
+                ps = (await client.get(f"{base}/api/ps")).json()
+                result["loaded"] = modelfit.loaded_summary(ps)
+            except Exception:
+                result["loaded"] = []  # older Ollama without /api/ps
+    except Exception as exc:
+        result["error"] = f"Could not reach Ollama at {base}: {exc}"
+
+    return result
 
 
 class LiveTestBody(BaseModel):
