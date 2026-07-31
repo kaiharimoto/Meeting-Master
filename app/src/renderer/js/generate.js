@@ -6,6 +6,12 @@ import { setStatus, showError, friendlyState, isBusyState } from './status.js';
 import { renderExtractPrompt, captureExtracted } from './extractReview.js';
 import { saveCurrentToHistory } from './history.js';
 import { showToast } from './toast.js';
+import { showProblem, clearProblem } from './problems.js';
+import { FIRST_TRANSCRIPT_KEY } from './checklist.js';
+import { copyText } from './clipboard.js';
+import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
+import { refreshFillButton } from './answerFill.js';
+import { applyKeptInsights } from './liveInsights.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -26,19 +32,37 @@ let uploading = false;
 let pollInFlight = false;
 let pollGeneration = 0;
 
+// Transcription ETA: wall-clock start of the transcribing state, so progress
+// percent can be projected into "~N min left".
+let transcribeStartedAt = null;
+let lastPolledState = null;
+// Which job's transcript-quality warning has already been raised, so a poll
+// every few seconds doesn't re-raise the same card.
+let transcriptWarningShownFor = null;
+
+// Jobs whose recipient list the operator has confirmed this session (the
+// preset list lives on the server and is otherwise invisible from here).
+const confirmedSendJobs = new Set();
+
 export function initGenerate(context) {
   ctx = context;
   els = {
     pick: document.getElementById('pick-audio-btn'),
     generate: document.getElementById('generate-pdf-btn'),
     open: document.getElementById('open-pdf-btn'),
+    preview: document.getElementById('preview-pdf-btn'),
     send: document.getElementById('send-email-btn'),
   };
 
   els.pick.addEventListener('click', () => guarded(onPickAudio));
   els.generate.addEventListener('click', () => guarded(onGeneratePdf));
   els.open.addEventListener('click', () => guarded(onOpenPdf));
+  if (els.preview) els.preview.addEventListener('click', () => guarded(onPreviewPdf));
   els.send.addEventListener('click', () => guarded(onSendEmail));
+
+  // Explicit file upload — bypasses any attached in-app recording.
+  els.pickFile = document.getElementById('pick-file-btn');
+  if (els.pickFile) els.pickFile.addEventListener('click', () => guarded(onPickFileExplicit));
 
   // Transcript escape hatch (v0.4.0): grab the raw transcript / the exact AI
   // prompt so an EXTERNAL model can write the summary when the local one
@@ -130,18 +154,70 @@ async function onPickAudio() {
     setStatus('An upload is already in progress — wait for it to finish.');
     return;
   }
+
+  // An attached in-app recording wins over the file picker. Verify it still
+  // exists first — a missing file falls back to the picker instead of a
+  // confusing upload error.
+  let filePath = null;
+  const rec = ctx.state.recording;
+  if (rec && rec.filePath && typeof api.recStat === 'function') {
+    let exists = false;
+    try {
+      const s = await api.recStat(rec.filePath);
+      exists = Boolean(s && s.exists);
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      filePath = rec.filePath;
+    } else {
+      ctx.state.recording = null;
+      ctx.persist();
+      showToast({
+        kind: 'error',
+        title: 'The attached recording file is missing',
+        message: 'It may have been deleted from the recordings folder — pick an audio file instead.',
+      });
+    }
+  }
+
+  if (!filePath) {
+    ({ filePath } = await api.pickWavFile());
+    if (!filePath) {
+      setStatus('No audio file picked — nothing was uploaded.');
+      return;
+    }
+  }
+
+  await uploadAudio(filePath);
+}
+
+/** "Upload audio file…": always the picker, even with a recording attached. */
+async function onPickFileExplicit() {
+  const api = requireApi();
+  if (uploading) {
+    setStatus('An upload is already in progress — wait for it to finish.');
+    return;
+  }
   const { filePath } = await api.pickWavFile();
   if (!filePath) {
     setStatus('No audio file picked — nothing was uploaded.');
     return;
   }
+  await uploadAudio(filePath);
+}
 
+async function uploadAudio(filePath) {
+  const api = requireApi();
   // "New meeting" replaces state.job with a fresh object, so holding the
   // reference lets us detect a mid-upload reset and drop this continuation
   // instead of attaching the old meeting's job to the new meeting.
   const jobRef = ctx.state.job;
   uploading = true;
   updateButtons(ctx);
+  // A fresh upload is a fresh attempt — retire the previous failure cards.
+  clearProblem('pipeline');
+  clearProblem('email');
   setStatus('Uploading the recording to the home server…', { busy: true });
   try {
     const { jobId } = await api.uploadMeeting(buildMeetingJson(), filePath);
@@ -228,8 +304,48 @@ async function pollOnce() {
 
   ctx.state.job.state = job.state;
   ctx.state.job.progress = typeof job.progress === 'number' ? job.progress : null;
-  if (job.transcript) ctx.state.transcript = job.transcript;
-  if (job.summary !== null && job.summary !== undefined) ctx.state.summary = job.summary;
+  if (job.state !== lastPolledState) {
+    lastPolledState = job.state;
+    transcribeStartedAt = job.state === 'transcribing' ? Date.now() : null;
+  }
+  if (job.transcript) {
+    ctx.state.transcript = job.transcript;
+    // First-run checklist: the pipeline has produced a transcript once.
+    try {
+      localStorage.setItem(FIRST_TRANSCRIPT_KEY, '1');
+    } catch {
+      // Storage unavailable — the checklist item just stays open.
+    }
+    // A damaged transcript (a whisper repetition loop over quiet audio) still
+    // LOOKS like a transcript, so it would flow into the summary and the Q&A
+    // extraction unremarked and produce thin, strange notes. Say so before the
+    // operator clicks Start AI — this is the one moment the warning can change
+    // what they do.
+    if (job.transcript.warning && transcriptWarningShownFor !== job.id) {
+      transcriptWarningShownFor = job.id;
+      showProblem({
+        id: 'transcript-quality',
+        title: 'This transcript looks damaged',
+        detail: job.transcript.warning,
+        actions: [
+          {
+            label: 'Read the transcript',
+            primary: true,
+            onClick: () => els.copyTranscript && els.copyTranscript.click(),
+          },
+        ],
+      });
+    } else if (!job.transcript.warning) {
+      clearProblem('transcript-quality');
+    }
+  }
+  if (job.summary !== null && job.summary !== undefined) {
+    ctx.state.summary = job.summary;
+    // The server's summary REPLACES the local one, so re-assert any insights
+    // the operator kept from the live rail mid-meeting — they were chosen by
+    // hand and must survive the AI's version arriving.
+    applyKeptInsights(ctx.state);
+  }
   // Capture AI-detected Q&A candidates once (they are approved, not auto-added),
   // dropping any that duplicate a card the operator already typed. Guard on
   // !reviewed so a late poll can't resurrect a list the user culled.
@@ -245,10 +361,19 @@ async function pollOnce() {
   if (job.state === 'failed') {
     stopPolling();
     showError(`AI processing failed on the home server${job.error ? `: ${job.error}` : '.'}`);
-    showToast({
-      kind: 'error',
-      title: 'AI processing failed',
-      message: job.error || 'The home server reported a failure.',
+    // Persistent card with the remedies attached — a failed pipeline stage is
+    // not transient, and its fix shouldn't depend on a toast you missed.
+    showProblem({
+      id: 'pipeline',
+      title: 'AI processing failed on the home server',
+      detail: job.error || 'The home server reported a failure.',
+      actions: [
+        { label: 'Retry AI', primary: true, onClick: () => startAi() },
+        {
+          label: 'Copy AI prompt',
+          onClick: () => els.copyPrompt && els.copyPrompt.click(),
+        },
+      ],
     });
   } else if (READY_STATES.includes(job.state)) {
     stopPolling();
@@ -286,16 +411,22 @@ async function pollOnce() {
       ].filter(Boolean).join(' and ');
       const reason = job.summaryError || job.questionsError;
       showError(`Transcript is ready, but the AI ${failedBits} failed: ${reason}`);
-      showToast({
-        kind: 'error',
-        title: `AI ${failedBits} failed — transcript is safe`,
-        message:
-          `${reason} — Retry (e.g. after lowering the context window in the ` +
-          'server Settings), or use "Copy AI prompt" with your own model and ' +
-          'import its reply via Edit summary.',
-        action: { label: 'Retry summary', onClick: startAi },
+      showProblem({
+        id: 'pipeline',
+        title: `AI ${failedBits} failed — the transcript is safe`,
+        detail:
+          `${reason}. Retry (e.g. after lowering the context window in the ` +
+          'server Settings), or hand the transcript to an external AI.',
+        actions: [
+          { label: 'Retry summary', primary: true, onClick: () => startAi() },
+          {
+            label: 'Copy AI prompt',
+            onClick: () => els.copyPrompt && els.copyPrompt.click(),
+          },
+        ],
       });
     } else {
+      clearProblem('pipeline'); // a clean result retires the failure card
       setStatus(friendlyState(job.state));
       showToast({
         kind: 'success',
@@ -304,13 +435,29 @@ async function pollOnce() {
       });
     }
   } else {
-    // Append a live percentage when the server reports one (transcription).
+    // Append a live percentage when the server reports one (transcription),
+    // plus a projected time remaining — waiting with an ETA feels completely
+    // different from waiting without one.
     let text = friendlyState(job.state);
     if (typeof job.progress === 'number' && job.progress > 0) {
       text += ` — ${job.progress}%`;
+      if (job.state === 'transcribing' && transcribeStartedAt && job.progress >= 5) {
+        const elapsed = Date.now() - transcribeStartedAt;
+        const remainMs = (elapsed * (100 - job.progress)) / job.progress;
+        text += ` · ${fmtEta(remainMs)}`;
+      }
     }
-    setStatus(text, { busy: isBusyState(job.state) });
+    setStatus(text, {
+      busy: isBusyState(job.state),
+      progress: typeof job.progress === 'number' ? job.progress : null,
+    });
   }
+}
+
+function fmtEta(ms) {
+  if (ms < 60000) return 'under a minute left';
+  const min = Math.round(ms / 60000);
+  return `~${min} min left`;
 }
 
 // ---- Generate / open PDF ------------------------------------------------------
@@ -322,7 +469,6 @@ async function onGeneratePdf() {
   // placeholder when summary is null.
   const { pdfPath, fontUsed, warning } = await api.renderPdf(
     buildMeetingJson(),
-    ctx.state.transcript,
     ctx.state.summary
   );
 
@@ -338,6 +484,20 @@ async function onGeneratePdf() {
     setStatus(`PDF saved to ${pdfPath}${warning ? ` (${warning})` : ''}`);
     showToast({ kind: 'success', title: 'PDF saved', message: pdfPath });
   }
+}
+
+// The same render as Generate PDF, shown in a window instead of written to
+// disk — same template path, same font injection, same paper geometry. Seeing
+// the document beats generating a file to find out.
+async function onPreviewPdf() {
+  const api = requireApi();
+  if (typeof api.previewPdf !== 'function') {
+    showError('The PDF preview needs a newer version of the desktop app.');
+    return;
+  }
+  setStatus('Opening the preview…', { busy: true });
+  const { warning } = await api.previewPdf(buildMeetingJson(), ctx.state.summary);
+  setStatus(warning ? `Preview open — ${warning}` : 'Preview open in its own window.');
 }
 
 async function onOpenPdf() {
@@ -378,14 +538,58 @@ async function onSendEmail() {
     return;
   }
 
+  // The preset recipient list lives on the SERVER and is invisible from this
+  // laptop — confirm who actually gets the email once per meeting, with the
+  // real resolved recipients + subject when the server can tell us.
+  if (!confirmedSendJobs.has(jobId)) {
+    let prompt = 'Send the meeting PDF to the preset recipient list now?';
+    try {
+      if (typeof api.getEmailPreview === 'function') {
+        const preview = await api.getEmailPreview(jobId);
+        const to = Array.isArray(preview.recipients)
+          ? preview.recipients.join(', ')
+          : preview.to || '';
+        prompt =
+          `Send the meeting PDF now?\n\n` +
+          (to ? `To: ${to}\n` : '') +
+          (preview.subject ? `Subject: ${preview.subject}` : '');
+      }
+    } catch {
+      // Preview unavailable — fall back to the generic confirmation.
+    }
+    if (!window.confirm(prompt)) {
+      setStatus('Email not sent.');
+      return;
+    }
+    confirmedSendJobs.add(jobId);
+  }
+
   setStatus('Sending the PDF to the home server for emailing…', { busy: true });
   const result = await api.sendPdfViaHome(jobId, ctx.state.pdfPath);
   if (result && result.emailed) {
+    clearProblem('email');
     setStatus('Email sent by the home server.');
     showToast({ kind: 'success', title: 'Email sent', message: 'Delivered by the home server.' });
   } else {
     const detail = result && result.error ? `: ${result.error}` : '.';
     showError(`The home server stored the PDF but could not send the email${detail}`);
+    showProblem({
+      id: 'email',
+      title: 'The email could not be sent',
+      detail:
+        (result && result.error ? `${result.error}. ` : '') +
+        'The PDF is stored on the home server — retry, or send it yourself.',
+      actions: [
+        { label: 'Retry send', primary: true, onClick: () => els.send && els.send.click() },
+        {
+          label: 'Email text…',
+          onClick: () => {
+            const btn = document.getElementById('email-text-btn');
+            if (btn) btn.click();
+          },
+        },
+      ],
+    });
   }
 }
 
@@ -395,7 +599,10 @@ export function updateButtons(context) {
   if (!els) return;
   const c = context || ctx;
   const hasApi = Boolean(c.api);
-  els.pick.disabled = !hasApi || uploading;
+  // No uploads while a recording is running — the file is still being written.
+  const recBusy = typeof c.recActive === 'function' && c.recActive();
+  els.pick.disabled = !hasApi || uploading || recBusy;
+  if (els.pickFile) els.pickFile.disabled = !hasApi || uploading || recBusy;
   els.generate.disabled = !hasApi; // PDF works even without AI results
   els.open.disabled = !hasApi || !c.state.pdfPath;
   els.send.disabled = !hasApi || !c.state.pdfPath;
@@ -421,6 +628,9 @@ export function updateButtons(context) {
     const jobId = c.state.job && c.state.job.id;
     emailBtn.disabled = !hasApi || !jobId || typeof c.api.getEmailPreview !== 'function';
   }
+  // Owned by answerFill.js — it depends on how many cards are still blank,
+  // which nothing else here tracks.
+  refreshFillButton();
 }
 
 // ---- Transcript / external-AI escape hatch ----------------------------------
@@ -452,7 +662,10 @@ function transcriptOrExplain() {
 async function onCopyTranscript() {
   const text = transcriptOrExplain();
   if (!text) return;
-  await navigator.clipboard.writeText(text);
+  if (!(await copyText(text))) {
+    showError('Could not copy to the clipboard — use "Save transcript" to write it to a file instead.');
+    return;
+  }
   setStatus('Transcript copied to the clipboard.');
   showToast({ kind: 'success', title: 'Transcript copied', message: 'Paste it anywhere.' });
 }
@@ -476,7 +689,18 @@ async function onCopyAiPrompt() {
   }
   setStatus('Fetching the AI prompt…', { busy: true });
   const { text } = await ctx.api.getJobPrompt(jobId);
-  await navigator.clipboard.writeText(text);
+  if (!(await copyText(text))) {
+    // The prompt isn't shown anywhere to select by hand, so offer the file
+    // route rather than leaving the operator with no way to get at it.
+    showError('Could not copy to the clipboard — save the prompt to a file instead.');
+    showToast({
+      kind: 'error',
+      title: 'Clipboard unavailable',
+      message: 'Save the AI prompt as a .txt file and open it from there.',
+      action: { label: 'Save prompt…', onClick: () => guarded(() => savePromptToFile(text)) },
+    });
+    return;
+  }
   setStatus('AI prompt copied — paste it into your model, then import its JSON reply via Edit summary.');
   showToast({
     kind: 'success',
@@ -485,10 +709,23 @@ async function onCopyAiPrompt() {
   });
 }
 
+async function savePromptToFile(text) {
+  if (!ctx.api || typeof ctx.api.pickSavePath !== 'function') return;
+  const title = (ctx.state.details && ctx.state.details.title) || 'meeting';
+  const safe = title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'meeting';
+  const { filePath } = await ctx.api.pickSavePath(`${safe}-ai-prompt.txt`);
+  if (!filePath) return;
+  await ctx.api.saveTextFile(filePath, text);
+  setStatus(`AI prompt saved: ${filePath}`);
+}
+
 // ---- Dev shortcut ----------------------------------------------------------------
 
 async function onDevMockShortcut(e) {
-  if (!(e.ctrlKey && e.shiftKey && (e.key === 'M' || e.key === 'm'))) return;
+  if (!matchChord(e, 'ctrl+shift+m')) return;
+  // Guards every other global shortcut has and this one didn't: never fire
+  // while typing, never fire over an open dialog.
+  if (isTypingTarget(e.target) || anyModalOpen()) return;
   e.preventDefault();
   try {
     // Dev-only nicety: the fixture only exists relative to the source tree,

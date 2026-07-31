@@ -29,8 +29,13 @@ async function call(channel, ...args) {
 contextBridge.exposeInMainWorld('api', {
   uploadMeeting: (meeting, wavFilePath) => call(CHANNELS.JOB_UPLOAD, meeting, wavFilePath),
   getJobStatus: (jobId) => call(CHANNELS.JOB_STATUS, jobId),
-  renderPdf: (meeting, transcript, summary) =>
-    call(CHANNELS.PDF_RENDER, meeting, transcript, summary),
+  // No transcript argument: it is deliberately not part of the printed
+  // document (see src/main/pdf.js), and it used to be sent here only to be
+  // ignored.
+  renderPdf: (meeting, summary) => call(CHANNELS.PDF_RENDER, meeting, summary),
+  previewPdf: (meeting, summary) => call(CHANNELS.PDF_PREVIEW, meeting, summary),
+  draftAnswers: (jobId, questions, attendees) =>
+    call(CHANNELS.JOB_DRAFT_ANSWERS, jobId, questions, attendees),
   openPdf: (pdfPath) => call(CHANNELS.PDF_OPEN, pdfPath),
   sendPdfViaHome: (jobId, pdfPath) => call(CHANNELS.PDF_SEND_HOME, jobId, pdfPath),
   sendPdfViaLaptop: (meeting, pdfPath) => call(CHANNELS.PDF_SEND_LAPTOP, meeting, pdfPath),
@@ -64,6 +69,56 @@ contextBridge.exposeInMainWorld('api', {
   getJobNames: (jobId) => call(CHANNELS.JOB_NAMES_GET, jobId),
   applyJobNames: (jobId, mapping) => call(CHANNELS.JOB_NAMES_APPLY, jobId, mapping),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
+
+  // In-app recording (v0.8.0)
+  recStart: (meta) => call(CHANNELS.REC_START, meta),
+  recAppend: (recId, seq, chunk, elapsedMs) =>
+    call(CHANNELS.REC_APPEND, recId, seq, chunk, elapsedMs),
+  recStop: (recId, info) => call(CHANNELS.REC_STOP, recId, info),
+  recDiscard: (recId) => call(CHANNELS.REC_DISCARD, recId),
+  recListOrphans: () => call(CHANNELS.REC_ORPHANS),
+  recResolveOrphan: (recId, action) => call(CHANNELS.REC_ORPHAN_RESOLVE, recId, action),
+  recStat: (filePath) => call(CHANNELS.REC_STAT, filePath),
+  recOpenFolder: () => call(CHANNELS.REC_OPEN_FOLDER),
+  onRecEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.REC_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.REC_EVENT, listener);
+  },
+
+  // Live mid-meeting transcription (v0.9.0)
+  liveSupportGet: () => call(CHANNELS.LIVE_SUPPORT_GET),
+  liveModelDownload: (name) => call(CHANNELS.LIVE_MODEL_DOWNLOAD, name),
+  liveModelDelete: (name) => call(CHANNELS.LIVE_MODEL_DELETE, name),
+  liveStart: (opts) => call(CHANNELS.LIVE_START, opts),
+  livePcm: (chunk, rms) => call(CHANNELS.LIVE_PCM, chunk, rms),
+  liveStop: () => call(CHANNELS.LIVE_STOP),
+  onLiveEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.LIVE_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.LIVE_EVENT, listener);
+  },
+  onLiveModelEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.LIVE_MODEL_EVENT, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.LIVE_MODEL_EVENT, listener);
+  },
+
+  // Usability batch (v0.10.0)
+  getPreflight: () => call(CHANNELS.PREFLIGHT_GET),
+  miniOpen: () => call(CHANNELS.MINI_OPEN),
+  miniCmd: (cmd) => call(CHANNELS.MINI_CMD, cmd),
+  miniStatus: (payload) => call(CHANNELS.MINI_STATUS, payload),
+  onMiniCmd: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.MINI_CMD, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.MINI_CMD, listener);
+  },
+  onMiniState: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.MINI_STATE, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.MINI_STATE, listener);
+  },
 
   // Server-mode window pages (boot page + Dashboard tab in the one window)
   getSidecarState: () => call(CHANNELS.SIDECAR_STATE_GET),

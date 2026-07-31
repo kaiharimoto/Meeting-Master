@@ -2,7 +2,8 @@
 summary with an Ollama model.
 
 Output is a MeetingSummary rendered as a "deck" in the PDF:
-  Key Takeaways · Decisions · Action Items (owner/due/priority) · Key Figures · Topics
+  Key Takeaways · Key Insights · Decisions · Action Items (owner/due/priority)
+  · Key Figures · Topics
 See _ollama.py for the shared chat/token helpers and the reason these calls use
 the native /api/chat endpoint.
 """
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 # Keep the printed deck tight and slide-like — hard caps so a chatty model
 # can't blow out the PDF layout.
 _MAX_TAKEAWAYS = 8
+_MAX_INSIGHTS = 6
 _MAX_DECISIONS = 8
 _MAX_ACTIONS = 10
 _MAX_FIGURES = 8
@@ -31,6 +33,7 @@ _SCHEMA_HINT = (
     'Respond with ONLY a JSON object of this exact shape:\n'
     '{\n'
     '  "keyTakeaways": ["short bullet", ...],\n'
+    '  "keyInsights": ["a lesson to apply going forward", ...],\n'
     '  "decisions": ["a decision that was made", ...],\n'
     '  "actionItems": [\n'
     '    {"task": "what to do", "owner": "name or empty", '
@@ -48,7 +51,17 @@ SYSTEM_PROMPT = (
     "— never invent names, numbers, decisions, dates, or owners.\n\n"
     "Populate these sections:\n"
     "- keyTakeaways: the most important outcomes and conclusions, each a single "
-    "crisp sentence.\n"
+    "crisp sentence. These RECORD THE MEETING — what was said, concluded or "
+    "settled. Past tense, about this meeting.\n"
+    "- keyInsights: LESSONS TO APPLY IN FUTURE, drawn from what happened in "
+    "this meeting — what worked, what went wrong, a pattern worth watching, a "
+    "risk to plan around, or something the group should do differently next "
+    "time. Each a single forward-looking sentence that would still be useful "
+    "to someone who was not at the meeting. This is NOT a second copy of "
+    "keyTakeaways: a takeaway says what happened, an insight says what to do "
+    "about it from now on. Only include an insight the transcript genuinely "
+    "supports — an empty array is better than a platitude, and never restate a "
+    "takeaway, a decision, or an action item here.\n"
     "- decisions: concrete decisions the group actually made (agreements, "
     "approvals, choices). One decision per string. Empty array if none.\n"
     "- actionItems: things someone must DO after the meeting. For each, give the "
@@ -69,8 +82,10 @@ SYSTEM_PROMPT = (
 _MERGE_SYSTEM_PROMPT = (
     "You merge several partial structured summaries of ONE meeting into a "
     "single structured summary. Deduplicate overlapping points, keep the most "
-    "specific wording, and preserve every distinct takeaway, decision, action "
-    "item, figure, and topic. Invent nothing. " + _SCHEMA_HINT
+    "specific wording, and preserve every distinct takeaway, insight, decision, "
+    "action item, figure, and topic. Keep keyTakeaways (what happened) and "
+    "keyInsights (lessons to apply in future) strictly separate — never move a "
+    "point from one into the other. Invent nothing. " + _SCHEMA_HINT
 )
 
 
@@ -167,6 +182,9 @@ def _coerce(parsed) -> MeetingSummary:
     data = parsed if isinstance(parsed, dict) else {}
     return MeetingSummary(
         keyTakeaways=_string_list(data, "keyTakeaways", "key_takeaways", limit=_MAX_TAKEAWAYS),
+        keyInsights=_string_list(
+            data, "keyInsights", "key_insights", "insights", limit=_MAX_INSIGHTS
+        ),
         decisions=_string_list(data, "decisions", "decisionsMade", limit=_MAX_DECISIONS),
         actionItems=_action_items(data),
         keyFigures=_string_list(data, "keyFigures", "key_figures", "figures", limit=_MAX_FIGURES),
@@ -180,6 +198,7 @@ def _merge(summaries: list[MeetingSummary]) -> MeetingSummary:
     # String sections.
     for field, limit in (
         ("keyTakeaways", _MAX_TAKEAWAYS),
+        ("keyInsights", _MAX_INSIGHTS),
         ("decisions", _MAX_DECISIONS),
         ("keyFigures", _MAX_FIGURES),
         ("topics", _MAX_TOPICS),
@@ -214,7 +233,7 @@ async def run(
     context = _ollama.meeting_context(meeting)
     num_predict = settings.SUMMARY_NUM_PREDICT
     temperature = settings.SUMMARY_TEMPERATURE
-    budget_tokens = _ollama.input_budget_tokens(settings, num_predict)
+    budget_tokens = _ollama.input_budget_tokens(settings, num_predict, "summary")
 
     async with httpx.AsyncClient(timeout=_ollama.DEFAULT_TIMEOUT) as client:
         if _ollama.estimate_tokens(transcript_text) <= budget_tokens:

@@ -261,6 +261,14 @@ jobs:
           if (-not (Test-Path app/sidecar/MeetingMasterServer.exe)) {
             throw "app/sidecar/MeetingMasterServer.exe missing — the sidecar artifact did not download where expected."
           }
+          # Live transcription reuses the sidecar's whisper-cli on the laptop.
+          # whisperLocator.js probes resources/server/_internal/bin (and
+          # resources/server/bin); if the PyInstaller layout moves, update the
+          # probe list in app/src/main/whisperLocator.js alongside this check.
+          if (-not (Test-Path app/sidecar/_internal/bin/whisper-cli.exe) -and
+              -not (Test-Path app/sidecar/bin/whisper-cli.exe)) {
+            throw "whisper-cli.exe is not at a path the laptop's live transcription probes (src/main/whisperLocator.js)."
+          }
           $size = (Get-ChildItem app/sidecar -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
           Write-Host ("Sidecar payload: {0:N0} MB" -f $size)
 

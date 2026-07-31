@@ -18,18 +18,24 @@
   --surface: #ffffff;
   --surface-2: #f6f8fb;
   --surface-3: #edf1f7;
+  /* Form controls. Inputs sit ON --surface panels, so their boundary comes
+     from --border-control (3:1, WCAG 1.4.11) rather than a fill difference. */
+  --field-bg: #ffffff;
 
-  /* Ink */
+  /* Ink. --ink-faint is held at >=4.5:1 on every surface in BOTH themes; it
+     carries real content (timestamps, version, placeholders), not decoration. */
   --ink: #1c222b;
   --ink-soft: #57606d;
-  --ink-faint: #8a93a1;
+  --ink-faint: #5e6773;
 
   /* Brand + accent */
   --brand: #1a2b4a;
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
-  --accent-soft: #dbeafe;
+  --accent-soft: #eaf3ff;
   --accent-ghost: rgba(37, 99, 235, 0.08);
+  /* Ink that sits ON an accent fill (was two different hard-coded literals). */
+  --on-accent: #ffffff;
 
   /* Status */
   --success: #15803d;
@@ -41,18 +47,63 @@
   --danger-soft: #fee2e2;
 
   /* Lines + depth */
-  --border: #d9dfe8;
-  --border-strong: #c3ccd8;
+  --border: #cbd3de;
+  --border-strong: #aab4c2;
+  --border-control: #8a94a3; /* input/control edges — must clear 3:1 */
+  --scrim: rgba(15, 20, 32, 0.5); /* modal backdrop; theme-aware */
   --shadow-1: 0 1px 2px rgba(26, 43, 74, 0.06);
   --shadow-2: 0 1px 3px rgba(26, 43, 74, 0.08), 0 4px 14px rgba(26, 43, 74, 0.06);
   --shadow-3: 0 18px 50px rgba(15, 23, 42, 0.35);
 
   /* Shape + rhythm */
+  --r-xs: 4px;
   --r-sm: 7px;
   --r-md: 10px;
   --r-lg: 14px;
+  --r-pill: 999px;
   --sidebar-w: 240px;
+  --sidebar-w-collapsed: 64px;
   --titlebar-h: 40px;
+  /* Rail width is operator-adjustable (shell.js) and restored pre-paint by
+     shellBoot.js. Clamps live in BOTH: 240–460. */
+  --rail-w: 300px;
+  /* How long a panel takes to collapse. Also gates the visibility flip that
+     hides the body from assistive tech and hit-testing once it's closed. */
+  --collapse-t: 180ms;
+
+  /* Type scale — six steps, every one multiplied by --fs-scale so the Settings
+     "Text size" control moves TYPE ONLY. That is deliberately not the same
+     thing as zoom.js's display zoom, which scales the whole window (sidebar,
+     paddings, icons) from the main process; see settings.js for how the two
+     are labelled. shellBoot's sibling themeBoot.js sets --fs-scale pre-paint.
+     Any literal font-size left in this file silently opts out of scaling —
+     textscale.spec.js asserts there are none. */
+  --fs-scale: 1;
+  --fs-2xs: calc(11px * var(--fs-scale));
+  --fs-xs: calc(12px * var(--fs-scale));
+  --fs-sm: calc(13px * var(--fs-scale));
+  --fs-base: calc(15px * var(--fs-scale));
+  --fs-md: calc(17px * var(--fs-scale));
+  --fs-lg: calc(21px * var(--fs-scale));
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.3;
+  --lh-base: 1.5;
+  --lh-loose: 1.6;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* Spacing: a 4px grid. The off-grid 6/7/9/11/18/22px values still in the
+     file are snapped in Phase 2. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
 
   /* Motion */
   --t-fast: 120ms ease;
@@ -69,32 +120,113 @@
   --surface: #171b24;
   --surface-2: #1d232e;
   --surface-3: #232b38;
+  /* Dark inputs used to share --surface with the panel behind them, so with a
+     1.4:1 border they had no visible boundary at all. */
+  --field-bg: #1d232e;
 
   --ink: #e7ebf2;
   --ink-soft: #9aa4b2;
-  --ink-faint: #6b7585;
+  --ink-faint: #98a2b1;
 
   --brand: #d5deed;
   --accent: #6b9aff;
   --accent-strong: #86acff;
-  --accent-soft: rgba(107, 154, 255, 0.18);
-  --accent-ghost: rgba(107, 154, 255, 0.1);
+  /* The soft fills are PRE-COMPOSITED over --surface rather than alpha: as
+     alpha they resolved to a different colour on every ancestor (--bg vs
+     --surface vs --surface-2), so one rule produced three contrast ratios. */
+  --accent-soft: #26324b;
+  --accent-ghost: #1f2840;
+  --on-accent: #0d1220;
 
   --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.14);
+  --success-soft: #1e3631;
   --warn-ink: #f0b667;
-  --warn-bg: rgba(240, 182, 103, 0.1);
-  --warn-border: rgba(240, 182, 103, 0.35);
+  --warn-bg: #2d2b2b;
+  --warn-border: #635139;
   --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.14);
+  --danger-soft: #372727;
 
-  --border: #262d3a;
-  --border-strong: #35404f;
+  --border: #3a4352;
+  --border-strong: #4a5568;
+  --border-control: #67717f;
+  /* A 50% near-black scrim over an already-dark app separates nothing. */
+  --scrim: rgba(0, 0, 0, 0.62);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.5), 0 6px 18px rgba(0, 0, 0, 0.38);
   --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.6);
 
   color-scheme: dark;
+}
+
+/* ---------- Tokens: high contrast ----------
+ *
+ * ORTHOGONAL to the theme, not a third theme: <html data-contrast="high">
+ * composes with data-theme="light|dark", so both stay maintained and there is
+ * one place to change a colour. Only the tokens that carry SEPARATION move —
+ * ink, borders, accent, scrim — because Phase 1 tokenized everything, this is
+ * one small block rather than a parallel stylesheet.
+ *
+ * Targets: body ink at 15:1+ (AAA), --ink-faint and --ink-soft comfortably past
+ * AA, and every border past the 3:1 non-text minimum instead of hovering just
+ * over it. contrast.test.js asserts all of that against these exact values.
+ */
+
+:root[data-contrast="high"] {
+  --ink: #000000;
+  --ink-soft: #1b1f24;
+  --ink-faint: #33393f;
+
+  --accent: #0a46b8;
+  --accent-strong: #073187;
+  --accent-soft: #dbe8ff;
+  --accent-ghost: #eef4ff;
+
+  --success: #0c5c28;
+  --success-soft: #cdf3da;
+  --warn-ink: #7a4400;
+  --warn-bg: #fff2df;
+  --warn-border: #b98330;
+  --danger: #960606;
+  --danger-soft: #ffdede;
+
+  --border: #616a75;
+  --border-strong: #3d444c;
+  --border-control: #3d444c;
+  --scrim: rgba(0, 0, 0, 0.72);
+}
+
+:root[data-theme="dark"][data-contrast="high"] {
+  /* A true-black ground buys the most separation a screen can give. */
+  --bg: #000000;
+  --bg-sidebar: #000000;
+  --surface: #12161d;
+  --surface-2: #191f28;
+  --surface-3: #1d232b;
+  --field-bg: #191f28;
+
+  --ink: #ffffff;
+  --ink-soft: #d9dfe8;
+  --ink-faint: #c6cdd8;
+
+  --brand: #f0f4fa;
+  --accent: #a6c8ff;
+  --accent-strong: #c6dcff;
+  --accent-soft: #2a3a55;
+  --accent-ghost: #202a3d;
+  --on-accent: #000000;
+
+  --success: #86efac;
+  --success-soft: #1d3a2a;
+  --warn-ink: #ffcf87;
+  --warn-bg: #33291a;
+  --warn-border: #8a6a34;
+  --danger: #ffa3a3;
+  --danger-soft: #3d2222;
+
+  --border: #808b9a;
+  --border-strong: #a8b2bf;
+  --border-control: #a8b2bf;
+  --scrim: rgba(0, 0, 0, 0.85);
 }
 
 /* ---------- Base ---------- */
@@ -119,8 +251,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
   transition: background var(--t-base), color var(--t-base);
 }
 
@@ -135,6 +267,20 @@ body {
   background: var(--accent-soft);
 }
 
+/* Visually hidden, still announced. Kept focusable-safe (no display:none). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 kbd {
   display: inline-block;
   padding: 1px 7px;
@@ -144,7 +290,7 @@ kbd {
   background: var(--surface);
   font-family: inherit;
   font-size: 0.85em;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--ink-soft);
 }
 
@@ -177,9 +323,9 @@ kbd {
   display: flex;
   align-items: center;
   padding-left: 16px;
-  gap: 8px;
-  font-size: 12.5px;
-  font-weight: 600;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.02em;
   color: var(--ink-faint);
   background: var(--bg-sidebar);
@@ -192,7 +338,7 @@ kbd {
 #titlebar .titlebar-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 #titlebar .brand-mark {
@@ -224,8 +370,80 @@ kbd {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 10px 14px;
+  gap: var(--sp-2);
+  padding: 4px 4px 14px 10px;
+}
+
+.sidebar-toggle {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+.sidebar-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------- Icons-only sidebar ----------
+   One attribute drives it, and it works by narrowing --sidebar-w itself, so
+   everything already anchored to that token (the frame's first grid track, the
+   sheet modals' left edge) follows without a second rule. Labels go sr-only
+   rather than display:none — a nav button whose only child is an aria-hidden
+   icon has NO accessible name at all. */
+
+:root[data-sidebar="collapsed"] {
+  --sidebar-w: var(--sidebar-w-collapsed);
+}
+
+:root[data-sidebar="collapsed"] #sidebar {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+:root[data-sidebar="collapsed"] .sidebar-brand {
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: 4px 0 12px;
+}
+
+:root[data-sidebar="collapsed"] .sidebar-toggle {
+  margin-left: 0;
+}
+
+:root[data-sidebar="collapsed"] .nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+:root[data-sidebar="collapsed"] .server-pill {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+:root[data-sidebar="collapsed"] .sidebar-foot-row {
+  justify-content: center;
+}
+
+:root[data-sidebar="collapsed"] .connection-info,
+:root[data-sidebar="collapsed"] .app-version {
+  display: none;
+}
+
+:root[data-sidebar="collapsed"] .brand-name,
+:root[data-sidebar="collapsed"] .nav-label,
+:root[data-sidebar="collapsed"] .pill-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .brand-mark {
@@ -233,23 +451,27 @@ kbd {
   height: 26px;
   border-radius: 7px;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-accent);
   display: grid;
   place-content: center;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
   letter-spacing: -0.02em;
   flex: none;
 }
 
 :root[data-theme="dark"] .brand-mark {
   background: var(--accent);
-  color: #0f1117;
+  color: var(--on-accent);
 }
 
 .brand-name {
-  font-size: 15px;
-  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
   color: var(--ink);
   letter-spacing: -0.01em;
 }
@@ -263,7 +485,7 @@ kbd {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
   width: 100%;
   padding: 9px 12px;
   border: none;
@@ -271,16 +493,16 @@ kbd {
   background: transparent;
   color: var(--ink-soft);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   text-align: left;
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast);
 }
 
 .nav-item svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   flex: none;
 }
 
@@ -306,7 +528,7 @@ kbd {
 .sidebar-foot {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
   padding: 10px 4px 0;
   border-top: 1px solid var(--border);
 }
@@ -315,7 +537,7 @@ kbd {
 .server-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--border);
@@ -323,8 +545,8 @@ kbd {
   background: var(--surface);
   color: var(--ink-soft);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: border-color var(--t-fast), background var(--t-fast);
 }
@@ -372,17 +594,17 @@ kbd {
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-3);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .server-popover .pop-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .server-popover .pop-key {
@@ -392,14 +614,14 @@ kbd {
 
 .server-popover .pop-val {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .connection-info {
-  font-size: 11.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-faint);
   padding: 0 6px;
   overflow: hidden;
@@ -411,7 +633,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--sp-2);
   padding: 0 4px;
 }
 
@@ -441,13 +663,23 @@ kbd {
 }
 
 .app-version {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-faint);
 }
 
+/* An update is downloaded: the version label becomes a real control (the
+   always-available way to install — a toast can be missed or dismissed). */
 .app-version.update-ready {
   color: var(--success);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--success-soft);
+}
+.app-version.update-ready:hover {
+  filter: brightness(1.08);
+  text-decoration: underline;
 }
 
 /* Theme toggle shows the icon for the theme you'd switch TO. */
@@ -468,14 +700,14 @@ kbd {
 .shortcuts-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-2);
 }
 
 .shortcut-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
 }
 
@@ -485,30 +717,60 @@ kbd {
 
 /* ---------- Content area + screens ---------- */
 
+/* BREAKPOINTS — the app had exactly one width media query in 2,100 lines.
+ * Three named steps, documented here and used nowhere else by raw number:
+ *
+ *   < 1100px   narrow: form grids collapse to one column
+ *   >= 1400px  wide:   the reading column gets more room
+ *   >= 1700px  ultra:  ditto, for the Z13 docked to a big display
+ *
+ * The Meeting screen's two-column split is deliberately NOT on this scale —
+ * it depends on how much room the panels actually have, which the sidebar
+ * (240px or 64px) and the suggestions rail (240–460px, or absent) both change
+ * independently of the window. It uses a container query instead; see
+ * .meeting-grid. */
+
 .app-content {
   overflow-y: auto;
   min-width: 0;
 }
 
 .screen {
-  max-width: 980px;
+  max-width: var(--screen-max);
   margin: 0 auto;
   padding: 26px 30px 80px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--sp-5);
+}
+
+:root {
+  --screen-max: 980px;
+}
+
+@media (min-width: 1400px) {
+  :root {
+    --screen-max: 1320px;
+  }
+}
+
+@media (min-width: 1700px) {
+  :root {
+    --screen-max: 1560px;
+  }
 }
 
 .screen-head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--sp-3);
 }
 
 .screen-title {
   margin: 0;
-  font-size: 21px;
-  font-weight: 700;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
   letter-spacing: -0.01em;
   color: var(--ink);
 }
@@ -517,52 +779,24 @@ kbd {
   margin-left: auto;
 }
 
-/* Legacy header block (pre-sidebar layout) — kept so an unmigrated index.html
-   still renders sanely; remove once the shell migration is complete. */
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 28px;
-  background: var(--brand);
-  color: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* Autosave receipt. Sits next to the screen title, never moves the layout:
+   it reserves no space until the first save of the session. */
+.save-indicator {
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  transition: color var(--t-base);
 }
 
-.app-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.app-header .btn-secondary {
-  background: transparent;
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.4);
-}
-
-.app-header .connection-info {
-  margin-left: auto;
-  font-size: 13px;
-  color: #c6d2e8;
-  max-width: 45%;
-}
-
-.app-main {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 24px 28px 72px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+.save-indicator.is-fresh {
+  color: var(--success);
+  font-weight: var(--fw-medium);
 }
 
 /* ---------- Panels ---------- */
 
 .panel {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -572,13 +806,14 @@ kbd {
 }
 
 .panel h2 {
-  margin: 0 0 16px;
-  font-size: 16px;
-  font-weight: 700;
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
   color: var(--ink);
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-2);
 }
 
 .panel h2 svg {
@@ -589,16 +824,26 @@ kbd {
 
 .panel-heading-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 14px;
+  gap: var(--sp-2) var(--sp-3);
+  /* Clear the absolutely-positioned collapse chevron at the panel's right
+     edge — a right-aligned control in this row would sit under it. */
+  padding-right: var(--sp-5);
 }
 
+/* The heading keeps its line; the chip and any controls wrap beneath it. */
+.panel-heading-row > h2 {
+  white-space: nowrap;
+}
+
+
 .hint-chip {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   background: var(--accent-soft);
-  border-radius: 999px;
-  padding: 3px 12px;
+  border-radius: var(--r-pill);
+  padding: 3px var(--sp-3);
   white-space: nowrap;
 }
 
@@ -616,8 +861,8 @@ kbd {
 
 .field label {
   display: block;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   color: var(--ink-soft);
   margin-bottom: 4px;
 }
@@ -628,11 +873,11 @@ kbd {
 .settings-modal select {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   font: inherit;
   color: var(--ink);
-  background: var(--surface);
+  background: var(--field-bg);
   transition: border-color var(--t-fast), background var(--t-base);
 }
 
@@ -652,6 +897,52 @@ kbd {
   resize: vertical;
 }
 
+/* ---------- Checkbox rows ----------
+   ONE definition for every "box + words on one line" control (live transcript,
+   computer audio, high contrast, Follow). Two rules from above would otherwise
+   wreck them, which is exactly how the live-transcription checkboxes ended up
+   misaligned: `.field label` is display:block (box on its own row above the
+   words) and `.field input` is width:100% + padding + border (the box stretched
+   across the whole panel). Both selectors carry a type, so these must too —
+   winning on specificity rather than the !important the old rule needed (and
+   which the .rec-loopback rows never had, hence the misalignment). */
+
+.field input[type="checkbox"],
+.field input[type="radio"],
+.settings-check input[type="checkbox"],
+.rec-loopback input[type="checkbox"],
+.log-follow input[type="checkbox"] {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  /* Nudge the box onto the first line's optical centre (cap-height, not the
+     line box) — the same 2px correction .extract-check-wrap uses. */
+  margin: 2px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+  transition: none;
+}
+
+.field label.settings-check,
+.field label.rec-loopback,
+.field label.log-follow,
+.settings-check,
+.rec-loopback,
+.log-follow {
+  display: inline-flex;
+  /* Top-aligned, not centered: these labels wrap on narrow windows, and a box
+     centered against two lines of text reads as belonging to neither. */
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-bottom: 0;
+  /* These words label a control, not a field below them — so body weight, not
+     the semibold `.field label` heading weight. */
+  font-weight: var(--fw-regular);
+  cursor: pointer;
+}
+
 .field-invalid {
   border-color: var(--danger) !important;
   background: var(--danger-soft) !important;
@@ -660,9 +951,13 @@ kbd {
 /* ---------- Buttons ---------- */
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
   font: inherit;
-  font-weight: 600;
-  padding: 9px 18px;
+  font-weight: var(--fw-semibold);
+  padding: 9px var(--sp-4);
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   cursor: pointer;
@@ -675,18 +970,28 @@ kbd {
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  /* 0.45 dropped labels to ~3.5:1 and 8+ buttons are disabled at rest, so
+     fade gently. The ink override is SECONDARY-only: .btn:disabled outranks
+     .btn-primary, so applying it here put grey text on the blue fill. */
+  opacity: 0.6;
   cursor: not-allowed;
+}
+.btn-secondary:disabled {
+  color: var(--ink-soft);
+}
+
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
-:root[data-theme="dark"] .btn-primary {
-  color: #0d1220;
-}
+
 
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-strong);
@@ -704,14 +1009,45 @@ kbd {
 
 .btn-small {
   padding: 5px 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .button-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--sp-3);
   margin-bottom: 16px;
+}
+
+/* ---------- Inline quick capture ---------- */
+
+/* The fast path: one field, always in the same place, always ready. Deliberately
+   flush with the card list below it so it reads as "row zero" of the list. */
+.quick-capture {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.quick-capture input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font: inherit;
+  color: var(--ink);
+  background: var(--field-bg);
+  transition: border-color var(--t-fast), background var(--t-base);
+}
+
+.quick-capture input::placeholder {
+  color: var(--ink-faint);
+}
+
+.quick-capture input:focus {
+  border-color: var(--accent);
 }
 
 /* ---------- Q&A cards ---------- */
@@ -719,35 +1055,11 @@ kbd {
 .card-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
   margin-bottom: 16px;
 }
 
-.card-list-empty {
-  color: var(--ink-soft);
-  padding: 26px 12px;
-  text-align: center;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--r-md);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
 
-.card-list-empty::before {
-  content: "";
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  -webkit-mask: center / 20px no-repeat
-    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>');
-  mask: center / 20px no-repeat
-    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>');
-  background-color: var(--accent);
-  opacity: 0.7;
-}
 
 .qa-card {
   position: relative;
@@ -755,54 +1067,280 @@ kbd {
   border-left: 4px solid var(--accent);
   border-radius: var(--r-md);
   background: var(--surface-2);
-  padding: 14px 44px 14px 16px;
-  cursor: pointer;
+  padding: var(--sp-4) 44px var(--sp-4) var(--sp-4);
+  box-shadow: var(--shadow-1);
+  /* Not a button any more: the CARD isn't clickable, its text is. */
+  cursor: default;
+  animation: mm-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
   transition: background var(--t-fast), border-color var(--t-fast),
-    transform var(--t-fast), box-shadow var(--t-fast);
+    box-shadow var(--t-fast);
 }
 
 .qa-card:hover {
   background: var(--accent-ghost);
-  box-shadow: var(--shadow-1);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
+
+/* The list is one tab stop; the focused card has to say so clearly. */
+.qa-card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .card-question {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--ink);
   margin-bottom: 4px;
+  cursor: text;
 }
 
 .card-answer {
   color: var(--ink-soft);
   white-space: pre-wrap; /* keep Shift+Enter newlines */
   margin-bottom: 6px;
+  cursor: text;
 }
 
-.card-participant {
+/* A question with no answer yet. The slot stays in the DOM so it can be
+   clicked (and so `A` has something to focus) — and reading as an invitation
+   rather than as content makes "which of these still needs an answer?"
+   answerable at a glance down the list. */
+.card-answer.is-blank {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.card-answer.is-blank::before {
+  content: "+ ";
+  font-style: normal;
+}
+
+.qa-card:hover .card-answer.is-blank,
+.qa-card:focus-within .card-answer.is-blank {
+  color: var(--accent);
+}
+
+/* When the question was captured, in recording time. Quiet — it is a
+   reference, not a fact about the meeting. */
+.card-stamp {
   display: inline-block;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--warn-ink);
-  background: var(--warn-bg);
-  border: 1px solid var(--warn-border);
-  border-radius: 999px;
-  padding: 2px 10px;
+  margin-left: var(--sp-2);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
 }
 
-.card-delete {
+/* ---------- Card actions ----------
+   A floating toolbar rather than reserved gutter: three permanent buttons on
+   every card would cost 80px of text width on every line, forever, to serve a
+   moment. Hidden at rest, present on hover or when the card has focus. */
+
+.card-actions {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 26px;
-  height: 26px;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+
+.qa-card:hover .card-actions,
+.qa-card:focus-within .card-actions,
+.qa-card.is-dragging .card-actions {
+  opacity: 1;
+}
+
+/* …except while the card is being edited in place: the toolbar floats over the
+   right end of the very field you're typing into. (:focus-within would
+   otherwise reveal it, since the editor holds focus.) */
+.qa-card:has(.card-editor) .card-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.card-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: none;
   border-radius: 50%;
   background: transparent;
   color: var(--ink-faint);
-  font-size: 17px;
+  font: inherit;
   line-height: 1;
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast);
+}
+
+.card-actions button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.card-actions button:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.card-grip {
+  cursor: grab;
+}
+
+.card-grip:active,
+.qa-card.is-dragging .card-grip {
+  cursor: grabbing;
+}
+
+/* ---------- Inline editing ---------- */
+
+/* The editor inherits the slot's type so the text doesn't jump size or weight
+   when it becomes editable — the point is that you're editing the thing you
+   were reading, in place. */
+.card-editor {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-xs);
+  background: var(--field-bg);
+  color: var(--ink);
+  font: inherit;
+  line-height: inherit;
+  resize: none;
+  overflow: hidden;
+}
+
+.card-editor--question {
+  font-weight: var(--fw-bold);
+}
+
+.card-editor--answer {
+  color: var(--ink-soft);
+}
+
+/* ---------- Dragging ---------- */
+
+.qa-card.is-dragging {
+  z-index: 2; /* over its neighbours, under the rail (60) */
+  /* Fully opaque and on the raised surface: a translucent card lets the one it
+     is passing over show through, which reads as a glitch rather than depth. */
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  border-color: var(--accent);
+  cursor: grabbing;
+  animation: none; /* never replay the entrance mid-drag */
+  transition: box-shadow var(--t-fast), border-color var(--t-fast);
+}
+
+/* While reordering, hover highlights would fire on every card the pointer
+   crosses. */
+.card-list.is-reordering .qa-card:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.card-list.is-reordering .qa-card.is-dragging:hover {
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  border-color: var(--accent);
+}
+
+/* ---------- Compact density ----------
+   A long meeting produces a list you scroll rather than read. Compact trades
+   the answer's full text for seeing more questions at once; nothing is lost,
+   the card still opens in full. */
+
+/* Toolbar over the card list: what's in the list, and how to see more of it.
+   The density control lives HERE rather than in the panel heading — it acts on
+   the list, and the heading row already carries a title and a shortcut hint. */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.card-count {
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+
+.density-toggle {
+  margin-left: auto;
+  padding: 2px var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast),
+    color var(--t-fast);
+}
+
+.density-toggle:hover {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+.density-toggle[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.card-list[data-density="compact"] {
+  gap: var(--sp-2);
+}
+
+.card-list[data-density="compact"] .qa-card {
+  padding: var(--sp-3) 40px var(--sp-3) var(--sp-3);
+}
+
+.card-list[data-density="compact"] .card-answer {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: var(--sp-1);
+}
+
+/* The placeholder is one short line — clamping it does nothing but break the
+   ::before marker's layout. */
+.card-list[data-density="compact"] .card-answer.is-blank {
+  display: block;
+}
+
+.card-participant {
+  display: inline-block;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--r-pill);
+  padding: 3px var(--sp-3);
+}
+
+/* The × keeps its own hover colour; its position and size now come from
+   .card-actions button. It used to be absolutely positioned itself, which put
+   it on top of the two buttons that joined it in the toolbar. */
+.card-delete {
+  font-size: var(--fs-md);
 }
 
 .card-delete:hover {
@@ -815,7 +1353,7 @@ kbd {
 .extract-review {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   flex-wrap: wrap;
   margin-bottom: 14px;
   padding: 12px 16px;
@@ -826,7 +1364,7 @@ kbd {
 
 .extract-review-text {
   margin-right: auto;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   color: var(--ink);
 }
 
@@ -840,27 +1378,27 @@ kbd {
 
 .extract-intro {
   margin: 0;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
 }
 
 .extract-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
 }
 
 .extract-count {
   margin-left: auto;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   color: var(--ink-soft);
 }
 
 .extract-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-2);
   overflow-y: auto;
   padding: 2px;
   max-height: 52vh;
@@ -868,13 +1406,14 @@ kbd {
 
 .extract-row {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
   border-radius: var(--r-md);
   background: var(--surface-2);
   transition: opacity var(--t-fast), border-color var(--t-fast);
+  box-shadow: var(--shadow-1);
 }
 
 .extract-row.is-off {
@@ -902,7 +1441,7 @@ kbd {
 
 .extract-q {
   display: block;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--ink);
   cursor: pointer;
 }
@@ -910,13 +1449,13 @@ kbd {
 .extract-a {
   margin-top: 4px;
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: var(--fs-sm);
 }
 
 .extract-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   flex-wrap: wrap;
   margin-top: 10px;
 }
@@ -924,9 +1463,9 @@ kbd {
 .extract-answerer-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
   color: var(--ink-soft);
 }
 
@@ -936,7 +1475,7 @@ kbd {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink);
   background: var(--surface);
 }
@@ -946,7 +1485,7 @@ kbd {
 }
 
 .extract-directed {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-style: italic;
   color: var(--ink-faint);
 }
@@ -960,14 +1499,14 @@ kbd {
 }
 
 .extract-flag {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
   letter-spacing: 0.02em;
   color: var(--warn-ink);
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
-  border-radius: 999px;
-  padding: 1px 9px;
+  border-radius: var(--r-pill);
+  padding: 2px var(--sp-2);
   white-space: nowrap;
 }
 
@@ -978,7 +1517,7 @@ kbd {
 /* ---------- Edit-summary modal ---------- */
 
 .summary-modal {
-  gap: 12px;
+  gap: var(--sp-3);
   max-height: 88vh;
   overflow-y: auto;
 }
@@ -986,23 +1525,62 @@ kbd {
 .summary-intro,
 .history-intro {
   margin: 0;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
 }
 
 .sum-actions-edit {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
   margin-bottom: 8px;
 }
 
+/* Live insights still awaiting a decision, offered where Key Insights is
+   actually decided. Framed as a quiet aside, not a second input. */
+.insight-offers {
+  margin-top: var(--sp-2);
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.insight-offers-head {
+  margin: 0 0 6px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.insight-offer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 4px 0;
+}
+.insight-offer + .insight-offer {
+  border-top: 1px solid var(--border);
+}
+.insight-offer-text {
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+/* Four fixed pixel tracks plus 1fr meant the task field got whatever the other
+   460px left over — under 100px in the modal's own width. Every track can now
+   give, and the task field keeps a floor. */
 .action-edit-row {
   display: grid;
-  grid-template-columns: 1fr 130px 108px 92px 30px;
-  gap: 8px;
+  grid-template-columns:
+    minmax(120px, 1fr) minmax(88px, 130px) minmax(76px, 108px)
+    minmax(72px, 92px) 30px;
+  gap: var(--sp-2);
   align-items: center;
 }
+
 
 .action-edit-row input,
 .action-edit-row select {
@@ -1011,7 +1589,7 @@ kbd {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink);
   background: var(--surface);
 }
@@ -1028,7 +1606,7 @@ kbd {
   border-radius: 50%;
   background: transparent;
   color: var(--ink-faint);
-  font-size: 18px;
+  font-size: var(--fs-md);
   line-height: 1;
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast);
@@ -1042,7 +1620,7 @@ kbd {
 /* ---------- Meeting-history modal ---------- */
 
 .history-modal {
-  gap: 12px;
+  gap: var(--sp-3);
   max-height: 88vh;
   overflow-y: auto;
 }
@@ -1051,7 +1629,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .history-head h3 {
@@ -1061,28 +1639,22 @@ kbd {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-2);
   max-height: 56vh;
   overflow-y: auto;
 }
 
-.history-empty {
-  color: var(--ink-soft);
-  padding: 22px 12px;
-  text-align: center;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--r-md);
-}
 
 .history-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface-2);
   transition: border-color var(--t-fast);
+  box-shadow: var(--shadow-1);
 }
 
 .history-row:hover {
@@ -1095,20 +1667,20 @@ kbd {
 }
 
 .history-title {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--ink);
 }
 
 .history-meta {
   margin-top: 2px;
-  font-size: 12.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
 }
 
 .history-actions {
   flex: none;
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 .history-del:hover {
@@ -1121,15 +1693,15 @@ kbd {
 .status-line {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
   min-height: 28px;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
 }
 
 .status-line.is-error #status-text {
   color: var(--danger);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .spinner {
@@ -1150,13 +1722,84 @@ kbd {
 
 .config-note {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--warn-ink);
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
   border-radius: var(--r-sm);
   padding: 9px 12px;
   word-break: break-all;
+}
+
+/* ---------- Empty states ---------- */
+/* One component for every "nothing here yet" moment — they appear exactly
+   when the user has nothing to look at, so they say what's missing and what
+   to do about it. */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6) var(--sp-3);
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  color: var(--ink-soft);
+}
+.empty-state-icon {
+  display: grid;
+  place-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.empty-state-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.empty-state-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+  line-height: var(--lh-snug);
+}
+.empty-state-hint {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  max-width: 52ch;
+  text-wrap: balance;
+}
+.log-view .empty-state {
+  border: 0;
+  padding: var(--sp-4) var(--sp-3);
+}
+
+/* ---------- Determinate progress meter ---------- */
+/* One component for every bar in the app (mic level, model download, and —
+   new here — transcription progress, which existed only as text). */
+
+.meter {
+  height: var(--meter-h, 6px);
+  border-radius: var(--r-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+.meter-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transition: width var(--t-base);
+}
+.meter--level .meter-fill {
+  background: linear-gradient(90deg, var(--success), var(--warn-ink));
+  transition: none; /* a live input level must not lag behind the voice */
+}
+.status-meter {
+  margin-top: var(--sp-2);
 }
 
 /* ---------- Toasts ---------- */
@@ -1168,14 +1811,14 @@ kbd {
   z-index: 200;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-2);
   width: min(360px, calc(100vw - 36px));
   pointer-events: none;
 }
 
 .toast {
   display: flex;
-  gap: 11px;
+  gap: var(--sp-3);
   align-items: flex-start;
   padding: 12px 14px;
   border: 1px solid var(--border);
@@ -1225,13 +1868,13 @@ kbd {
 }
 
 .toast-title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
   color: var(--ink);
 }
 
 .toast-msg {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   margin-top: 1px;
   overflow-wrap: break-word;
@@ -1247,7 +1890,7 @@ kbd {
   border: none;
   background: transparent;
   color: var(--ink-faint);
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1;
   cursor: pointer;
   padding: 2px 4px;
@@ -1264,7 +1907,7 @@ kbd {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 20, 32, 0.5);
+  background: var(--scrim);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1288,7 +1931,7 @@ kbd {
   padding: 24px 28px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-3);
   animation: mm-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 
@@ -1301,21 +1944,36 @@ kbd {
 
 .modal h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--fs-md);
   color: var(--ink);
 }
 
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: var(--sp-3);
   margin-top: 4px;
 }
 
+/* Button labels never break mid-phrase. */
+.modal-actions .btn {
+  white-space: nowrap;
+}
+
+/* The hint takes its own full-width line above the buttons. With three actions
+   in the capture modal there is no width left to share, and a hint that wraps
+   between the buttons reads as a layout accident. */
 .keyboard-hint {
-  margin-right: auto;
-  font-size: 12.5px;
+  flex: 1 1 100%;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
+}
+
+/* Several modals carry the element only as a spacer — don't reserve a line. */
+.keyboard-hint:empty {
+  display: none;
 }
 
 /* Sheet variant: History/Settings render as full content-area screens (the
@@ -1337,10 +1995,10 @@ kbd {
   max-width: 860px;
   margin: 0 auto;
   min-height: 100%;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  box-shadow: var(--shadow-3);
+  background: var(--surface);
   padding: 26px 30px 80px;
   animation: mm-sheet-in 200ms ease;
 }
@@ -1353,14 +2011,97 @@ kbd {
 }
 
 .modal--sheet .modal h3 {
-  font-size: 21px;
+  font-size: var(--fs-lg);
   letter-spacing: -0.01em;
+}
+
+/* Drafted-answer review rows: the answer is EDITABLE in the review, because a
+   draft that is 90% right should cost a word change, not a rejection. */
+.answer-draft {
+  width: 100%;
+  margin-top: var(--sp-2);
+  padding: 7px 9px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--field-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  resize: vertical;
+}
+
+.answer-draft:focus {
+  border-color: var(--accent);
+}
+
+/* ---------- Command palette ---------- */
+
+/* Above the live rail (60), the popover (80) and the titlebar (90) — the
+   palette must never open UNDER something. Below toasts (200), which are
+   announcements and outrank everything. */
+.palette-backdrop {
+  z-index: 150;
+  padding-top: 14vh;
+}
+
+.palette-modal {
+  width: min(560px, 92vw);
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+}
+
+.palette-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--fs-md);
+  color: var(--ink);
+  background: var(--field-bg);
+}
+
+.palette-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.palette-input:focus {
+  border-color: var(--accent);
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.palette-item {
+  padding: 8px var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Selection is carried by fill AND weight, not colour alone. */
+.palette-item.is-active {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.palette-empty {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
 }
 
 /* ---------- Settings modal ---------- */
 
 .settings-modal {
-  gap: 12px;
+  gap: var(--sp-3);
   max-height: 86vh;
   overflow-y: auto;
 }
@@ -1371,8 +2112,8 @@ kbd {
 
 .settings-welcome {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   color: var(--ink);
   background: var(--accent-soft);
   border: 1px solid var(--accent);
@@ -1382,7 +2123,7 @@ kbd {
 
 .settings-code-row {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-2);
   align-items: stretch;
 }
 
@@ -1396,14 +2137,14 @@ kbd {
 
 .settings-help {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
 }
 
 .settings-error {
   margin: 4px 0 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   color: var(--danger);
 }
 
@@ -1428,7 +2169,7 @@ kbd {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   min-width: 0;
   position: relative;
 }
@@ -1475,11 +2216,7 @@ kbd {
 .pipe-step.done .pipe-dot {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-}
-
-:root[data-theme="dark"] .pipe-step.done .pipe-dot {
-  color: #0d1220;
+  color: var(--on-accent);
 }
 
 .pipe-step.current .pipe-dot {
@@ -1504,8 +2241,8 @@ kbd {
 }
 
 .pipe-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
   color: var(--ink-soft);
   text-align: center;
 }
@@ -1515,19 +2252,12 @@ kbd {
 }
 
 .pipe-sub {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
 
 .pipeline-empty,
-.jobs-empty {
-  color: var(--ink-soft);
-  padding: 22px 12px;
-  text-align: center;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--r-md);
-}
 
 .pipeline-error {
   margin-top: 12px;
@@ -1535,8 +2265,8 @@ kbd {
   border-radius: var(--r-sm);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 
 /* Recent jobs list */
@@ -1548,11 +2278,11 @@ kbd {
 .job-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 14px;
+  gap: var(--sp-3);
   align-items: center;
   padding: 11px 4px;
   border-top: 1px solid var(--border);
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
 }
 
 .job-row:first-child {
@@ -1560,7 +2290,7 @@ kbd {
 }
 
 .job-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1569,18 +2299,18 @@ kbd {
 
 .job-when {
   color: var(--ink-faint);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .state-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: var(--sp-2);
+  padding: 3px var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
   background: var(--surface-3);
   color: var(--ink-soft);
 }
@@ -1614,7 +2344,7 @@ kbd {
   height: 260px;
   overflow-y: auto;
   font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.55;
   color: var(--ink-soft);
   white-space: pre-wrap;
@@ -1629,17 +2359,14 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-2);
   margin-bottom: 10px;
 }
 
+/* Layout comes from the shared checkbox-row rule; this is the typography. */
 .log-follow {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
-  cursor: pointer;
   user-select: none;
 }
 
@@ -1677,6 +2404,13 @@ kbd {
     animation-duration: 0.8s !important; /* keep the busy cue perceivable */
     animation-iteration-count: infinite !important;
   }
+  :root {
+    /* Zero the panel collapse — and with it the DELAY on the visibility flip,
+       which is a transition-delay and so survives the blanket duration reset
+       above. Without this the body would stay hit-testable for 180ms after a
+       collapse that already finished instantly. */
+    --collapse-t: 0s;
+  }
 }
 
 /* Dashboard screen (server mode): the loopback dashboard fills the content
@@ -1689,7 +2423,7 @@ kbd {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - var(--titlebar-h, 40px));
+  min-height: calc(100vh - var(--titlebar-h));
   border: 0;
   background: var(--bg);
 }
@@ -1699,7 +2433,7 @@ kbd {
   display: grid;
   grid-template-columns: 1fr 2fr;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
   margin-bottom: 8px;
 }
 .name-fix-row label {
@@ -1708,4 +2442,640 @@ kbd {
 #names-rows {
   max-height: 46vh;
   overflow-y: auto;
+}
+
+/* ---- In-app recording (Record audio panel) ---------------------------------- */
+
+/* Elapsed time, with a pulsing red dot while live (dimmed when paused). */
+.rec-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
+  color: var(--ink);
+}
+.rec-timer::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+.rec-timer.is-paused {
+  color: var(--ink-faint);
+}
+.rec-timer.is-paused::before {
+  background: var(--ink-faint);
+  animation: none;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rec-timer::before { animation: none; }
+}
+
+/* Live input level bar — doubles as "is the mic actually picking me up". */
+.rec-meter {
+  margin-top: var(--sp-2);
+}
+
+/* "Recording attached — 42 min, 19 MB. [Remove]" line under the controls. */
+.rec-note {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: var(--fs-sm);
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid var(--success);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+}
+
+/* Layout comes from the shared checkbox-row rule; this is the typography. */
+.rec-loopback {
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+}
+
+/* Sidebar dot: the recording stays visible from any screen. */
+.nav-item.is-recording {
+  position: relative;
+}
+.nav-item.is-recording::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+
+/* Suggestions waiting while the rail is off-screen (the operator is on Activity
+   or the Dashboard). Sits left of the recording dot so the two never collide. */
+.nav-item {
+  position: relative;
+}
+.nav-badge {
+  position: absolute;
+  top: 6px;
+  right: 24px;
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  line-height: 17px;
+  text-align: center;
+}
+/* Nothing is pulsing for attention: with no recording running there is no dot
+   to sit beside, so the badge takes the dot's place. */
+.nav-item:not(.is-recording) .nav-badge {
+  right: 10px;
+}
+
+/* ---- Live mid-meeting transcription ---------------------------------------- */
+
+.live-wrap {
+  margin-top: 12px;
+}
+.live-wrap .log-view {
+  height: 180px;
+  margin-top: 6px;
+}
+.live-disclaimer {
+  flex: 1;
+  margin: 0;
+}
+.live-wrap .log-line.live-note {
+  color: var(--warn-ink);
+  font-style: italic;
+}
+
+/* Live question suggestions: the peripheral rail beside the Meeting screen.
+   Design contract: monitorable while typing — it never reflows the main
+   column (own fixed-width flex slot, own scrollbar) and it stays visible
+   above the capture modal's dim (z-index 60 > backdrop's 50, opaque bg). */
+
+.meeting-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+}
+.meeting-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  /* The two-column split below is answering "how wide are the panels?", not
+     "how wide is the window" — so the panels' own box is the query subject. */
+  container-type: inline-size;
+  container-name: meeting;
+}
+
+/* The rail ADDS width instead of squeezing the main column: the screen's cap
+   grows by exactly the rail plus its gap. Was a hard-coded 1300px, which
+   silently broke that contract the moment either number changed — and both
+   are now adjustable. */
+#screen-meeting.has-rail {
+  max-width: calc(var(--screen-max) + var(--sp-4) + var(--rail-w));
+}
+
+/* ---------- Meeting screen: two columns when there's room ---------- */
+
+.meeting-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+/* Working column (what you act on) left, context column (what you refer to)
+   right. Assigned by grid area, so the DOM order the keyboard follows stays
+   details -> Q&A -> record -> generate. */
+@container meeting (min-width: 1040px) {
+  .meeting-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--sp-5);
+  }
+  #panel-qa {
+    grid-area: 1 / 1;
+  }
+  #panel-generate {
+    grid-area: 2 / 1;
+  }
+  #panel-details {
+    grid-area: 1 / 2;
+  }
+  #panel-record {
+    grid-area: 2 / 2;
+  }
+}
+
+/* ---------- Rail resize handle ---------- */
+
+/* An 8px hit target drawing a small grip. Invisible would be undiscoverable
+   (this is a new affordance); a full-height divider would compete with the
+   panel borders on either side of it. The grip grows and takes the accent on
+   hover/focus/drag, so the target reads as bigger than it looks at rest. */
+.rail-resizer {
+  display: none;
+  flex: 0 0 8px;
+  height: 200px;
+  margin: 0 calc(var(--sp-2) * -1);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.rail-resizer::before {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 48px;
+  margin: 60px auto 0;
+  border-radius: var(--r-pill);
+  background: var(--border-strong);
+  transition: background var(--t-fast), height var(--t-fast);
+}
+
+#screen-meeting.has-rail .rail-resizer {
+  display: block;
+  position: sticky;
+  top: 12px;
+}
+
+.rail-resizer:hover::before,
+.rail-resizer:focus-visible::before,
+.rail-resizer.is-dragging::before {
+  background: var(--accent);
+  height: 120px;
+}
+
+.live-rail {
+  flex: 0 0 var(--rail-w);
+  position: sticky;
+  top: 12px;
+  z-index: 60; /* above .modal-backdrop (50): glanceable during capture */
+  max-height: calc(100vh - var(--titlebar-h) - 40px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+@media (max-width: 1180px) {
+  /* Cap, don't override: a narrow window shouldn't discard the width the
+     operator chose, only refuse to honour the wide end of it. */
+  .live-rail {
+    flex-basis: min(var(--rail-w), 250px);
+  }
+}
+
+.live-rail-head h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.live-rail-head svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.live-rail-count {
+  min-width: 20px;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  text-align: center;
+}
+.live-rail-empty {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  display: flex;
+  gap: var(--sp-2);
+}
+.live-rail-empty::before {
+  content: "";
+  flex-shrink: 0;
+  margin-top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+
+/* The loop's status line: one quiet sentence, never a toast. Muted by default
+   so a healthy "asking the home server…" is ignorable; only a real problem
+   ("switched off", "not answering") takes any colour. */
+.live-rail-status {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+.live-rail-status[data-state="error"] {
+  color: var(--warn-ink);
+}
+.live-rail-status[data-state="off"] {
+  color: var(--ink-soft);
+}
+
+.live-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* Key insights: their own group under the questions, so approving a question
+   never means scrolling past a lesson (and the two are never confused). */
+.live-rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+.live-rail-subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.live-rail-subnote {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-faint);
+}
+/* An arrow marker, the same forward-looking cue the PDF's Key Insights use. */
+.live-insight-row .live-flag-q {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: var(--sp-2);
+  font-weight: var(--fw-regular);
+}
+.live-insight-row .live-flag-q::before {
+  content: "\2192";
+  color: var(--accent);
+  font-weight: var(--fw-bold);
+}
+
+/* Compact suggestion card, stacked for the narrow rail. */
+.live-flag-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+}
+.live-flag-row.is-unsure {
+  border-color: var(--warn-border);
+}
+.live-flag-row.is-new {
+  animation: live-flag-in 500ms ease;
+}
+@keyframes live-flag-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-flag-row.is-new { animation: none; }
+}
+.live-flag-q {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+.live-flag-a {
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  /* Peripheral view: clamp long answers — the full text lands on the card. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.live-flag-row .extract-answerer {
+  width: 100%;
+}
+.live-flag-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* ---- Usability batch: stage shell, pre-flight, guard, problems, checklist -- */
+
+/* Next-step strip: names the single action that matters right now. */
+.next-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 9px 14px;
+  border: 1px solid var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--accent-ghost);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* Exactly ONE promoted button per stage. */
+.btn-promoted {
+  box-shadow: 0 0 0 3px var(--accent-ghost), 0 0 0 1px var(--accent);
+}
+
+/* Collapsible panels: header becomes a toggle, body hides, a one-line
+   summary keeps the content reachable and scannable. */
+/* stage.js moves the heading's contents into this button so collapsing is
+   keyboard-operable; it fills the h2 so a click anywhere on the heading (and
+   the specs' #<panel>-heading click) still lands on the control. */
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+.panel::after {
+  content: "▾";
+  position: absolute;
+  top: 24px;
+  right: var(--sp-6);
+  font-size: var(--fs-xs);
+  line-height: 1;
+  color: var(--ink-faint);
+  transition: transform var(--t-fast);
+  pointer-events: none;
+}
+.panel.is-collapsed::after {
+  transform: rotate(-90deg);
+}
+.panel .panel-summary {
+  display: none;
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.panel.is-collapsed .panel-summary {
+  display: block;
+}
+/* The collapse contract, unchanged in shape: direct children of a collapsed
+   panel that aren't the heading, heading row or summary are hidden. The
+   .panel-body wrapper stage.js injects is exempt because it's the thing being
+   ANIMATED — display:none has no height to interpolate from. Anything outside
+   the wrapper still hides outright. */
+.panel.is-collapsed
+  > *:not(h2):not(.panel-heading-row):not(.panel-summary):not(.panel-body) {
+  display: none;
+}
+
+.panel-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--collapse-t) ease;
+}
+
+.panel-body-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.panel.is-collapsed > .panel-body {
+  grid-template-rows: 0fr;
+}
+
+/* Clipped is not hidden: a zero-height row still leaves its contents in the
+   tab order and the accessibility tree. Flip visibility once the animation has
+   finished collapsing — and back instantly on the way open. */
+.panel.is-collapsed > .panel-body > .panel-body-inner {
+  visibility: hidden;
+  transition: visibility 0s linear var(--collapse-t);
+}
+
+.panel.is-collapsed {
+  padding-bottom: 14px;
+}
+
+/* Pre-flight readiness chips in the Record panel. */
+.rec-preflight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: 12px;
+}
+.pf-chip {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  padding: 3px var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+}
+.pf-chip.is-ok {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: transparent;
+}
+.pf-chip.is-warn {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: transparent;
+}
+.pf-chip.is-soft {
+  color: var(--ink-soft);
+  background: var(--surface-2);
+}
+
+/* "Not recording" guard — quiet but persistent. */
+.rec-guard {
+  margin-bottom: 12px;
+  font-size: var(--fs-sm);
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+}
+
+/* Persistent problem cards with remedies attached. */
+.problem-host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: 12px;
+}
+.problem-card {
+  border: 1px solid var(--danger);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.problem-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  color: var(--danger);
+}
+.problem-detail {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.problem-card .button-row {
+  margin-top: 2px;
+}
+
+/* First-run checklist card. */
+.setup-checklist {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  box-shadow: var(--shadow-1);
+}
+.checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.checklist-row {
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 2px 0;
+}
+button.checklist-row {
+  cursor: pointer;
+  color: var(--accent);
+}
+button.checklist-row:hover {
+  text-decoration: underline;
+}
+.checklist-row.is-done {
+  color: var(--success);
+}
+
+/* ---------- Responsive overrides ----------
+ * Component rules that change at a breakpoint live HERE, at the end, not next
+ * to their component — a media query declared before the rule it overrides
+ * loses on source order at equal specificity. See the breakpoint scale
+ * documented above .screen. */
+
+@media (max-width: 1099px) {
+  /* One column: two ~300px fields side by side stop being a grid and start
+     being a squeeze. */
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* The summary modal is 92vw at this size — wrap the action-item row instead
+     of shaving every field. */
+  .action-edit-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
+  }
 }

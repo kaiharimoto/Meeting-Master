@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.19.3"
 
 
 def config_home() -> Path:
@@ -112,19 +112,65 @@ class Settings(BaseSettings):
     WHISPER_MODEL_FALLBACK: str = "large-v3"
     WHISPER_LANGUAGE: str = "auto"
     WHISPER_TIMEOUT_SEC: int = 3600
+    # Tokens of PREVIOUS transcript whisper.cpp carries into the next window.
+    # 0 disables it, and 0 is the default here on purpose: carry-over is the
+    # engine of whisper's repetition loops. Once it emits "I don't know", that
+    # text is in the prompt for the next window, which makes "I don't know"
+    # likelier again — and a stretch of quiet audio turns into pages of it.
+    # whisper.cpp's own default (-1, keep everything) trades exactly this risk
+    # for slightly better continuity across window boundaries; for meeting
+    # audio with real silences in it, that is the wrong side of the trade.
+    WHISPER_MAX_CONTEXT: int = 0
+    # Extra whisper-cli flags, appended verbatim (shell-style splitting). An
+    # escape hatch for tuning thresholds (-et, -lpt, …) or enabling VAD on a
+    # build that has it, without waiting for a release.
+    WHISPER_EXTRA_ARGS: str = ""
 
     # --- Summarization + Q&A extraction (native Ollama /api/chat, NOT /v1) ---
     OLLAMA_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "gemma4:26b"
     NUM_CTX: int = 32768
-    # Structured summary output (Key Takeaways / Decisions / Action Items /
-    # Key Figures / Topics) — five sections including a table need real room.
+    # Structured summary output (Key Takeaways / Key Insights / Decisions /
+    # Action Items / Key Figures / Topics) — six sections including a table need
+    # real room.
     SUMMARY_NUM_PREDICT: int = 1400
     SUMMARY_TEMPERATURE: float = 0.3
     # Q&A extraction returns a JSON list — size it for a meeting's worth of
     # question/answer pairs; keep the temperature low for faithful extraction.
     EXTRACT_NUM_PREDICT: int = 1500
     EXTRACT_TEMPERATURE: float = 0.2
+    # Turn a reasoning model's thinking OFF for these calls. Every stage asks
+    # for strict JSON with a small output budget, and a thinking model spends
+    # that budget on reasoning instead — which looks like "the summary failed"
+    # when the model is working fine. Only sent to models that advertise the
+    # capability (Ollama errors on the rest), so this is safe to leave on.
+    OLLAMA_DISABLE_THINKING: bool = True
+
+    # --- Mid-meeting live suggestions (POST /live/questions) ---
+    # Q&A pairs AND key insights the operator can approve while the meeting is
+    # still running. The LAPTOP asks this server how to drive the loop (GET
+    # /live/config), so the whole feature is configured HERE, in one place, on
+    # the dashboard's Settings tab.
+    LIVE_SUGGESTIONS: bool = True
+    # Blank means "use OLLAMA_MODEL". Point this at a SMALLER installed model
+    # when the summary model can't answer inside a meeting — a tick that takes
+    # longer than the interval is a tick the operator never sees.
+    LIVE_MODEL: str = ""
+    # How often the laptop asks (seconds), and how much of its rough live
+    # transcript it sends. A small window keeps the round-trip in seconds.
+    LIVE_INTERVAL_SEC: int = 45
+    LIVE_WINDOW_CHARS: int = 4000
+    # Server-side budget for one live call. The laptop derives its own HTTP
+    # timeout from this (this + margin) so the client can never give up on a
+    # request the server is still working on — the bug that made live
+    # suggestions look permanently broken.
+    LIVE_TIMEOUT_SEC: int = 90
+    # Keep the live model resident in VRAM between ticks. A cold model load is
+    # the single biggest reason a mid-meeting call blows its budget.
+    LIVE_KEEP_ALIVE_MIN: int = 30
+    # A small answer budget so results come back while the conversation is
+    # still on the same subject.
+    LIVE_EXTRACT_NUM_PREDICT: int = 600
 
     # --- Email (Gmail SMTP with an App Password) ---
     SMTP_HOST: str = "smtp.gmail.com"
@@ -168,6 +214,17 @@ class Settings(BaseSettings):
         return _resolve(self.EMAIL_TEMPLATE_PATH)
 
     @property
+    def live_model(self) -> str:
+        """The model the mid-meeting live path uses (falls back to the summary
+        model). Always read the live model through here."""
+        return self.LIVE_MODEL.strip() or self.OLLAMA_MODEL
+
+    @property
+    def live_keep_alive(self) -> str:
+        """Ollama ``keep_alive`` for live calls, as a duration string."""
+        return f"{max(0, int(self.LIVE_KEEP_ALIVE_MIN))}m"
+
+    @property
     def is_configured(self) -> bool:
         """Configured enough to leave setup mode and accept jobs."""
         return bool(self.BEARER_TOKEN.strip())
@@ -183,6 +240,13 @@ WRITABLE_KEYS = (
     "SUMMARY_TEMPERATURE",
     "EXTRACT_NUM_PREDICT",
     "EXTRACT_TEMPERATURE",
+    "LIVE_SUGGESTIONS",
+    "LIVE_MODEL",
+    "LIVE_INTERVAL_SEC",
+    "LIVE_WINDOW_CHARS",
+    "LIVE_TIMEOUT_SEC",
+    "LIVE_KEEP_ALIVE_MIN",
+    "LIVE_EXTRACT_NUM_PREDICT",
     "WHISPER_MODEL_DEFAULT",
     "SMTP_USER",
     "SMTP_APP_PASSWORD",

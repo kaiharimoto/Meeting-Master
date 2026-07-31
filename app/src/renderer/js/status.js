@@ -44,11 +44,35 @@ export function isBusyState(state) {
   return BUSY_STATES.has(state);
 }
 
-export function setStatus(text, { busy = false } = {}) {
+export function setStatus(text, { busy = false, progress = null } = {}) {
   if (!textEl) return;
   lineEl.classList.remove('is-error');
   textEl.textContent = text;
   spinnerEl.hidden = !busy;
+  // The spinner says "working" to everyone who can see it; aria-busy says it
+  // to everyone else, and tells assistive tech this region is mid-update.
+  lineEl.setAttribute('aria-busy', String(busy));
+  setProgress(progress);
+}
+
+/**
+ * Draw the determinate bar under the status line. The percentage has always
+ * existed as text (and in the stepper); this is the first time it's a bar.
+ * Pass null to hide it.
+ */
+export function setProgress(progress) {
+  const meter = document.getElementById('status-meter');
+  const fill = document.getElementById('status-meter-fill');
+  if (!meter || !fill) return;
+  if (typeof progress !== 'number' || !(progress > 0)) {
+    meter.hidden = true;
+    meter.removeAttribute('aria-valuenow');
+    return;
+  }
+  const pct = Math.max(0, Math.min(100, Math.round(progress)));
+  meter.hidden = false;
+  fill.style.width = `${pct}%`;
+  meter.setAttribute('aria-valuenow', String(pct));
 }
 
 export function showError(text) {
@@ -56,4 +80,6 @@ export function showError(text) {
   lineEl.classList.add('is-error');
   textEl.textContent = text;
   spinnerEl.hidden = true;
+  lineEl.setAttribute('aria-busy', 'false');
+  setProgress(null);
 }

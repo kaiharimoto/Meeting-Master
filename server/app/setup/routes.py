@@ -160,6 +160,18 @@ async def build_state() -> dict:
             "extractNumPredict": settings.EXTRACT_NUM_PREDICT,
             "extractTemperature": settings.EXTRACT_TEMPERATURE,
         },
+        # Mid-meeting live suggestions. Configured here and ONLY here — the
+        # laptop reads these off GET /live/config at the start of a meeting.
+        "liveParams": {
+            "liveSuggestions": settings.LIVE_SUGGESTIONS,
+            "liveModel": settings.LIVE_MODEL,
+            "liveModelEffective": settings.live_model,
+            "liveIntervalSec": settings.LIVE_INTERVAL_SEC,
+            "liveWindowChars": settings.LIVE_WINDOW_CHARS,
+            "liveTimeoutSec": settings.LIVE_TIMEOUT_SEC,
+            "liveKeepAliveMin": settings.LIVE_KEEP_ALIVE_MIN,
+            "liveExtractNumPredict": settings.LIVE_EXTRACT_NUM_PREDICT,
+        },
         "deps": await bootstrap.detect(),
         "tasks": bootstrap.all_task_states(),
         "updates": _updates_snapshot(),
@@ -190,6 +202,16 @@ class SaveBody(BaseModel):
     summaryTemperature: float | None = None
     extractNumPredict: int | None = None
     extractTemperature: float | None = None
+    # Mid-meeting live suggestions — None means "leave as saved".
+    liveSuggestions: bool | None = None
+    # "" is a MEANINGFUL value here (fall back to the summary model), so this
+    # one is distinguished from "not sent" by None, not by emptiness.
+    liveModel: str | None = None
+    liveIntervalSec: int | None = None
+    liveWindowChars: int | None = None
+    liveTimeoutSec: int | None = None
+    liveKeepAliveMin: int | None = None
+    liveExtractNumPredict: int | None = None
 
 
 # --- Routes -----------------------------------------------------------------
@@ -319,9 +341,64 @@ async def save(body: SaveBody) -> dict:
     if body.extractTemperature is not None:
         values["EXTRACT_TEMPERATURE"] = _clamp(float(body.extractTemperature), 0.0, 2.0)
 
+    # Live suggestions. The clamps matter more here than elsewhere: these run
+    # while a meeting is in progress, so a too-short interval or too-tight
+    # timeout produces a loop that fails every tick instead of a slow one.
+    if body.liveSuggestions is not None:
+        values["LIVE_SUGGESTIONS"] = "true" if body.liveSuggestions else "false"
+    if body.liveModel is not None:
+        values["LIVE_MODEL"] = body.liveModel.strip()
+    if body.liveIntervalSec is not None:
+        values["LIVE_INTERVAL_SEC"] = _clamp(int(body.liveIntervalSec), 15, 600)
+    if body.liveWindowChars is not None:
+        values["LIVE_WINDOW_CHARS"] = _clamp(int(body.liveWindowChars), 500, 12000)
+    if body.liveTimeoutSec is not None:
+        values["LIVE_TIMEOUT_SEC"] = _clamp(int(body.liveTimeoutSec), 15, 600)
+    if body.liveKeepAliveMin is not None:
+        values["LIVE_KEEP_ALIVE_MIN"] = _clamp(int(body.liveKeepAliveMin), 0, 1440)
+    if body.liveExtractNumPredict is not None:
+        values["LIVE_EXTRACT_NUM_PREDICT"] = _clamp(
+            int(body.liveExtractNumPredict), 128, 4096
+        )
+
+    # A context window has to leave room for the OUTPUT it reserves plus the
+    # prompt, or there is nothing left for the transcript. Clamping each number
+    # into its own range (above) can't catch that — the relationship between
+    # them is what breaks, and it breaks into a job that never finishes rather
+    # than one that fails. Reject it here, naming the fix.
+    _reject_impossible_context(values, settings)
+
     config.write_env(values)
     log.info("Setup saved (server is now configured=%s)", config.get_settings().is_configured)
     return await build_state()
+
+
+def _reject_impossible_context(values: dict, saved) -> None:
+    """422 when NUM_CTX can't hold its own reserved output plus a transcript."""
+    from ..pipeline import _ollama
+
+    num_ctx = int(values.get("NUM_CTX", saved.NUM_CTX))
+    stages = (
+        ("summary", int(values.get("SUMMARY_NUM_PREDICT", saved.SUMMARY_NUM_PREDICT))),
+        ("Q&A extraction", int(values.get("EXTRACT_NUM_PREDICT", saved.EXTRACT_NUM_PREDICT))),
+    )
+    for stage, num_predict in stages:
+        needed = (
+            num_predict
+            + _ollama.PROMPT_OVERHEAD_TOKENS
+            + _ollama.MIN_INPUT_BUDGET_TOKENS
+        )
+        if num_ctx < needed:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"A context window of {num_ctx} tokens is too small for the "
+                    f"{stage} stage, which reserves {num_predict} tokens for its "
+                    f"answer. Use at least {needed}, or lower that stage's max "
+                    f"output tokens. ('Fit to your GPU' below suggests a context "
+                    f"window that works on your card.)"
+                ),
+            )
 
 
 @router.post("/install/{component}")
@@ -432,6 +509,157 @@ async def setup_ollama_models() -> dict:
             "quant": details.get("quantization_level") or "",
         })
     return {"models": [m for m in models if m["name"]]}
+
+
+@router.get("/model-fit")
+async def setup_model_fit(vramGB: float = 24.0, kvCache: str = "f16") -> dict:
+    """Which installed models fit this GPU, and at what context window.
+
+    Answers the question the dashboard could not answer before: not "is there an
+    update" or "does the model load", but "what should I actually run on this
+    card, and how much context can I afford". Computed from each model's real
+    layer/head metadata (/api/show) plus what Ollama has resident now (/api/ps),
+    so it stays correct for models this code has never heard of.
+
+    Never raises: Ollama being down is a normal answer here (empty list), not an
+    error page in the middle of the Settings tab.
+    """
+    import asyncio
+
+    import httpx
+
+    from . import modelfit
+
+    settings = config.get_settings()
+    vram_bytes = int(max(2.0, min(256.0, vramGB)) * modelfit.GB)
+    cache_type = kvCache if kvCache in modelfit.KV_CACHE_BYTES else "f16"
+    base = settings.OLLAMA_URL.rstrip("/")
+    result: dict = {
+        "vramGB": round(vram_bytes / modelfit.GB, 1),
+        "kvCache": cache_type,
+        "models": [],
+        "loaded": [],
+        "currentModel": settings.OLLAMA_MODEL,
+        "liveModel": settings.live_model,
+        "numCtx": settings.NUM_CTX,
+        "minUsableCtx": modelfit.MIN_USABLE_CTX,
+        "error": None,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=3.0)) as client:
+            tags = (await client.get(f"{base}/api/tags")).json()
+            installed = [m for m in (tags.get("models") or []) if m.get("name")]
+
+            # /api/show per model, concurrently — a dozen installed models
+            # would otherwise make the Settings tab wait a second per model.
+            async def describe(entry: dict) -> dict:
+                try:
+                    resp = await client.post(f"{base}/api/show", json={"model": entry["name"]})
+                    resp.raise_for_status()
+                    return resp.json()
+                except Exception:
+                    return {}
+
+            shown = await asyncio.gather(*(describe(m) for m in installed))
+            for entry, info in zip(installed, shown):
+                details = {**(entry.get("details") or {}), **(info.get("details") or {})}
+                result["models"].append(
+                    modelfit.plan_model(
+                        name=entry["name"],
+                        weights_bytes=int(entry.get("size") or 0),
+                        model_info=info.get("model_info") or {},
+                        vram_bytes=vram_bytes,
+                        cache_type=cache_type,
+                        quantization=str(details.get("quantization_level") or ""),
+                        param_size=str(details.get("parameter_size") or ""),
+                    )
+                )
+            result["models"] = modelfit.rank(result["models"])
+
+            try:
+                ps = (await client.get(f"{base}/api/ps")).json()
+                result["loaded"] = modelfit.loaded_summary(ps)
+            except Exception:
+                result["loaded"] = []  # older Ollama without /api/ps
+    except Exception as exc:
+        result["error"] = f"Could not reach Ollama at {base}: {exc}"
+
+    return result
+
+
+class LiveTestBody(BaseModel):
+    """Overrides for a live-suggestions test run, so the operator can prove a
+    setting works BEFORE saving it. None => use what is saved."""
+
+    liveModel: str | None = None
+    liveTimeoutSec: int | None = None
+    liveExtractNumPredict: int | None = None
+
+
+# A short scripted excerpt with exactly one answered question and one genuine
+# forward-looking lesson in it. Fixed text so the test measures the MODEL, not
+# the meeting — and so a plausible-looking empty result is a real failure.
+_LIVE_TEST_WINDOW = (
+    "Priya: Before we go on — what did the renewal quote come back at? "
+    "Marcus: Twelve percent up, locked for twenty-four months. "
+    "Priya: Twelve? We only found that out this morning. "
+    "Marcus: Yes, the vendor sat on it for three weeks and we did not chase "
+    "them, so we are agreeing to it with two days left before the deadline. "
+    "Priya: Right. We cannot be in this position again next year."
+)
+
+
+@router.post("/live-test")
+async def setup_live_test(body: LiveTestBody) -> dict:
+    """Run the REAL mid-meeting live path over a fixed scripted excerpt.
+
+    The one honest answer to "live suggestions don't work": it uses the same
+    prompt, model, timeout and parsing a real meeting does, and reports what
+    came back — how long it took, how many questions and insights, and the
+    exact error if any. Never raises; the result IS the diagnosis.
+    """
+    import time
+
+    from ..pipeline import extract
+
+    settings = config.get_settings()
+    overrides: dict = {}
+    if body.liveModel is not None:
+        overrides["LIVE_MODEL"] = body.liveModel.strip()
+    if body.liveTimeoutSec:
+        overrides["LIVE_TIMEOUT_SEC"] = max(15, min(600, int(body.liveTimeoutSec)))
+    if body.liveExtractNumPredict:
+        overrides["LIVE_EXTRACT_NUM_PREDICT"] = max(
+            128, min(4096, int(body.liveExtractNumPredict))
+        )
+    if overrides:
+        settings = settings.model_copy(update=overrides)
+
+    start = time.monotonic()
+    result = None
+    error = None
+    try:
+        result = await extract.run_live(
+            _LIVE_TEST_WINDOW, ["Priya", "Marcus"], [], [], settings
+        )
+    except Exception as exc:
+        error = str(exc)
+        log.warning("Live suggestions test failed: %s", exc)
+    latency_ms = int((time.monotonic() - start) * 1000)
+    return {
+        "ok": error is None,
+        "enabled": settings.LIVE_SUGGESTIONS,
+        "model": settings.live_model,
+        "latencyMs": latency_ms,
+        "intervalSec": settings.LIVE_INTERVAL_SEC,
+        # A run that is slower than the interval means every tick lands on top
+        # of the previous one — worth saying out loud, not just timing.
+        "slowerThanInterval": latency_ms > settings.LIVE_INTERVAL_SEC * 1000,
+        "questions": [q.model_dump() for q in (result.questions if result else [])],
+        "insights": list(result.insights) if result else [],
+        "error": error,
+    }
 
 
 class AiTestBody(BaseModel):

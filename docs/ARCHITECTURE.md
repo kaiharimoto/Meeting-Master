@@ -181,10 +181,12 @@ Job record shape:
   "meeting": { "…": "MeetingJSON as uploaded" },
   "transcript": {
     "text": "str",
-    "segments": [ { "start": 0.0, "end": 9.2, "text": "str" } ]
+    "segments": [ { "start": 0.0, "end": 9.2, "text": "str" } ],
+    "warning": "str or null"
   },
   "summary": {
     "keyTakeaways": ["str"],
+    "keyInsights": ["str"],
     "decisions": ["str"],
     "actionItems": [ { "task": "str", "owner": "str", "due": "str", "priority": "high|normal|low" } ],
     "keyFigures": ["str"],
@@ -201,6 +203,126 @@ Job record shape:
 `transcript` and `summary` are `null` until their pipeline stage completes;
 `error` is `null` unless `state` is `failed`. Segment `start`/`end` are
 **seconds** (float) — the server converts whisper.cpp's millisecond offsets.
+
+### `POST /jobs/{id}/answers`
+
+- Auth: Bearer token.
+- Body:
+
+  ```json
+  {
+    "questions": [ { "id": "str", "question": "str", "atMs": 125000 } ],
+    "attendees": ["str"]
+  }
+  ```
+
+- Drafts an answer for each question from **only the slice of transcript around
+  the moment it was written down** — 45 s before `atMs` through 210 s after —
+  rather than the whole recording. `atMs` is the elapsed recording time the
+  laptop stamped onto the card at capture (`null` for cards captured outside a
+  recording, which fall back to the full transcript). Answering is one bounded-
+  concurrency chat call per question, so one bad question can't sink the batch.
+- Requires a transcript: unknown id → `404`, no transcript yet → `409`, Ollama
+  unreachable → `502`. At most 25 questions per request.
+- Response: `200`
+
+  ```json
+  {"answers": [ { "id": "str", "answer": "str", "answerer": "str", "confidence": "high|low" } ]}
+  ```
+
+  An empty `answer` means the window did not contain one — the laptop leaves
+  that card blank rather than inventing something.
+
+### Two transcripts, and which one becomes the notes
+
+There are two transcripts in this system, and they never mix:
+
+| | Live draft | Notes transcript |
+| --- | --- | --- |
+| Made by | whisper.cpp `small`/`base` on the **laptop**, 15-second windows | whisper.cpp `large-v3-turbo` on the **home server**, whole recording |
+| Exists | during the meeting | after the recording is uploaded |
+| Stored | in memory only (`liveTranscript.js`, a module-local string) | `job.transcript`, persisted |
+| Feeds | the operator's own reading, and the live-suggestion loop | the summary, the Q&A extraction, answer drafting, the AI prompt, the PDF |
+
+**The live draft never reaches the AI that writes the notes.** It is a rough
+pass from a small model over short windows and it is not good enough to base a
+document on. The guarantee is structural, not a convention: the live pane keeps
+its text in a module-local and never touches `ctx.state`, the uploaded meeting
+JSON has no transcript field for draft text to ride along in, and every
+assignment to `state.transcript` comes from a server job.
+`app/test/unit/transcriptSource.test.js` enumerates those writers and fails if a
+new one appears, because "keep the live text so the AI has more to work with" is
+a change that looks helpful and silently degrades every meeting.
+
+**Transcript damage is reported, not hidden.** Whisper hallucinates a filler
+phrase over quiet or non-speech audio and repeats it, sometimes for pages — the
+transcript still *looks* like a transcript, so it flows into the summary as if
+it were speech. `transcribe.detect_repetition_loop` catches a phrase repeated
+6+ times consecutively and sets `transcript.warning`; the laptop raises it as a
+problem card before Start AI, which is the one moment it can change what the
+operator does. The cause is also addressed: `WHISPER_MAX_CONTEXT=0` disables the
+prompt carry-over that makes such a loop self-sustaining.
+
+### Mid-meeting live suggestions
+
+Three bearer-gated endpoints the laptop drives WHILE a meeting is being
+recorded, all stateless (no job, no store, nothing persisted). The post-meeting
+pipeline over the full transcript stays the quality backstop, so every failure
+here is degradable.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /live/config` | How to drive the loop: `{enabled, intervalSec, windowChars, timeoutSec, clientTimeoutSec, model, insights}`. Fetched once per session. |
+| `POST /live/warmup` | Loads the live model into VRAM (`keep_alive`) so the first ask doesn't pay for it. Never raises — `{ok, model, latencyMs, error}` IS the diagnosis. |
+| `POST /live/questions` | `{transcriptWindow, attendees, alreadyFlagged, alreadyInsights}` → `{questions: [ExtractedQuestion], insights: ["str"]}`. Ollama unreachable/garbled → `502`; empty window → `422`. |
+
+Three answers the laptop must tell apart, hence three status codes — a single
+"it failed" would make the loop punish the server for behaving correctly:
+
+| Code | Meaning | What the laptop does |
+| --- | --- | --- |
+| `503` | Switched off on the dashboard | Says so in the rail and stops asking |
+| `409` | A pipeline job holds the GPU | "Busy, retrying" — retries on the normal cadence, does **not** count a failure |
+| `502` | The AI genuinely failed | Reports it; three in a row drop to a 2-minute backoff |
+
+`insights` are candidate **Key Insights** — lessons to apply going forward,
+which become the summary's `keyInsights` when the operator keeps one. They are
+not a running summary of the meeting; that is the post-meeting `keyTakeaways`.
+
+Four rules this feature is built around, all learned from it not working:
+
+- **The server owns the configuration.** Everything (on/off, `LIVE_MODEL`,
+  interval, window, timeout, keep-alive, token budget) lives in `server.env` and
+  is edited on the dashboard's **Settings → Live suggestions**, with a **Test
+  live suggestions** button that runs the real path over a fixed sample
+  conversation. The laptop has no live-suggestion settings of its own — it asks.
+- **`clientTimeoutSec` > `timeoutSec`, always.** The laptop must be the more
+  patient of the two. It was not: a hard-coded 45 s client timeout against a
+  60 s server budget meant a home PC running a big model failed *every* ask
+  from the client side while answering fine — three failures, then a two-minute
+  backoff, and the feature was dead for the rest of the meeting. Nothing on
+  screen said so either, which is why the rail now carries a status line.
+- **Warm up, THEN ask.** The laptop awaits `/live/warmup` before scheduling its
+  first ask. An ask fired during a cold model load queues behind that load
+  inside Ollama and can burn its whole timeout waiting — which made the first
+  suggestion of the meeting, the one that tells the operator this works at all,
+  the single most likely to fail.
+- **Never compete with the pipeline for the GPU.** `/live/questions` and
+  `/live/warmup` answer `409` while any job is `transcribing` or `summarizing`.
+  A live ask and a pipeline stage are two models wanting the same VRAM; with a
+  separate `LIVE_MODEL` they can thrash Ollama into unloading and reloading
+  between every call, making both slow. (`normalizing` is brief CPU ffmpeg work
+  and doesn't count.)
+
+Asks also skip the network when there is nothing to ask about: fewer than ~200
+new characters of draft transcript since the last successful ask, and the tick
+is spent on a status line instead. The window sent is anchored just before where
+the previous ask ended (with ~600 characters of overlap so a Q&A pair split
+across two asks survives whole) rather than being a blind tail slice — less
+prompt, and far less already-mined text to filter back out as duplicates.
+
+When `LIVE_SUGGESTIONS` is false, `/live/config` answers `enabled: false`
+(a normal answer, not an error) and the other two return `503`.
 
 ### `POST /jobs/{id}/pdf`
 
@@ -307,7 +429,9 @@ both the main process (`src/main/ipc.js`) and the preload script.
 | `job:upload` | renderer → main | `uploadMeeting(meeting, wavFilePath) -> {jobId}` |
 | `job:status` | renderer → main | `getJobStatus(jobId) -> Job record` |
 | `job:progress` | **main → renderer** | `onJobProgress(cb)` — `cb({jobId\|null, state, message})`; returns an unsubscribe fn |
-| `pdf:render` | renderer → main | `renderPdf(meeting, transcript, summary) -> {pdfPath, fontUsed, warning\|null}` |
+| `job:draftAnswers` | renderer → main | `draftAnswers(jobId, questions, attendees) -> {answers}` — drafts answers for blank cards from the transcript around each card's capture stamp |
+| `pdf:render` | renderer → main | `renderPdf(meeting, summary) -> {pdfPath, fontUsed, warning\|null}` |
+| `pdf:preview` | renderer → main | `previewPdf(meeting, summary) -> {ok, fontUsed, warning\|null}` — shows the same render in a reusable child window instead of printing it |
 | `pdf:open` | renderer → main | `openPdf(pdfPath) -> {ok}` |
 | `pdf:sendHome` | renderer → main | `sendPdfViaHome(jobId, pdfPath) -> {ok, emailed, error\|null}` |
 | `pdf:sendLaptop` | renderer → main | `sendPdfViaLaptop(meeting, pdfPath) -> {ok, error\|null}` |

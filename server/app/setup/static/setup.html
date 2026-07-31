@@ -45,15 +45,22 @@
   </div>
   <div id="saved-banner" class="banner">Settings saved. Your connection code is on the Overview tab.</div>
 
-  <nav class="tabs" aria-label="Dashboard sections">
-    <button class="tab active" data-tab="overview" type="button">Overview</button>
-    <button class="tab" data-tab="jobs" type="button">Jobs</button>
-    <button class="tab" data-tab="logs" type="button">Logs</button>
-    <button class="tab" data-tab="settings" type="button">Settings</button>
+  <!-- Real tab semantics: these were four buttons with a class, so nothing
+       announced which one was current or what it controlled. Arrow-key
+       navigation lives in dashboard.js. -->
+  <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button class="tab active" data-tab="overview" type="button" role="tab"
+            id="tabbtn-overview" aria-selected="true" aria-controls="tab-overview">Overview</button>
+    <button class="tab" data-tab="jobs" type="button" role="tab"
+            id="tabbtn-jobs" aria-selected="false" aria-controls="tab-jobs" tabindex="-1">Jobs</button>
+    <button class="tab" data-tab="logs" type="button" role="tab"
+            id="tabbtn-logs" aria-selected="false" aria-controls="tab-logs" tabindex="-1">Logs</button>
+    <button class="tab" data-tab="settings" type="button" role="tab"
+            id="tabbtn-settings" aria-selected="false" aria-controls="tab-settings" tabindex="-1">Settings</button>
   </nav>
 
   <!-- ================= OVERVIEW ================= -->
-  <section class="tab-panel" id="tab-overview">
+  <section class="tab-panel" id="tab-overview" role="tabpanel" aria-labelledby="tabbtn-overview" tabindex="0">
     <div class="cards-grid">
       <div class="card stat-card">
         <div class="stat-head">Server</div>
@@ -96,11 +103,23 @@
       </div>
       <div class="bar" data-bar="update-check"><i></i></div>
       <div class="taskmsg" data-msg="update-check"></div>
+      <!-- Two install paths, because two topologies. Inside the Meeting Master
+           app the APP owns installing (electron-updater): this link is
+           intercepted by main.js and installs the already-downloaded update
+           immediately. A server running on its own installs the cached
+           installer itself, no app restart involved. -->
       <div class="sub" id="up-app-update-row" hidden>
         <span class="lbl">A new version is ready for this machine</span>
         <a class="linkbtn" href="/setup/action/app-update"
-           title="The Meeting Master app fetches and installs it, then restarts">Update &amp; restart app</a>
+           title="Installs the downloaded update now and restarts the app (a few seconds). Nothing is lost — the server comes back up with it.">Install now &amp; restart</a>
       </div>
+      <div class="sub" id="up-server-update-row" hidden>
+        <span class="lbl">A new version is downloaded and ready to install</span>
+        <button class="ghost small" id="up-server-update-btn" data-install="server-update" type="button"
+                title="Installs the cached installer silently and restarts this server — the app does not need to restart">Install now</button>
+      </div>
+      <div class="bar" data-bar="server-update"><i></i></div>
+      <div class="taskmsg" data-msg="server-update"></div>
       <div class="taskmsg" id="up-laptop-note"></div>
     </div>
 
@@ -189,7 +208,7 @@
   </section>
 
   <!-- ================= JOBS ================= -->
-  <section class="tab-panel" id="tab-jobs" hidden>
+  <section class="tab-panel" id="tab-jobs" role="tabpanel" aria-labelledby="tabbtn-jobs" tabindex="0" hidden>
     <div class="card">
       <h2>Jobs</h2>
       <p class="hint">Every meeting this server has processed, updating live.</p>
@@ -198,7 +217,7 @@
   </section>
 
   <!-- ================= LOGS ================= -->
-  <section class="tab-panel" id="tab-logs" hidden>
+  <section class="tab-panel" id="tab-logs" role="tabpanel" aria-labelledby="tabbtn-logs" tabindex="0" hidden>
     <div class="card">
       <h2>Server log</h2>
       <div class="log-toolbar">
@@ -210,7 +229,7 @@
   </section>
 
   <!-- ================= SETTINGS ================= -->
-  <section class="tab-panel" id="tab-settings" hidden>
+  <section class="tab-panel" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" tabindex="0" hidden>
     <div class="card">
       <h2>Email delivery</h2>
       <p class="hint">Finished meeting notes are emailed from a Gmail account using an App Password.</p>
@@ -299,12 +318,105 @@
         Ollama-compatible server on this machine or your network.
       </p>
       <div class="sub">
-        <button class="ghost small" id="ai-suggest" type="button"
-                title="Pick a context window sized to the selected model">Suggest settings</button>
         <button class="ghost small" id="ai-test" type="button"
                 title="Run a tiny real request through the model with the context window above">Test AI now</button>
       </div>
       <div class="taskmsg" id="ai-test-result"></div>
+    </div>
+
+    <div class="card" id="fit-card">
+      <h2>Fit to your GPU</h2>
+      <p class="hint">
+        What fills graphics memory is the model's <strong>weights</strong> plus
+        its <strong>KV cache</strong>, and the cache cost per token comes from
+        the model's own layer and head counts — not from its parameter count. So
+        this reads those numbers off each installed model and works out the
+        largest context window that actually fits your card.
+      </p>
+      <div class="row2">
+        <div>
+          <label for="fit-vram">Your GPU memory (GB)</label>
+          <input id="fit-vram" type="number" min="2" max="256" step="1" value="24" />
+        </div>
+        <div>
+          <label for="fit-kv">KV cache precision</label>
+          <select id="fit-kv">
+            <option value="f16">f16 — default, no setup</option>
+            <option value="q8_0">q8_0 — about half the cache, needs Ollama flags</option>
+            <option value="q4_0">q4_0 — about a quarter, needs Ollama flags</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="fit-kv-note" hidden>
+        A quantized KV cache needs both <code>OLLAMA_FLASH_ATTENTION=1</code> and
+        <code>OLLAMA_KV_CACHE_TYPE</code> set in Ollama's own environment (a
+        Windows user variable, then restart Ollama). Without them Ollama keeps
+        using f16 and these numbers will be optimistic.
+      </p>
+      <div class="sub">
+        <button class="ghost small" id="fit-refresh" type="button">Measure my models</button>
+        <span class="st" id="fit-status"></span>
+      </div>
+      <div id="fit-loaded" class="taskmsg" hidden></div>
+      <div id="fit-table"></div>
+    </div>
+
+    <div class="card">
+      <h2>Live suggestions (during the meeting)</h2>
+      <p class="hint">
+        While the laptop is recording with the live transcript on, it asks this
+        server every so often for questions it heard being answered and key
+        insights worth carrying forward. The note-taker approves them one at a
+        time in a side panel. Everything about the loop is configured here — the
+        laptop reads these settings at the start of each meeting.
+      </p>
+      <label class="check-row" for="liveSuggestions">
+        <input id="liveSuggestions" type="checkbox" />
+        Send live suggestions to the laptop during meetings
+      </label>
+      <div class="row2">
+        <div>
+          <label for="liveModel">Live model (blank = the summary model)</label>
+          <input id="liveModel" type="text" autocomplete="off"
+                 placeholder="e.g. a smaller, faster installed model" list="ollama-model-list" />
+        </div>
+        <div>
+          <label for="liveIntervalSec">Ask every (seconds)</label>
+          <input id="liveIntervalSec" type="number" min="15" max="600" step="5" placeholder="45" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="liveTimeoutSec">Give up after (seconds)</label>
+          <input id="liveTimeoutSec" type="number" min="15" max="600" step="5" placeholder="90" />
+        </div>
+        <div>
+          <label for="liveWindowChars">Transcript window (characters)</label>
+          <input id="liveWindowChars" type="number" min="500" max="12000" step="500" placeholder="4000" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="liveKeepAliveMin">Keep the model loaded (minutes)</label>
+          <input id="liveKeepAliveMin" type="number" min="0" max="1440" step="5" placeholder="30" />
+        </div>
+        <div>
+          <label for="liveExtractNumPredict">Max output tokens per ask</label>
+          <input id="liveExtractNumPredict" type="number" min="128" max="4096" placeholder="600" />
+        </div>
+      </div>
+      <p class="hint">
+        Suggestions arriving late is the usual complaint, and the cause is
+        almost always a big summary model answering slower than the interval.
+        Fix it by naming a smaller <strong>live model</strong> above, or by
+        raising the interval. Keeping the model loaded avoids paying for a cold
+        start on every ask.
+      </p>
+      <div class="sub">
+        <button class="ghost small" id="live-test" type="button"
+                title="Run a real live-suggestion request over a fixed sample conversation">Test live suggestions</button>
+      </div>
+      <div class="taskmsg" id="live-test-result"></div>
     </div>
 
     <div class="card savebar">

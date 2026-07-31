@@ -14,6 +14,7 @@ const INDEX_URL = pathToFileURL(
 
 const AI_REPLY = {
   keyTakeaways: ['Q3 launch slips to November', 'Budget approved'],
+  keyInsights: ['Lock the launch scope before the budget review, not after.'],
   decisions: ['Ship the beta to internal users first'],
   actionItems: [
     { task: 'Draft rollout plan', owner: 'Alice', due: 'Nov 15', priority: 'high' },
@@ -55,6 +56,9 @@ test('transcript buttons disabled without a transcript, enabled with one', async
 });
 
 test('summary editor imports pasted AI JSON (with fences and chatter)', async ({ page }) => {
+  // A blank meeting starts in the "setup" stage with the Generate panel
+  // collapsed — expand it via its header (the manual stage override).
+  await page.locator('#generate-heading').click();
   await page.locator('#edit-summary-btn').click();
   await expect(page.locator('#summary-modal')).toBeVisible();
 
@@ -67,6 +71,9 @@ test('summary editor imports pasted AI JSON (with fences and chatter)', async ({
 
   await expect(page.locator('#sum-takeaways')).toHaveValue(
     'Q3 launch slips to November\nBudget approved'
+  );
+  await expect(page.locator('#sum-insights')).toHaveValue(
+    'Lock the launch scope before the budget review, not after.'
   );
   await expect(page.locator('#sum-decisions')).toHaveValue('Ship the beta to internal users first');
   await expect(page.locator('#sum-topics')).toHaveValue('Launch timing\nPricing');
@@ -81,6 +88,7 @@ test('summary editor imports pasted AI JSON (with fences and chatter)', async ({
 });
 
 test('combined harness reply also imports Q&A candidates for review', async ({ page }) => {
+  await page.locator('#generate-heading').click(); // expand the collapsed panel
   await page.locator('#edit-summary-btn').click();
   const combined = {
     summary: { keyTakeaways: ['One takeaway'], topics: ['Pricing'] },

@@ -139,8 +139,6 @@ a { color: var(--accent); }
 .tab:hover { color: var(--ink); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-.tab-panel[hidden] { display: none; }
-
 /* ---- Cards ---- */
 
 .card {
@@ -178,6 +176,26 @@ input[type=text], input[type=email], input[type=password], textarea {
   color: var(--ink); border-radius: var(--r-sm); padding: 10px 12px; font: inherit;
 }
 input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+/* The UA's `[hidden] { display: none }` loses to ANY author `display`, and this
+   sheet sets one on almost everything (.sub is flex, .linkbtn is inline-block,
+   .tab-panel was special-cased here for exactly this reason). That silently made
+   the hidden="" attribute inert: the Updates card's "a new version is ready"
+   row, and the "open meeting notes" link, showed unconditionally in a browser
+   while dashboard.js believed it had hidden them. One rule, once, for the page —
+   nothing here reveals an element by setting display inline. */
+[hidden] { display: none !important; }
+
+/* A checkbox and its words on one line — `label` is display:block above, which
+   would strand the box on its own row. Same treatment as .log-follow. */
+.check-row {
+  display: inline-flex; align-items: flex-start; gap: 8px;
+  margin: 14px 0 6px; font-weight: 400; cursor: pointer;
+}
+.check-row input[type=checkbox] {
+  flex: none; width: 15px; height: 15px; margin-top: 2px; accent-color: var(--accent);
+}
+.log-follow input[type=checkbox] { flex: none; accent-color: var(--accent); }
 textarea { resize: vertical; min-height: 60px; }
 textarea.tpl { min-height: 150px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
 .note { font-size: 12px; color: var(--warn-ink); margin-top: 6px; }
@@ -276,6 +294,20 @@ button.small { padding: 6px 11px; font-size: 13px; }
 }
 .job-progress > i { display: block; height: 100%; background: var(--accent); transition: width 0.4s ease; }
 
+/* ---- Fit to your GPU ---- */
+
+.fit-row {
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: 11px 13px; margin-top: 10px; background: var(--surface-2);
+}
+.fit-row.is-current { border-color: var(--accent); }
+.fit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.fit-name { font-weight: 700; font-size: 14px; }
+.fit-verdict { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.fit-facts { margin-top: 3px; font-size: 12.5px; color: var(--ink-soft); }
+.fit-note { margin-top: 5px; font-size: 12.5px; color: var(--ink-faint); line-height: 1.45; }
+.fit-actions { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* ---- Log view ---- */
 
 .log-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
@@ -303,7 +335,23 @@ button.small { padding: 6px 11px; font-size: 13px; }
 .toast.show { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 0.01ms !important; }
+  /* Transitions were covered; animations were not, so the spinners and pulses
+     kept running for exactly the people who asked them not to. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* The dashboard had NO focus style at all — it is driven by keyboard as much
+   as the app is. Mirrors app.css's rule. */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* Link styled as a small button (dashboard actions the APP intercepts). */
@@ -322,5 +370,9 @@ button.small { padding: 6px 11px; font-size: 13px; }
 .masthead .linkbtn { margin-right: 8px; }
 
 /* Inside the app's Dashboard tab (iframe) the app owns these actions. */
-.framed #open-notes-link,
-.framed #up-app-update-row { display: none !important; }
+/* Inside the app's Dashboard tab the meeting UI is one click away in the
+   sidebar, so the "open notes" link is redundant. The UPDATE row is NOT: the
+   app intercepts its link (main.js will-frame-navigate exists precisely for
+   it), so framed is the one place it works — hiding it here left the Updates
+   card announcing a cached update with nothing to click. */
+.framed #open-notes-link { display: none !important; }

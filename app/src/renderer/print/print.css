@@ -8,15 +8,30 @@
  *   boxed 3-column details band / "Q&A n" / ruled rows Qn|question|answer /
  *   page-broken GENERAL SUMMARY with 2-column body / end colophon.
  *
- * TYPE SCALE (v3 mock supersedes the original 24pt/16pt contract):
- *   title 42pt · Q index 22pt · summary header 20pt · Q/A text 13pt ·
- *   key-takeaway text 12.5pt · details values 12pt · follow-up text 11pt ·
- *   section kickers/labels/topic chips 9.5-10pt · captions 8.5pt.
- * The summary is a structured "deck": Key Takeaways (accent-numbered), then
- * Follow-Up Points (accent checkbox markers) beside Topics Discussed (outline
- * accent chips). A legacy plain-string summary falls back to 2-column prose
- * via #summary-body.is-prose. The e2e print spec asserts .question at 13pt,
- * the accent .sum-heading kicker, and the takeaway/topic/follow-up counts.
+ * TYPE SCALE — nine steps, each with one job. This list is the contract;
+ * anything not on it is a bug (it grew to fourteen sizes, five of them
+ * separated by half a point, before this was written down honestly):
+ *
+ *   42pt    document title
+ *   22pt    Q&A index numeral (Q1, Q2 …)
+ *   20pt    section headers — "Q&A" and "Meeting Summary"
+ *   18pt    key-takeaway index numeral
+ *   13pt    Q&A question + answer — the body of the document
+ *   12pt    detail values, takeaway text, decision text
+ *   11pt    action-item task, key figures, colophon, legacy prose, placeholder
+ *   10.5pt  contents rows, action-item owner + due
+ *    9.5pt  EVERY uppercase micro-label: topbar, detail labels, contents head,
+ *           section kickers, table head, legend, participant, topic chips
+ *
+ * The summary is a structured "deck": Key Takeaways (accent-numbered), Key
+ * Insights (arrow markers — lessons to apply in future, as opposed to the
+ * takeaways' record of what happened), then Decisions (filled accent markers),
+ * Action Items (ruled table with priority dots), and a lower band of Key
+ * Figures beside Topics Discussed (outline accent chips). A legacy
+ * plain-string summary falls back to 2-column prose via
+ * #summary-body.is-prose. The e2e print spec asserts .question at 13pt, the
+ * accent .sum-heading kicker, and the takeaway/insight/decision/action/figure/
+ * topic counts.
  *
  * NOTE: no @font-face here — src/main/pdf.js injects Neue Haas Grotesk at
  * runtime (Roman 400 + Bold 700; Medium 500 optional).
@@ -39,6 +54,11 @@ body {
   color: var(--ink);
   background: #ffffff;
   font-size: 12pt;
+  /* Never strand a single line of a paragraph on either side of a page break.
+     break-inside:avoid already protects the blocks that must stay whole; this
+     covers the ones that are allowed to split. */
+  orphans: 2;
+  widows: 2;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -96,7 +116,7 @@ body {
 }
 
 .detail-label {
-  font-size: 8.5pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -117,7 +137,7 @@ body {
 section#contents { margin-top: 26pt; }
 
 .contents-head {
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -153,11 +173,14 @@ section#contents { margin-top: 26pt; }
 
 section#qa { margin-top: 34pt; }
 
+/* The document has two section headers — "Q&A" and "Meeting Summary". They
+   are the same rank, so they are the same size; this one was 17pt and
+   undocumented. */
 .section-header {
   display: flex;
   align-items: baseline;
   gap: 8pt;
-  font-size: 17pt;
+  font-size: 20pt;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -176,7 +199,9 @@ section#qa { margin-top: 34pt; }
   display: grid;
   grid-template-columns: 0.95in 2.5in 1fr;
   column-gap: 0.28in;
-  padding: 16pt 0 18pt;
+  /* Symmetric: the rule between two rows has to sit midway between them, and
+     16/18 put it a couple of points high on every single row. */
+  padding: 17pt 0;
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -209,7 +234,7 @@ section#qa { margin-top: 34pt; }
 
 .participant-chip {
   margin-top: 8pt;
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -265,7 +290,7 @@ section#summary {
   display: flex;
   align-items: center;
   gap: 9pt;
-  font-size: 10pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -306,11 +331,49 @@ section#summary {
 }
 
 .takeaway-text {
-  font-size: 12.5pt;
+  font-size: 12pt;
   line-height: 1.4;
   font-weight: 400;
   color: var(--ink);
 }
+
+/* A lowercase gloss after a section kicker ("to apply going forward") — the
+   only non-uppercase text allowed in a .sum-heading. */
+.sum-heading-note {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+}
+
+/* Key Insights — arrow markers pointing out of the meeting and into the next
+   one. Same 12pt body weight as the takeaways they must not be confused with;
+   the marker and the heading gloss carry the difference. */
+.sum-insights { margin-bottom: 28pt; }
+
+.sum-insights .sum-list {
+  margin-top: 14pt;
+  display: grid;
+  gap: 10pt;
+}
+
+.insight {
+  display: grid;
+  grid-template-columns: 12pt 1fr;
+  column-gap: 11pt;
+  align-items: start;
+  break-inside: avoid;
+}
+
+.insight::before {
+  content: "\2192"; /* → — survives grayscale printing, unlike a color cue */
+  font-size: 12pt;
+  line-height: 1.4;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.insight-text { font-size: 12pt; line-height: 1.4; color: var(--ink); }
 
 /* Decisions — filled accent markers: settled, agreed points. */
 .sum-decisions { margin-bottom: 28pt; }
@@ -360,7 +423,7 @@ section#summary {
 .ai-head {
   border-top: none;
   padding: 0 0 6pt;
-  font-size: 8.5pt;
+  font-size: 9.5pt;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -381,9 +444,9 @@ section#summary {
 .ai-pri-low { background: #fff; border: 1pt solid var(--muted); }
 
 .ai-task { font-size: 11pt; line-height: 1.35; color: var(--ink); }
-.ai-owner { font-size: 10pt; font-weight: 700; color: var(--ink-soft); }
+.ai-owner { font-size: 10.5pt; font-weight: 700; color: var(--ink-soft); }
 .ai-due {
-  font-size: 10pt;
+  font-size: 10.5pt;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -392,7 +455,7 @@ section#summary {
   margin-top: 9pt;
   display: flex;
   gap: 16pt;
-  font-size: 8.5pt;
+  font-size: 9.5pt;
   letter-spacing: 0.03em;
   color: var(--muted);
 }

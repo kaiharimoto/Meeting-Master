@@ -8,6 +8,7 @@
   />
   <title>Meeting Master</title>
   <script src="js/themeBoot.js"></script>
+  <script src="js/shellBoot.js"></script>
   <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
@@ -20,28 +21,33 @@
       <div class="sidebar-brand">
         <span class="brand-mark" aria-hidden="true">M</span>
         <span class="brand-name">Meeting Master</span>
+        <button id="sidebar-toggle" type="button" class="icon-btn sidebar-toggle"
+                aria-expanded="true" aria-controls="sidebar"
+                aria-label="Collapse the sidebar" title="Collapse the sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        </button>
       </div>
 
       <nav class="sidebar-nav" aria-label="Primary">
-        <button id="nav-meeting" type="button" class="nav-item active">
+        <button id="nav-meeting" type="button" title="Meeting" class="nav-item active">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          Meeting
+          <span class="nav-label">Meeting</span>
         </button>
-        <button id="nav-activity" type="button" class="nav-item">
+        <button id="nav-activity" type="button" title="Activity" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Activity
+          <span class="nav-label">Activity</span>
         </button>
-        <button id="nav-dashboard" type="button" class="nav-item" hidden>
+        <button id="nav-dashboard" type="button" title="Dashboard" class="nav-item" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-          Dashboard
+          <span class="nav-label">Dashboard</span>
         </button>
-        <button id="history-btn" type="button" class="nav-item">
+        <button id="history-btn" type="button" title="History" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          History
+          <span class="nav-label">History</span>
         </button>
-        <button id="settings-btn" type="button" class="nav-item">
+        <button id="settings-btn" type="button" title="Settings" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          Settings
+          <span class="nav-label">Settings</span>
         </button>
       </nav>
 
@@ -68,13 +74,29 @@
     <main class="app-content">
       <!-- ============ Meeting screen ============ -->
       <section id="screen-meeting" class="screen">
+        <div class="meeting-columns">
+        <div class="meeting-main">
         <div class="screen-head">
           <h2 class="screen-title">Meeting</h2>
-          <button id="new-meeting-btn" type="button" class="btn btn-secondary">New meeting</button>
+          <span id="save-indicator" class="save-indicator" role="status" aria-live="polite" hidden></span>
+          <button id="new-meeting-btn" type="button" class="btn btn-secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>New meeting</button>
         </div>
 
+        <div id="next-step" class="next-step" role="status" hidden>
+          <span id="next-step-text"></span>
+        </div>
+
+        <div id="setup-checklist" class="setup-checklist" hidden></div>
+
+        <!-- The four workflow panels. Single column by default; at a wide
+             enough CONTAINER (not viewport — the rail and the sidebar both eat
+             width) this becomes two columns: working left, context right. DOM
+             order is unchanged, so tab order still reads details -> Q&A ->
+             record -> generate. -->
+        <div class="meeting-grid">
+
         <!-- 1. Meeting details -->
-        <section class="panel" aria-labelledby="details-heading">
+        <section id="panel-details" class="panel" aria-labelledby="details-heading">
           <h2 id="details-heading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Meeting details
@@ -112,24 +134,107 @@
         </section>
 
         <!-- 2. Questions & answers -->
-        <section class="panel" aria-labelledby="qa-heading">
+        <section id="panel-qa" class="panel" aria-labelledby="qa-heading">
           <div class="panel-heading-row">
             <h2 id="qa-heading">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               Questions &amp; answers
             </h2>
-            <span class="hint-chip">Press <kbd>Q</kbd> to add a question</span>
+            <span class="hint-chip"><kbd>Q</kbd> for the full card &middot; <kbd>Ctrl</kbd>+<kbd>K</kbd> for anything</span>
           </div>
 
           <div id="extract-review" class="extract-review" aria-live="polite" hidden></div>
 
+          <div id="quick-capture" class="quick-capture">
+            <input id="quick-question" type="text" autocomplete="off"
+                   aria-label="Add a question"
+                   placeholder="Type a question, press Enter — it stays here for the next one" />
+            <button id="quick-add-btn" type="button" class="btn btn-primary btn-small">Add</button>
+            <button id="quick-more-btn" type="button" class="btn btn-secondary btn-small"
+                    title="Open the full card with answer and answerer fields">More fields…</button>
+          </div>
+
+          <div id="list-toolbar" class="list-toolbar" hidden>
+            <span id="card-count" class="card-count"></span>
+            <button id="density-toggle" type="button" class="density-toggle"
+                    aria-pressed="false" title="Show more cards at once">Compact</button>
+          </div>
+
           <div id="card-list" class="card-list" aria-live="polite"></div>
 
-          <button id="add-card-btn" type="button" class="btn btn-secondary">Add question</button>
+          <button id="add-card-btn" type="button" class="btn btn-secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add question</button>
         </section>
 
-        <!-- 3. Generate & send -->
-        <section class="panel" aria-labelledby="generate-heading">
+        <!-- 3. Record audio -->
+        <section id="panel-record" class="panel" aria-labelledby="record-heading">
+          <div class="panel-heading-row">
+            <h2 id="record-heading">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              Record audio
+            </h2>
+            <span class="hint-chip">Saved to disk every 5 s — survives a crash</span>
+          </div>
+
+          <div id="rec-preflight" class="rec-preflight" role="status" aria-live="polite"
+               aria-label="Pre-flight checks" hidden></div>
+          <div id="rec-guard" class="rec-guard" hidden>
+            Not recording — nothing is being captured yet.
+          </div>
+
+          <div class="field-grid">
+            <div class="field field-wide">
+              <label for="rec-device-select">Microphone</label>
+              <select id="rec-device-select"></select>
+            </div>
+            <!-- Windows-only (loopback capture) — revealed by recorder.js -->
+            <div class="field field-wide" id="rec-loopback-field" hidden>
+              <label class="rec-loopback">
+                <input id="rec-loopback-check" type="checkbox" />
+                Also record computer audio (for remote calls)
+              </label>
+            </div>
+            <!-- Revealed when this install has whisper-cli (recorder.js) -->
+            <div class="field field-wide" id="rec-live-field" hidden>
+              <label class="rec-loopback">
+                <input id="rec-live-check" type="checkbox" />
+                Live transcript (beta) — draft text appears while you talk
+              </label>
+              <p id="rec-live-hint" class="settings-help" hidden>
+                Download the live model first: Settings → Live transcription.
+              </p>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="rec-start-btn" type="button" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Start recording</button>
+            <button id="rec-pause-btn" type="button" class="btn btn-secondary" hidden>Pause</button>
+            <button id="rec-resume-btn" type="button" class="btn btn-primary" hidden>Resume</button>
+            <button id="rec-stop-btn" type="button" class="btn btn-primary" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Stop &amp; use recording</button>
+            <button id="rec-discard-btn" type="button" class="btn btn-secondary" hidden>Discard</button>
+            <button id="rec-mini-btn" type="button" class="btn btn-secondary" hidden
+                    title="Shrink to a small always-on-top recording strip">Mini mode</button>
+            <span id="rec-timer" class="rec-timer" hidden>00:00</span>
+          </div>
+
+          <div id="rec-meter" class="meter meter--level rec-meter" hidden aria-hidden="true"><div id="rec-meter-fill" class="meter-fill"></div></div>
+
+          <div id="live-wrap" class="live-wrap" hidden>
+            <div class="log-toolbar">
+              <span class="settings-help live-disclaimer">Live draft — rough and a few
+                seconds behind. The final transcript is produced after the meeting.</span>
+              <label class="log-follow">
+                <input id="live-follow-check" type="checkbox" checked /> Follow
+              </label>
+              <button id="live-copy-btn" type="button" class="btn btn-secondary btn-small">Copy</button>
+            </div>
+            <div id="live-view" class="log-view" aria-live="off"></div>
+          </div>
+
+          <div id="rec-note" class="rec-note" role="status" aria-live="polite" hidden></div>
+        </section>
+
+        <!-- 4. Generate & send -->
+        <section id="panel-generate" class="panel" aria-labelledby="generate-heading">
           <h2 id="generate-heading">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             Generate &amp; send
@@ -138,11 +243,14 @@
           <div class="button-row">
             <button id="pick-audio-btn" type="button" class="btn btn-primary">Generate transcript</button>
             <button id="start-ai-btn" type="button" class="btn btn-primary" disabled
-                    title="Run the AI summary + question detection on the (name-corrected) transcript">Start AI</button>
+                    title="Run the AI summary + question detection on the (name-corrected) transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Start AI</button>
+            <button id="fill-answers-btn" type="button" class="btn btn-secondary" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>Fill blank answers</button>
             <button id="edit-summary-btn" type="button" class="btn btn-secondary">Edit summary</button>
-            <button id="generate-pdf-btn" type="button" class="btn btn-primary">Generate PDF</button>
+            <button id="generate-pdf-btn" type="button" class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Generate PDF</button>
+            <button id="preview-pdf-btn" type="button" class="btn btn-secondary"
+                    title="See the printed document before generating it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>
             <button id="open-pdf-btn" type="button" class="btn btn-secondary" disabled>Open PDF</button>
-            <button id="send-email-btn" type="button" class="btn btn-primary" disabled>Send email</button>
+            <button id="send-email-btn" type="button" class="btn btn-primary" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send email</button>
           </div>
           <div class="button-row">
             <button id="copy-transcript-btn" type="button" class="btn btn-secondary" disabled
@@ -155,15 +263,67 @@
                     title="Get the Subject, recipient list, and body to send the email yourself (attach the PDF)">Email text</button>
             <button id="fix-names-btn" type="button" class="btn btn-secondary"
                     title="Correct or merge misspelled names everywhere in this meeting">Fix names…</button>
+            <button id="pick-file-btn" type="button" class="btn btn-secondary"
+                    title="Transcribe an audio file from disk instead of the in-app recording">Upload audio file…</button>
           </div>
 
-          <div id="status-line" class="status-line" role="status" aria-live="polite">
+          <div id="problem-host" class="problem-host" hidden></div>
+
+          <div id="status-line" class="status-line" role="status" aria-live="polite"
+               aria-busy="false">
             <span id="status-spinner" class="spinner" hidden></span>
             <span id="status-text">Ready.</span>
+          </div>
+          <div id="status-meter" class="meter status-meter" hidden
+               role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-label="Transcription progress">
+            <div id="status-meter-fill" class="meter-fill"></div>
           </div>
 
           <p id="config-note" class="config-note" hidden></p>
         </section>
+        </div><!-- /.meeting-grid -->
+        </div><!-- /.meeting-main -->
+
+        <!-- Drag (or arrow-key) to trade width between the rail and the main
+             column. Only present while the rail is. -->
+        <div id="rail-resizer" class="rail-resizer" role="separator"
+             aria-orientation="vertical" tabindex="0"
+             aria-label="Suggestions rail width"
+             aria-valuemin="240" aria-valuemax="460" aria-valuenow="300"></div>
+
+        <!-- Live suggestions: a peripheral rail the operator can monitor while
+             typing questions — it never reflows the main column, and it stays
+             visible above the capture modal's dim. Two kinds of suggestion:
+             answered questions (become cards) and key insights (become Key
+             Insights in the summary + PDF). -->
+        <aside id="live-rail" class="live-rail" aria-label="Live suggestions" hidden>
+          <div class="live-rail-head">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Live suggestions
+              <span id="live-rail-count" class="live-rail-count" hidden>0</span>
+            </h2>
+          </div>
+          <!-- What the loop is doing right now. Quiet by design (aria-live off,
+               no toast): the operator is in a meeting. But never blank —
+               "asking", "unreachable" and "switched off" must be tellable
+               apart without opening a log. -->
+          <p id="live-rail-status" class="live-rail-status" aria-live="off" hidden></p>
+          <p id="live-rail-empty" class="live-rail-empty" hidden>
+            Listening… questions the AI hears being answered, and insights worth
+            keeping, appear here. Approve the good ones whenever you have a moment.
+          </p>
+          <div id="live-rail-list" class="live-rail-list" aria-live="polite"></div>
+          <div id="live-rail-insight-group" class="live-rail-group" hidden>
+            <h3 class="live-rail-subhead">
+              Key insights
+              <span class="live-rail-subnote">lessons to apply later</span>
+            </h3>
+            <div id="live-rail-insights" class="live-rail-list" aria-live="polite"></div>
+          </div>
+        </aside>
+        </div><!-- /.meeting-columns -->
       </section>
 
       <!-- ============ Activity screen ============ -->
@@ -268,28 +428,32 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
       <h3 id="card-modal-title">New question</h3>
 
+      <!-- No positive tabindex: DOM order already produces the cycle, and
+           positive values reorder the whole document's tab sequence. -->
       <div class="field">
         <label for="card-question">Question</label>
-        <input id="card-question" type="text" tabindex="1" autocomplete="off" />
+        <input id="card-question" type="text" autocomplete="off" />
       </div>
 
       <div class="field">
         <label for="card-answer">Answer</label>
-        <textarea id="card-answer" rows="4" tabindex="2"></textarea>
+        <textarea id="card-answer" rows="4"></textarea>
       </div>
 
       <div class="field">
         <label for="card-participant">Answered by</label>
-        <input id="card-participant" type="text" tabindex="3" autocomplete="off"
+        <input id="card-participant" type="text" autocomplete="off"
                list="participant-options" placeholder="Who gave the answer?" />
         <datalist id="participant-options"></datalist>
       </div>
 
       <div class="modal-actions">
         <span class="keyboard-hint">
-          <kbd>Enter</kbd> save &middot; <kbd>Shift+Enter</kbd> newline in answer &middot; <kbd>Esc</kbd> cancel
+          <kbd>Enter</kbd> save &middot; <kbd>Ctrl+Enter</kbd> save &amp; add another &middot;
+          <kbd>Esc</kbd> cancel
         </span>
         <button id="card-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="card-save-add-btn" type="button" class="btn btn-secondary">Save &amp; add another</button>
         <button id="card-save-btn" type="button" class="btn btn-primary">Save</button>
       </div>
     </div>
@@ -322,6 +486,28 @@
     </div>
   </div>
 
+  <!-- ============ Drafted answers review (hidden by default) ============ -->
+  <div id="answers-modal" class="modal-backdrop" hidden>
+    <div class="modal extract-modal" role="dialog" aria-modal="true" aria-labelledby="answers-modal-title">
+      <h3 id="answers-modal-title">Answers from the transcript</h3>
+      <p id="answers-intro" class="extract-intro"></p>
+
+      <div class="extract-toolbar">
+        <span id="answers-count" class="extract-count"></span>
+      </div>
+
+      <div id="answers-list" class="extract-list"></div>
+
+      <div class="modal-actions">
+        <span class="keyboard-hint">
+          Edit anything before you use it — these go straight onto your cards.
+        </span>
+        <button id="answers-cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="answers-apply-btn" type="button" class="btn btn-primary">Use selected</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ Edit summary modal (hidden by default) ============ -->
   <div id="summary-modal" class="modal-backdrop" hidden>
     <div class="modal summary-modal" role="dialog" aria-modal="true" aria-labelledby="summary-modal-title">
@@ -334,6 +520,23 @@
       <div class="field">
         <label for="sum-takeaways">Key Takeaways</label>
         <textarea id="sum-takeaways" rows="4" placeholder="One takeaway per line"></textarea>
+        <p class="settings-help">What happened — the outcomes and conclusions of this meeting.</p>
+      </div>
+
+      <div class="field">
+        <label for="sum-insights">Key Insights</label>
+        <textarea id="sum-insights" rows="3" placeholder="One insight per line"></textarea>
+        <p class="settings-help">
+          Lessons to apply going forward — what to do differently next time.
+          Not a second copy of the takeaways above.
+        </p>
+        <!-- Insights suggested live but never actioned. They sit in the rail
+             behind this dialog, which is exactly where they'd be missed at the
+             moment the summary is being finalised. -->
+        <div id="sum-insight-offers" class="insight-offers" hidden>
+          <p class="insight-offers-head">Still waiting in the live rail</p>
+          <div id="sum-insight-offer-list"></div>
+        </div>
       </div>
 
       <div class="field">
@@ -450,6 +653,101 @@
       </div>
 
       <div class="field">
+        <label for="settings-mic-select">Default microphone</label>
+        <select id="settings-mic-select">
+          <option value="">System default microphone</option>
+        </select>
+        <p class="settings-help">
+          Used by the in-app "Record audio" panel. You can still pick a
+          different mic right before recording.
+        </p>
+      </div>
+
+      <div class="field">
+        <label>Recordings</label>
+        <div class="settings-code-row">
+          <button id="open-recordings-btn" type="button" class="btn btn-secondary">Open recordings folder</button>
+        </div>
+        <p class="settings-help">
+          Every in-app recording is kept here — nothing is deleted
+          automatically.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="settings-zoom-select">Display zoom (<kbd>Ctrl</kbd> <kbd>+</kbd>/<kbd>&minus;</kbd>)</label>
+        <select id="settings-zoom-select">
+          <option value="">Auto — match the display</option>
+          <option value="0.9">90%</option>
+          <option value="1">100%</option>
+          <option value="1.1">110%</option>
+          <option value="1.25">125%</option>
+        </select>
+        <p class="settings-help">
+          Scales the <strong>whole window</strong> — type, spacing, icons, the
+          sidebar. Auto picks a comfortable size for the current display (bigger
+          on projectors and large monitors). <kbd>Ctrl</kbd>+<kbd>=</kbd> /
+          <kbd>Ctrl</kbd>+<kbd>-</kbd> adjust any time; <kbd>Ctrl</kbd>+<kbd>0</kbd>
+          returns to Auto.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="settings-textsize-select">Text size</label>
+        <select id="settings-textsize-select">
+          <option value="0.9">Small (90%)</option>
+          <option value="1">Default</option>
+          <option value="1.12">Large (112%)</option>
+          <option value="1.25">Larger (125%)</option>
+        </select>
+        <p class="settings-help">
+          Scales <strong>type only</strong>, leaving the layout where it is —
+          separate from display zoom above, and they combine. No keyboard
+          shortcut, so it can't be changed by accident mid-meeting.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="settings-contrast-check" class="settings-check">
+          <input id="settings-contrast-check" type="checkbox" />
+          High contrast
+        </label>
+        <p class="settings-help">
+          Stronger ink, borders and accents. Applies on top of whichever theme
+          is active — light or dark — rather than replacing it.
+        </p>
+      </div>
+
+      <div class="field" id="settings-live-section" hidden>
+        <label for="settings-live-model">Live transcription (beta)</label>
+        <select id="settings-live-model">
+          <option value="small">Higher accuracy — small model (~466 MB)</option>
+          <option value="base">Lower footprint — base model (~142 MB)</option>
+        </select>
+        <label class="rec-loopback">
+          <input id="settings-live-default" type="checkbox" />
+          Turn the live transcript on by default when recording
+        </label>
+        <div class="settings-code-row">
+          <button id="settings-live-download-btn" type="button" class="btn btn-secondary">Download model</button>
+          <button id="settings-live-delete-btn" type="button" class="btn btn-secondary" hidden>Delete model</button>
+          <span id="settings-live-note" class="settings-help" role="status"></span>
+        </div>
+        <div id="settings-live-progress" class="meter rec-meter" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Model download progress"><div id="settings-live-progress-fill" class="meter-fill"></div></div>
+        <p class="settings-help">
+          Runs on this laptop's GPU while you record. The live transcript is a
+          draft — the final transcript is still produced by the home server
+          after the meeting.
+        </p>
+        <p class="settings-help">
+          The <strong>Live suggestions</strong> rail (questions and key insights
+          heard mid-meeting) rides on this transcript, and is configured on the
+          home server's dashboard under <strong>Settings → Live
+          suggestions</strong> — including which model answers and how often.
+        </p>
+      </div>
+
+      <div class="field">
         <label>PDF brand fonts</label>
         <div class="settings-code-row">
           <button id="open-fonts-btn" type="button" class="btn btn-secondary">Open fonts folder</button>
@@ -505,16 +803,39 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
       <h3 id="shortcuts-modal-title">Keyboard shortcuts</h3>
       <div class="shortcuts-list">
+        <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Command palette — run anything by name</span></div>
         <div class="shortcut-row"><kbd>Q</kbd><span>Capture a new question</span></div>
         <div class="shortcut-row"><kbd>Enter</kbd><span>Save the open question card</span></div>
+        <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>Save and add another question</span></div>
         <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>Enter</kbd><span>New line inside an answer</span></div>
-        <div class="shortcut-row"><kbd>Esc</kbd><span>Close the open dialog</span></div>
+        <div class="shortcut-row"><kbd>&uarr;</kbd><kbd>&darr;</kbd><span>Move between question cards</span></div>
+        <div class="shortcut-row"><kbd>E</kbd><span>Edit the focused question where it sits</span></div>
+        <div class="shortcut-row"><kbd>A</kbd><span>Add or edit the focused question's answer</span></div>
+        <div class="shortcut-row"><kbd>Del</kbd><span>Delete the focused question (undoable)</span></div>
+        <div class="shortcut-row"><kbd>Alt</kbd>+<kbd>&uarr;</kbd><kbd>&darr;</kbd><span>Reorder the focused question</span></div>
+        <div class="shortcut-row"><kbd>Esc</kbd><span>Close the open dialog, or abandon an edit</span></div>
         <div class="shortcut-row"><kbd>?</kbd><span>Show these shortcuts</span></div>
       </div>
       <div class="modal-actions">
         <span class="keyboard-hint"></span>
         <button id="shortcuts-close-btn" type="button" class="btn btn-primary">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ Command palette (Ctrl+K, hidden by default) ============ -->
+  <div id="palette-modal" class="modal-backdrop palette-backdrop" hidden>
+    <div class="modal palette-modal" role="dialog" aria-modal="true" aria-labelledby="palette-title">
+      <h3 id="palette-title" class="sr-only">Command palette</h3>
+      <input id="palette-input" type="text" class="palette-input" autocomplete="off"
+             role="combobox" aria-expanded="true" aria-controls="palette-list"
+             aria-autocomplete="list" aria-label="Search commands"
+             placeholder="Type a command…" />
+      <ul id="palette-list" class="palette-list" role="listbox" aria-label="Commands"></ul>
+      <p id="palette-empty" class="palette-empty" hidden>No matching command.</p>
+      <p class="keyboard-hint">
+        <kbd>&uarr;</kbd><kbd>&darr;</kbd> choose &middot; <kbd>Enter</kbd> run &middot; <kbd>Esc</kbd> close
+      </p>
     </div>
   </div>
 

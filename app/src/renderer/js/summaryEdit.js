@@ -1,13 +1,26 @@
 // In-app summary editor. Lets the operator review and adjust the AI summary
-// (Key Takeaways, Decisions, Action Items, Key Figures, Topics) BEFORE the PDF
-// is generated — the same "you're in control of what goes out" idea as the
-// question-approval step. Edits ctx.state.summary in place.
+// (Key Takeaways, Key Insights, Decisions, Action Items, Key Figures, Topics)
+// BEFORE the PDF is generated — the same "you're in control of what goes out"
+// idea as the question-approval step. Edits ctx.state.summary in place.
+//
+// Key Takeaways vs Key Insights is a real distinction, not a synonym pair:
+// takeaways record what happened at the meeting, insights are the lessons to
+// apply afterwards. Both ship as their own PDF section.
+
+import { openModal, closeModal } from './modalKit.js';
+import {
+  withKeptInsights,
+  reconcileKept,
+  liveFlagsState,
+  keepInsight,
+} from './liveInsights.js';
 
 let ctx = null;
 let onSaved = null;
 
-let backdrop, takeawaysEl, decisionsEl, actionsHost, figuresEl, topicsEl,
-  ownerOptions, addActionBtn, saveBtn, cancelBtn, importText, importBtn, importNote;
+let backdrop, takeawaysEl, insightsEl, decisionsEl, actionsHost, figuresEl,
+  topicsEl, ownerOptions, addActionBtn, saveBtn, cancelBtn, importText,
+  importBtn, importNote, offersHost, offersList;
 
 const PRIORITIES = ['high', 'normal', 'low'];
 
@@ -17,6 +30,7 @@ export function initSummaryEdit(context, opts) {
 
   backdrop = document.getElementById('summary-modal');
   takeawaysEl = document.getElementById('sum-takeaways');
+  insightsEl = document.getElementById('sum-insights');
   decisionsEl = document.getElementById('sum-decisions');
   actionsHost = document.getElementById('sum-actions');
   figuresEl = document.getElementById('sum-figures');
@@ -25,6 +39,9 @@ export function initSummaryEdit(context, opts) {
   addActionBtn = document.getElementById('sum-add-action');
   saveBtn = document.getElementById('sum-save-btn');
   cancelBtn = document.getElementById('sum-cancel-btn');
+
+  offersHost = document.getElementById('sum-insight-offers');
+  offersList = document.getElementById('sum-insight-offer-list');
 
   importText = document.getElementById('sum-import-text');
   importBtn = document.getElementById('sum-import-btn');
@@ -151,15 +168,16 @@ export function parseAiSummary(rawText) {
     .filter(Boolean);
   const summary = {
     keyTakeaways: stringList(data, ['keyTakeaways', 'key_takeaways']),
+    keyInsights: stringList(data, ['keyInsights', 'key_insights', 'insights']),
     decisions: stringList(data, ['decisions', 'decisionsMade']),
     actionItems,
     keyFigures: stringList(data, ['keyFigures', 'key_figures', 'figures']),
     topics: stringList(data, ['topics', 'topicsDiscussed']),
   };
   if (
-    !summary.keyTakeaways.length && !summary.decisions.length &&
-    !summary.actionItems.length && !summary.keyFigures.length && !summary.topics.length &&
-    !questions.length
+    !summary.keyTakeaways.length && !summary.keyInsights.length &&
+    !summary.decisions.length && !summary.actionItems.length &&
+    !summary.keyFigures.length && !summary.topics.length && !questions.length
   ) {
     throw new Error('The JSON parsed but contained no summary sections or questions.');
   }
@@ -171,6 +189,9 @@ async function applyImport() {
   try {
     const s = parseAiSummary(importText.value);
     takeawaysEl.value = linesToText(s.keyTakeaways);
+    // Insights kept from the live rail lead — an import must not silently drop
+    // what the operator picked by hand during the meeting.
+    insightsEl.value = linesToText(withKeptInsights(ctx.state, s.keyInsights));
     decisionsEl.value = linesToText(s.decisions);
     figuresEl.value = linesToText(s.keyFigures);
     topicsEl.value = linesToText(s.topics);
@@ -197,6 +218,7 @@ export function openSummaryEdit() {
   if (importNote) importNote.textContent = '';
   const s = currentSummary();
   takeawaysEl.value = linesToText(s.keyTakeaways);
+  insightsEl.value = linesToText(s.keyInsights);
   decisionsEl.value = linesToText(s.decisions);
   figuresEl.value = linesToText(s.keyFigures);
   topicsEl.value = linesToText(s.topics);
@@ -211,6 +233,8 @@ export function openSummaryEdit() {
     })
   );
 
+  renderInsightOffers();
+
   actionsHost.replaceChildren();
   const items = Array.isArray(s.actionItems) ? s.actionItems : [];
   if (items.length === 0) {
@@ -219,8 +243,51 @@ export function openSummaryEdit() {
     items.forEach((a) => actionsHost.append(buildActionRow(a || {})));
   }
 
-  backdrop.hidden = false;
-  takeawaysEl.focus();
+  openModal(backdrop, takeawaysEl);
+}
+
+/**
+ * Live insights the operator never got round to actioning.
+ *
+ * The rail keeps them after the meeting, but it is behind this dialog — and
+ * this dialog is where Key Insights is decided, seconds before the PDF is
+ * generated. Offering them here is the difference between "still available"
+ * and "actually seen". Adding one moves it into the textarea AND remembers it
+ * as kept, so it survives a later AI run like any other kept insight.
+ */
+function renderInsightOffers() {
+  if (!offersHost || !offersList) return;
+  const pending = liveFlagsState(ctx.state).pendingInsights;
+  offersHost.hidden = pending.length === 0;
+  offersList.replaceChildren();
+  pending.forEach((text) => {
+    const row = document.createElement('div');
+    row.className = 'insight-offer';
+
+    const body = document.createElement('span');
+    body.className = 'insight-offer-text';
+    body.textContent = text;
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'btn btn-secondary btn-small';
+    add.textContent = 'Add';
+    add.addEventListener('click', () => {
+      const lines = textToLines(insightsEl.value);
+      if (!lines.includes(text)) lines.push(text);
+      insightsEl.value = lines.join('\n');
+      const lf = liveFlagsState(ctx.state);
+      lf.pendingInsights = lf.pendingInsights.filter((i) => i !== text);
+      keepInsight(ctx.state, text);
+      ctx.persist();
+      // The rail loses the row it no longer owns.
+      document.dispatchEvent(new CustomEvent('mm:liveflags'));
+      renderInsightOffers();
+    });
+
+    row.append(body, add);
+    offersList.append(row);
+  });
 }
 
 function buildActionRow(a) {
@@ -285,8 +352,13 @@ function collectActions() {
 }
 
 function save() {
+  const insights = textToLines(insightsEl.value);
+  // An insight edited out here stays out: forget it as a kept one, or the next
+  // AI run would re-assert it and quietly undo the edit.
+  reconcileKept(ctx.state, insights);
   ctx.state.summary = {
     keyTakeaways: textToLines(takeawaysEl.value),
+    keyInsights: insights,
     decisions: textToLines(decisionsEl.value),
     actionItems: collectActions(),
     keyFigures: textToLines(figuresEl.value),
@@ -298,5 +370,5 @@ function save() {
 }
 
 function close() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
 }

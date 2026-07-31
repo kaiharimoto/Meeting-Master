@@ -4,6 +4,8 @@
 // answerer/directedTo, summary action-item owners), and giving two entries
 // the same name merges them into one person.
 
+import { openModal, closeModal } from './modalKit.js';
+
 let ctx = null;
 let onApplied = null;
 let onStartAi = null;
@@ -34,7 +36,7 @@ export function initNameFix(context, opts) {
 }
 
 function close() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
 }
 
 /** Every distinct name in the meeting, in first-seen order. */
@@ -115,9 +117,7 @@ export async function openNameFix() {
       jobId && onStartAi && ctx.api && typeof ctx.api.retrySummary === 'function'
     );
   }
-  backdrop.hidden = false;
-  const first = rowsHost.querySelector('input');
-  if (first) first.focus();
+  openModal(backdrop, rowsHost.querySelector('input'));
 }
 
 async function apply(startAiAfter) {

@@ -8,8 +8,9 @@
 //   GET  /setup/events         SSE: hello/job/log (live updates)
 (function () {
   "use strict";
-  // Inside the Meeting Master app's Dashboard tab (iframe): the app itself
-  // owns "open notes" and "update & restart", so hide those links here.
+  // Inside the Meeting Master app's Dashboard tab (iframe): the meeting UI is
+  // one sidebar click away, so the "open notes" link is redundant here. The
+  // UPDATE link is not — the app intercepts it, so framed is where it works.
   if (window.self !== window.top) document.documentElement.classList.add("framed");
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -22,7 +23,12 @@
   // AI engine tuning fields share one edited-flag map + numeric parsing.
   var AI_FIELDS = ["ollamaUrl", "numCtx", "summaryNumPredict",
                    "summaryTemperature", "extractNumPredict", "extractTemperature"];
+  // Live-suggestion fields work the same way, off state.liveParams. The
+  // checkbox is listed separately because it round-trips .checked, not .value.
+  var LIVE_FIELDS = ["liveModel", "liveIntervalSec", "liveWindowChars",
+                     "liveTimeoutSec", "liveKeepAliveMin", "liveExtractNumPredict"];
   var editedAi = {};
+  var fitLoaded = false; // "Fit to your GPU" is measured on first Settings open
 
   function toast(msg) {
     var t = $("#toast"); t.textContent = msg; t.classList.add("show");
@@ -64,13 +70,34 @@
       $("#tab-" + t).hidden = t !== name;
     });
     $$(".tab").forEach(function (b) {
-      b.classList.toggle("active", b.getAttribute("data-tab") === name);
+      var on = b.getAttribute("data-tab") === name;
+      b.classList.toggle("active", on);
+      // Roving tabindex + aria-selected: the tablist is ONE tab stop and
+      // arrows move within it, which is what role="tablist" promises.
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
     });
     try { if (location.hash !== "#" + name) location.hash = "#" + name; } catch (e) {}
     if (name === "logs") scrollLogToEnd();
+    // Measuring models means an /api/show per installed model, so do it when
+    // the operator actually opens Settings — once, not on every poll.
+    if (name === "settings" && !fitLoaded) { fitLoaded = true; loadFit(); }
   }
   $$(".tab").forEach(function (b) {
     b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); });
+    b.addEventListener("keydown", function (e) {
+      var tabs = $$(".tab");
+      var i = tabs.indexOf(b);
+      var next = null;
+      if (e.key === "ArrowRight") next = tabs[(i + 1) % tabs.length];
+      else if (e.key === "ArrowLeft") next = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === "Home") next = tabs[0];
+      else if (e.key === "End") next = tabs[tabs.length - 1];
+      if (!next) return;
+      e.preventDefault();
+      showTab(next.getAttribute("data-tab"));
+      next.focus();
+    });
   });
   $("#banner-settings-link").addEventListener("click", function (e) {
     e.preventDefault();
@@ -179,6 +206,15 @@
       if (el && !editedAi[f] && document.activeElement !== el)
         el.value = ai[f] != null ? ai[f] : "";
     });
+    var live = state.liveParams || {};
+    LIVE_FIELDS.forEach(function (f) {
+      var el = $("#" + f);
+      if (el && !editedAi[f] && document.activeElement !== el)
+        el.value = live[f] != null ? live[f] : "";
+    });
+    var liveOn = $("#liveSuggestions");
+    if (liveOn && !editedAi.liveSuggestions)
+      liveOn.checked = live.liveSuggestions !== false;
     if (!editedWhisper && document.activeElement !== $("#whisperModel")) $("#whisperModel").value = state.whisperModel || "";
 
     // Dependency detection.
@@ -226,17 +262,22 @@
       status.style.color = "var(--ink-faint)";
       status.title = "";
     }
-    // The app (not this server) installs updates. In the app window the
-    // button below is intercepted by Electron and runs the whole chain;
-    // in a plain browser it lands on an explanation page.
+    // Two install paths, one per topology (see setup.html). Inside the app the
+    // link is intercepted by Electron and installs the downloaded update now;
+    // a server running on its own installs the cached installer itself.
+    var hasUpdate = semverNewer(up.latest, up.current);
     var appRow = $("#up-app-update-row");
-    if (appRow) appRow.hidden = !(up.sidecar && semverNewer(up.latest, up.current));
+    if (appRow) appRow.hidden = !(up.sidecar && hasUpdate);
+    var srvRow = $("#up-server-update-row");
+    if (srvRow) srvRow.hidden = !(!up.sidecar && hasUpdate);
     var notesLink = $("#open-notes-link");
     if (notesLink) notesLink.hidden = !up.sidecar;
     var upNotes = [];
     if (up.sidecar)
       upNotes.push("This server runs inside the Meeting Master app — updates " +
-                   "download in the background and install when the app restarts.");
+                   "download in the background. Install one the moment it is " +
+                   "ready with the button above, or just leave it: it also " +
+                   "installs whenever the app next restarts.");
     if (up.laptopReady)
       upNotes.push("Update feed ready — operator laptops fetch updates from " +
                    "this server automatically.");
@@ -290,7 +331,16 @@
       extractNumPredict: parseInt($("#extractNumPredict").value, 10) || null,
       extractTemperature: $("#extractTemperature").value === "" ? null : parseFloat($("#extractTemperature").value),
       whisperModel: $("#whisperModel").value.trim() || null,
-      githubToken: $("#githubToken").value
+      githubToken: $("#githubToken").value,
+      liveSuggestions: $("#liveSuggestions").checked,
+      // Blank is meaningful (fall back to the summary model), so send "" —
+      // never null, which would mean "leave whatever is saved".
+      liveModel: $("#liveModel").value.trim(),
+      liveIntervalSec: parseInt($("#liveIntervalSec").value, 10) || null,
+      liveWindowChars: parseInt($("#liveWindowChars").value, 10) || null,
+      liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
+      liveKeepAliveMin: $("#liveKeepAliveMin").value === "" ? null : parseInt($("#liveKeepAliveMin").value, 10),
+      liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null
     };
     fetch("/setup/save", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -492,9 +542,13 @@
   $("#smtpUser").addEventListener("input", function () { editedUser = true; });
   $("#smtpFrom").addEventListener("input", function () { editedFrom = true; });
   $("#ollamaModel").addEventListener("input", function () { editedOllama = true; });
-  AI_FIELDS.forEach(function (f) {
+  AI_FIELDS.concat(LIVE_FIELDS).forEach(function (f) {
     var el = $("#" + f);
     if (el) el.addEventListener("input", function () { editedAi[f] = true; });
+  });
+  var liveOnBox = $("#liveSuggestions");
+  if (liveOnBox) liveOnBox.addEventListener("change", function () {
+    editedAi.liveSuggestions = true;
   });
 
   // ---- AI helpers: installed-model picker, suggested context, live test ----
@@ -516,30 +570,11 @@
   }
   loadOllamaModels();
 
-  function paramBillions(p) {
-    var m = /([0-9.]+)\s*B/i.exec(p || "");
-    return m ? parseFloat(m[1]) : null;
-  }
   function aiResult(text, color) {
     var el = $("#ai-test-result");
     el.textContent = text;
     el.style.color = color || "var(--ink-soft)";
   }
-  var suggestBtn = $("#ai-suggest");
-  if (suggestBtn) suggestBtn.addEventListener("click", function () {
-    var name = $("#ollamaModel").value.trim();
-    var info = null;
-    ollamaModels.forEach(function (m) { if (m.name === name) info = m; });
-    var b = info ? paramBillions(info.paramSize) : null;
-    // Bigger model => smaller safe context (the KV cache shares VRAM with the
-    // weights). Long meetings chunk automatically, so smaller is safe.
-    var ctx = b == null ? 16384 : b >= 20 ? 16384 : b >= 10 ? 24576 : b >= 4 ? 32768 : 65536;
-    $("#numCtx").value = ctx;
-    editedAi.numCtx = true;
-    aiResult((info ? name + " (" + info.paramSize + ", " + info.sizeGB + " GB): " :
-              "Model not in Ollama's installed list — conservative ") +
-             "suggested context " + ctx + ". Click 'Test AI now' to prove it loads, then Save.");
-  });
   var testBtn = $("#ai-test");
   if (testBtn) testBtn.addEventListener("click", function () {
     aiResult("Testing — first load of a big model can take a minute…");
@@ -566,6 +601,225 @@
         aiResult("Test request failed — is the server still running?", "var(--danger)");
       });
   });
+  // ---- Live suggestions: prove the mid-meeting path end to end -------------
+  // Runs the REAL live request over a fixed scripted conversation that contains
+  // exactly one answered question and one genuine forward-looking lesson, so an
+  // empty result is a finding rather than an ambiguity.
+  function liveResult(text, color) {
+    var el = $("#live-test-result");
+    el.textContent = text;
+    el.style.color = color || "var(--ink-soft)";
+  }
+  var liveTestBtn = $("#live-test");
+  if (liveTestBtn) liveTestBtn.addEventListener("click", function () {
+    liveResult("Asking the model for live suggestions — a cold model load can take a minute…");
+    liveTestBtn.disabled = true;
+    fetch("/setup/live-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        liveModel: $("#liveModel").value.trim(),
+        liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
+        liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null,
+      }),
+    }).then(function (r) { return r.json(); })
+      .then(function (p) {
+        liveTestBtn.disabled = false;
+        var secs = (p.latencyMs / 1000).toFixed(1);
+        if (!p.ok) {
+          liveResult("✗ " + p.model + " failed after " + secs + "s: " +
+                     (p.error || "unknown error") +
+                     " — try a smaller live model, or raise the give-up time.",
+                     "var(--danger)");
+          return;
+        }
+        var nq = (p.questions || []).length, ni = (p.insights || []).length;
+        var found = nq + " question" + (nq === 1 ? "" : "s") + " and " +
+                    ni + " insight" + (ni === 1 ? "" : "s");
+        if (nq === 0 && ni === 0) {
+          // The model answered, but found nothing in a sample that contains
+          // both — a real result, and a real problem worth naming.
+          liveResult("⚠ " + p.model + " answered in " + secs + "s but found " +
+                     "nothing in the sample conversation, which does contain a " +
+                     "question and a lesson. This model is a poor fit for live " +
+                     "suggestions — try a different one.", "var(--danger)");
+          return;
+        }
+        var msg = "✓ " + p.model + " found " + found + " in " + secs + "s.";
+        if (p.slowerThanInterval) {
+          msg += " That is SLOWER than the " + p.intervalSec + "s interval, so " +
+                 "asks would pile up — raise the interval or use a smaller live " +
+                 "model.";
+          liveResult(msg, "var(--warn-ink)");
+          return;
+        }
+        if (!p.enabled) {
+          liveResult(msg + " Live suggestions are currently switched OFF — tick " +
+                     "the box above and Save to use them.", "var(--warn-ink)");
+          return;
+        }
+        liveResult(msg + " Save to keep these settings.", "var(--success)");
+      })
+      .catch(function () {
+        liveTestBtn.disabled = false;
+        liveResult("Test request failed — is the server still running?", "var(--danger)");
+      });
+  });
+
+
+  // ---- Fit to your GPU -----------------------------------------------------
+  // The old "Suggest settings" guessed a context window from the parameter
+  // count, which is the wrong variable (see setup/modelfit.py). This asks the
+  // server to do the real arithmetic per installed model and lets the operator
+  // apply the answer with one click.
+  var VERDICT_STYLE = {
+    comfortable: { label: "fits comfortably", color: "var(--success)" },
+    tight: { label: "fits, tight", color: "var(--warn-ink)" },
+    "too big": { label: "will not fit", color: "var(--danger)" },
+    unknown: { label: "unknown", color: "var(--ink-faint)" },
+  };
+
+  function fitStatus(text, color) {
+    var el = $("#fit-status");
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = color || "var(--ink-soft)";
+  }
+
+  function renderFitRows(data) {
+    var host = $("#fit-table");
+    if (!host) return;
+    host.textContent = "";
+    var models = data.models || [];
+    if (models.length === 0) {
+      fitStatus(data.error || "Ollama reported no installed models.", "var(--danger)");
+      return;
+    }
+    models.forEach(function (m) {
+      var style = VERDICT_STYLE[m.verdict] || VERDICT_STYLE.unknown;
+      var row = document.createElement("div");
+      row.className = "fit-row";
+      if (m.name === data.currentModel) row.classList.add("is-current");
+
+      var head = document.createElement("div");
+      head.className = "fit-head";
+      var name = document.createElement("span");
+      name.className = "fit-name";
+      name.textContent = m.name + (m.name === data.currentModel ? "  (in use)" : "");
+      var verdict = document.createElement("span");
+      verdict.className = "fit-verdict";
+      verdict.textContent = style.label;
+      verdict.style.color = style.color;
+      head.appendChild(name);
+      head.appendChild(verdict);
+      row.appendChild(head);
+
+      var facts = document.createElement("div");
+      facts.className = "fit-facts";
+      var bits = [];
+      if (m.paramSize) bits.push(m.paramSize);
+      if (m.quantization) bits.push(m.quantization);
+      bits.push(m.weightsGB + " GB weights");
+      if (m.kvMBPer1k != null) bits.push(m.kvMBPer1k + " MB per 1k ctx");
+      if (m.maxCtx) bits.push("fits " + m.maxCtx.toLocaleString() + " ctx");
+      if (m.trainedCtx) bits.push("trained to " + m.trainedCtx.toLocaleString());
+      facts.textContent = bits.join(" · ");
+      row.appendChild(facts);
+
+      if (m.note) {
+        var note = document.createElement("div");
+        note.className = "fit-note";
+        note.textContent = m.note;
+        row.appendChild(note);
+      }
+
+      if (m.recommendedCtx) {
+        var actions = document.createElement("div");
+        actions.className = "fit-actions";
+        var use = document.createElement("button");
+        use.type = "button";
+        use.className = "ghost small";
+        use.textContent = "Use this model at " + m.recommendedCtx.toLocaleString();
+        use.title = "Fills in the summary model and context window above — review, then Save.";
+        use.addEventListener("click", function () {
+          $("#ollamaModel").value = m.name;
+          $("#numCtx").value = m.recommendedCtx;
+          editedOllama = true;
+          editedAi.numCtx = true;
+          toast("Filled in — press Save to keep it");
+          $("#ollamaModel").scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        var live = document.createElement("button");
+        live.type = "button";
+        live.className = "ghost small";
+        live.textContent = "Use for live suggestions";
+        live.title = "Sets this as the mid-meeting live model (a smaller one answers inside a meeting).";
+        live.addEventListener("click", function () {
+          $("#liveModel").value = m.name;
+          editedAi.liveModel = true;
+          toast("Set as the live model — press Save to keep it");
+        });
+        actions.appendChild(use);
+        actions.appendChild(live);
+        row.appendChild(actions);
+      }
+      host.appendChild(row);
+    });
+  }
+
+  function renderFitLoaded(loaded) {
+    var el = $("#fit-loaded");
+    if (!el) return;
+    if (!loaded || loaded.length === 0) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    // The estimates above predict; this is what Ollama actually did. A model
+    // running partly on the CPU is the real cause of "the AI is so slow".
+    var spilled = loaded.filter(function (m) { return !m.fullyOnGpu; });
+    var parts = loaded.map(function (m) {
+      return m.name + ": " + m.vramGB + " of " + m.sizeGB + " GB on the GPU" +
+        (m.onGpuPercent != null ? " (" + m.onGpuPercent + "%)" : "") +
+        (m.contextLength ? ", context " + m.contextLength.toLocaleString() : "");
+    });
+    el.textContent = "Loaded right now — " + parts.join("; ") +
+      (spilled.length
+        ? ". Part of that is on the CPU, which is many times slower: lower the " +
+          "context window, or use a model from the list below."
+        : ".");
+    el.classList.toggle("err", spilled.length > 0);
+  }
+
+  function loadFit() {
+    var vram = parseFloat($("#fit-vram").value) || 24;
+    var kv = $("#fit-kv").value;
+    fitStatus("Reading your installed models…");
+    fetch("/setup/model-fit?vramGB=" + encodeURIComponent(vram) +
+          "&kvCache=" + encodeURIComponent(kv))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) fitStatus(data.error, "var(--danger)");
+        else fitStatus(data.models.length + " installed model(s) measured against " +
+                       data.vramGB + " GB.", "var(--ink-soft)");
+        renderFitLoaded(data.loaded);
+        renderFitRows(data);
+      })
+      .catch(function () {
+        fitStatus("Could not read the model list — is the server still running?",
+                  "var(--danger)");
+      });
+  }
+
+  var fitBtn = $("#fit-refresh");
+  if (fitBtn) fitBtn.addEventListener("click", loadFit);
+  var fitKv = $("#fit-kv");
+  if (fitKv) fitKv.addEventListener("change", function () {
+    var note = $("#fit-kv-note");
+    if (note) note.hidden = fitKv.value === "f16";
+    loadFit();
+  });
+
   $("#whisperModel").addEventListener("input", function () { editedWhisper = true; });
   $("#copy").addEventListener("click", function () {
     var text = $("#code").textContent;

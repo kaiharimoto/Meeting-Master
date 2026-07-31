@@ -55,7 +55,17 @@ async function throwHttpError(res, what) {
   }
   if (body.length > BODY_SNIPPET_LIMIT) body = `${body.slice(0, BODY_SNIPPET_LIMIT)}…`;
   const detail = body ? ` — ${body}` : '';
-  throw new Error(`Home server returned ${res.status} while ${what}${detail}`);
+  const err = new Error(`Home server returned ${res.status} while ${what}${detail}`);
+  // Callers that must ACT on the status (the live loop treats 409 "GPU busy"
+  // and 503 "switched off" as normal, not as failures to back off from) get it
+  // as a number instead of having to pattern-match the message.
+  err.status = res.status;
+  try {
+    err.detail = String(JSON.parse(body).detail || '');
+  } catch {
+    err.detail = ''; // not a FastAPI error envelope — the message carries it
+  }
+  throw err;
 }
 
 /**
@@ -224,6 +234,79 @@ async function applyJobNames(jobId, mapping) {
   return res.json();
 }
 
+/** POST /live/questions — mid-meeting Q&A flagging over a live-transcript
+ *  window. Callers treat any failure as a silent skip (live is advisory). */
+/**
+ * Ask the server to draft answers for questions the operator captured but left
+ * blank. Each question carries WHEN it was captured, so the server can read the
+ * transcript around that moment instead of the whole thing.
+ * @param {string} jobId
+ * @param {{questions: Array<{id, question, atMs}>, attendees: string[]}} payload
+ */
+async function draftAnswers(jobId, payload) {
+  const { serverUrl, token } = requireServerConfig();
+  const res = await doFetch(
+    `${serverUrl}/jobs/${encodeURIComponent(jobId)}/answers`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'draft answers'
+  );
+  if (!res.ok) await throwHttpError(res, 'draft answers');
+  return res.json();
+}
+
+/** GET /live/config — how this server wants the mid-meeting loop driven. */
+async function getLiveConfig() {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/config`,
+    { headers, signal: AbortSignal.timeout(15000) },
+    'reading the live-suggestion settings'
+  );
+  if (!res.ok) await throwHttpError(res, 'reading the live-suggestion settings');
+  return res.json();
+}
+
+/** POST /live/warmup — load the live model before the meeting's first ask. */
+async function postLiveWarmup(timeoutMs) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/warmup`,
+    { method: 'POST', headers, signal: AbortSignal.timeout(timeoutMs || 120000) },
+    'warming up the live AI model'
+  );
+  if (!res.ok) await throwHttpError(res, 'warming up the live AI model');
+  return res.json();
+}
+
+/**
+ * POST /live/questions — one mid-meeting ask: recent transcript in, candidate
+ * Q&A pairs + key insights out.
+ *
+ * The timeout is passed IN (from GET /live/config) and is deliberately longer
+ * than the server's own budget. A client that gives up first turns a slow but
+ * working server into a permanent failure: every tick records an error, the
+ * loop backs off, and the operator sees nothing for the whole meeting.
+ */
+async function postLiveQuestions(payload, timeoutMs) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/questions`,
+    {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs || 110000),
+    },
+    'asking for live suggestions'
+  );
+  if (!res.ok) await throwHttpError(res, 'asking for live suggestions');
+  return res.json();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -236,4 +319,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions, getLiveConfig, postLiveWarmup, draftAnswers };

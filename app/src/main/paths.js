@@ -40,6 +40,17 @@ const WEIGHT_DIRS = Object.freeze({
   'NeueHaasGrotesk-Medium': 'medium',
 });
 
+/** Where in-app recordings live (created on demand). Never wiped by updates. */
+function recordingsDir() {
+  const dir = path.join(app.getPath('userData'), 'recordings');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    // Recording start will surface the real error when it tries to write.
+  }
+  return dir;
+}
+
 /** Update-proof, user-writable font location (created on demand). */
 function userFontsDir() {
   const dir = path.join(app.getPath('userData'), 'fonts');
@@ -140,4 +151,12 @@ function migrateFonts() {
   }
 }
 
-module.exports = { fontsDir, userFontsDir, bundledFontsDir, printHtmlPath, findFont, migrateFonts };
+module.exports = {
+  fontsDir,
+  userFontsDir,
+  bundledFontsDir,
+  recordingsDir,
+  printHtmlPath,
+  findFont,
+  migrateFonts,
+};

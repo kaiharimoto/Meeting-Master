@@ -12,6 +12,7 @@ const CHANNELS = Object.freeze({
   JOB_PROGRESS: 'job:progress',
   PDF_RENDER: 'pdf:render',
   PDF_OPEN: 'pdf:open',
+  PDF_PREVIEW: 'pdf:preview',
   PDF_SEND_HOME: 'pdf:sendHome',
   PDF_SEND_LAPTOP: 'pdf:sendLaptop',
   FILE_PICK_WAV: 'file:pickWav',
@@ -45,7 +46,33 @@ const CHANNELS = Object.freeze({
   JOB_EMAIL_PREVIEW: 'job:emailPreview',
   JOB_NAMES_GET: 'job:namesGet',
   JOB_NAMES_APPLY: 'job:namesApply',
+  JOB_DRAFT_ANSWERS: 'job:draftAnswers',
   FILE_SAVE_TEXT: 'file:saveText',
+  // In-app recording (v0.8.0)
+  REC_START: 'rec:start',
+  REC_APPEND: 'rec:append',
+  REC_STOP: 'rec:stop',
+  REC_DISCARD: 'rec:discard',
+  REC_ORPHANS: 'rec:orphans',
+  REC_ORPHAN_RESOLVE: 'rec:orphanResolve',
+  REC_STAT: 'rec:stat',
+  REC_OPEN_FOLDER: 'rec:openFolder',
+  REC_EVENT: 'rec:event', // main -> renderer push (force-stop on window close)
+  // Live mid-meeting transcription (v0.9.0)
+  LIVE_SUPPORT_GET: 'live:supportGet',
+  LIVE_MODEL_DOWNLOAD: 'live:modelDownload',
+  LIVE_MODEL_DELETE: 'live:modelDelete',
+  LIVE_MODEL_EVENT: 'live:modelEvent', // main -> renderer push (download progress)
+  LIVE_START: 'live:start',
+  LIVE_PCM: 'live:pcm',
+  LIVE_STOP: 'live:stop',
+  LIVE_EVENT: 'live:event', // main -> renderer push (segments, lag, flag candidates)
+  // Usability batch (v0.10.0)
+  PREFLIGHT_GET: 'preflight:get',
+  MINI_OPEN: 'mini:open',
+  MINI_CMD: 'mini:cmd', // mini window -> main; relayed to the main renderer as a push
+  MINI_STATUS: 'mini:status', // main renderer -> main; relayed to the mini window
+  MINI_STATE: 'mini:state', // main -> mini window push (timer/level/status)
 });
 
 const JOB_STATES = Object.freeze([

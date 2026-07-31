@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from . import updates
 from .config import get_settings
 from .events import EventBroker, RingLogHandler
-from .routes import health, jobs, monitor
+from .routes import health, jobs, live, monitor
 from .setup import routes as setup_routes
 from .store import JobStore
 from .worker import reset_queue, worker_loop
@@ -80,6 +80,7 @@ app = FastAPI(title="Meeting Master — Home AI Server", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(setup_routes.router)
 app.include_router(jobs.router)
+app.include_router(live.router)
 app.include_router(monitor.router)
 
 

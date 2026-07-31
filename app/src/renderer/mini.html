@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+  />
+  <title>Meeting Master — recording</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6fa;
+      --ink: #1c222b;
+      --ink-soft: #57606d;
+      --border: #d9dfe8;
+      --danger: #b91c1c;
+      --meter: #15803d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0d13;
+        --ink: #e7ebf2;
+        --ink-soft: #9aa4b2;
+        --border: #262d3a;
+        --danger: #f87171;
+        --meter: #4ade80;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font: 13px/1.35 system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 8px 10px;
+      gap: 6px;
+      -webkit-app-region: drag; /* the whole strip drags… */
+      user-select: none;
+    }
+    button {
+      -webkit-app-region: no-drag; /* …except the controls */
+      font: inherit;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 2px 9px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--ink-soft); }
+    .row { display: flex; align-items: center; gap: 8px; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--danger);
+      animation: pulse 1.6s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .dot.is-paused { animation: none; background: var(--ink-soft); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    #timer { font-weight: 700; font-variant-numeric: tabular-nums; }
+    #title {
+      flex: 1;
+      color: var(--ink-soft);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      min-width: 0;
+    }
+    #meter {
+      height: 4px; border-radius: 2px; background: var(--border); overflow: hidden;
+    }
+    #meter-fill { height: 100%; width: 0%; background: var(--meter); }
+    .controls { justify-content: flex-end; }
+    .controls .primary { font-weight: 600; }
+    button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    /* Visually hidden, still announced. */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dot { animation: none !important; }
+      * { transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Accessible names, not glyphs: "Q" and "⤢" were the whole announcement
+       for two of these four buttons, the timer ticked silently, and the level
+       meter had no name at all. -->
+  <div class="row">
+    <span id="dot" class="dot" aria-hidden="true"></span>
+    <span id="timer" role="timer" aria-live="off" aria-label="Elapsed recording time">00:00</span>
+    <span id="title"></span>
+  </div>
+  <div id="meter" role="img" aria-label="Microphone input level"><div id="meter-fill"></div></div>
+  <div class="row controls">
+    <button id="q-btn" title="Open the app and capture a question">
+      <span aria-hidden="true">Q</span><span class="sr-only">Capture a question in the app</span>
+    </button>
+    <button id="pause-btn">Pause</button>
+    <button id="stop-btn" class="primary">Stop</button>
+    <button id="expand-btn" title="Back to the full window">
+      <span aria-hidden="true">⤢</span><span class="sr-only">Back to the full window</span>
+    </button>
+  </div>
+  <script type="module" src="js/mini.js"></script>
+</body>
+</html>

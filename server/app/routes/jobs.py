@@ -1,4 +1,5 @@
-"""Job endpoints: upload audio+meeting, poll status, post back the PDF."""
+"""Job endpoints: upload audio+meeting, poll status, post back the PDF, and
+draft answers for questions the operator captured but left blank."""
 
 import json
 import logging
@@ -14,14 +15,21 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from .. import worker
 from ..auth import verify_token
 from ..config import get_settings
 from ..mailer import sender
-from ..models import READY_STATES, JobRecord, JobState, MeetingMeta
+from ..models import (
+    READY_STATES,
+    AnsweredQuestion,
+    JobRecord,
+    JobState,
+    MeetingMeta,
+)
+from ..pipeline import extract
 from ..store import JobStore
 
 log = logging.getLogger(__name__)
@@ -147,3 +155,111 @@ async def receive_pdf(
     store.update(record, state=JobState.emailed)
     log.info("Job %s emailed", job_id)
     return {"ok": True, "emailed": True, "error": None}
+
+
+# ---- Answer drafting ---------------------------------------------------------
+#
+# A note-taker types the question the moment it is asked and the answer arrives
+# a minute or three later, by which time they are writing down the next
+# question. This endpoint closes that gap: give it the questions that came out
+# of the meeting with no answer, plus WHEN each was captured, and it reads the
+# transcript around that moment and drafts the answer.
+#
+# Suggestions only, like every other AI output here — the laptop shows them for
+# approval and nothing reaches a card until the operator says so.
+
+# How much transcript to read around a captured question. Biased forward,
+# heavily: the operator writes the question down as it is being asked, and the
+# answer follows. The backward slack covers the seconds they spent typing.
+_WINDOW_BEFORE_S = 45.0
+_WINDOW_AFTER_S = 210.0
+
+# Guards against a buggy client turning one request into an unbounded Ollama
+# workload. A real meeting does not leave 25 questions unanswered.
+_MAX_ANSWER_ITEMS = 25
+_MAX_WINDOW_CHARS = 9000
+_MAX_QUESTION_CHARS = 500
+
+
+class BlankQuestion(BaseModel):
+    """One captured question with no answer, and when it was captured."""
+
+    id: str = Field(min_length=1, max_length=200)
+    question: str = Field(min_length=1)
+    # Milliseconds into the recording, from the laptop's capture clock. None
+    # for questions typed outside a recording — those search the whole
+    # transcript instead of a window.
+    atMs: float | None = None
+
+
+class DraftAnswersRequest(BaseModel):
+    questions: list[BlankQuestion]
+    attendees: list[str] = []
+
+
+class DraftAnswersResponse(BaseModel):
+    answers: list[AnsweredQuestion]
+
+
+def _window_for(record: JobRecord, at_ms: float | None) -> str:
+    """The transcript around ``at_ms``, or the whole thing when it is unknown.
+
+    whisper.cpp gives per-segment start/end times (pipeline/transcribe.py), so
+    this is a real slice of the conversation rather than a guess proportional
+    to character count.
+    """
+    transcript = record.transcript
+    if transcript is None:
+        return ""
+    segments = transcript.segments or []
+    if at_ms is None or not segments:
+        return (transcript.text or "")[:_MAX_WINDOW_CHARS]
+
+    at_s = at_ms / 1000.0
+    lo = at_s - _WINDOW_BEFORE_S
+    hi = at_s + _WINDOW_AFTER_S
+    picked = [s.text for s in segments if s.end >= lo and s.start <= hi]
+    window = " ".join(t.strip() for t in picked if t and t.strip())
+    if not window:
+        # The stamp landed outside the transcript (clock skew, a trimmed
+        # recording) — fall back to everything rather than answering nothing.
+        return (transcript.text or "")[:_MAX_WINDOW_CHARS]
+    return window[:_MAX_WINDOW_CHARS]
+
+
+@router.post("/jobs/{job_id}/answers", response_model=DraftAnswersResponse)
+async def draft_answers(
+    request: Request, job_id: str, body: DraftAnswersRequest
+) -> DraftAnswersResponse:
+    record = _store(request).get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown job id: {job_id}")
+    if record.transcript is None or not (record.transcript.text or "").strip():
+        raise HTTPException(
+            status_code=409,
+            detail="This job has no transcript yet — answers can only be drafted "
+            "once transcription has finished.",
+        )
+    if not body.questions:
+        return DraftAnswersResponse(answers=[])
+
+    items = [
+        {
+            "id": q.id,
+            "question": q.question.strip()[:_MAX_QUESTION_CHARS],
+            "window": _window_for(record, q.atMs),
+        }
+        for q in body.questions[:_MAX_ANSWER_ITEMS]
+    ]
+    attendees = [a.strip() for a in body.attendees[:50] if a and a.strip()]
+
+    settings = get_settings()
+    try:
+        answers = await extract.run_answers(items, attendees, settings)
+    except Exception as exc:  # Ollama unreachable — the laptop shows the error
+        log.warning("Answer drafting failed for job %s: %s", job_id, exc)
+        raise HTTPException(
+            status_code=502, detail=f"Answer drafting failed: {exc}"
+        ) from exc
+    log.info("Drafted %d answer(s) for job %s", len(answers), job_id)
+    return DraftAnswersResponse(answers=answers)

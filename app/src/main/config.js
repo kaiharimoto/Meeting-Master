@@ -21,6 +21,11 @@ const KEYS = [
   'PAGE_SIZE',
   'SMTP_USER',
   'SMTP_APP_PASSWORD',
+  'MIC_DEVICE_ID',
+  'MIC_DEVICE_LABEL',
+  'LIVE_TRANSCRIPT_ENABLED',
+  'LIVE_MODEL',
+  'UI_ZOOM',
 ];
 
 // Parse simple KEY=VALUE lines. Blank lines and #-comments are ignored.
@@ -64,6 +69,17 @@ const FIELD_TO_KEY = Object.freeze({
   pageSize: 'PAGE_SIZE',
   smtpUser: 'SMTP_USER',
   smtpPassword: 'SMTP_APP_PASSWORD',
+  // Default input device for in-app recording. The label is stored too so a
+  // Windows reinstall (which reshuffles device ids) can re-match by name.
+  micDeviceId: 'MIC_DEVICE_ID',
+  micDeviceLabel: 'MIC_DEVICE_LABEL',
+  // Live mid-meeting transcription: '1' = the Record panel checkbox defaults
+  // on; model ∈ {small, base} (validated by whisperLocator's whitelist).
+  liveTranscriptEnabled: 'LIVE_TRANSCRIPT_ENABLED',
+  liveModel: 'LIVE_MODEL',
+  // UI zoom: '' = auto (chosen from the display's size), else a factor like
+  // '1.1'. Written by Ctrl+=/Ctrl+- and the Settings picker (see zoom.js).
+  uiZoom: 'UI_ZOOM',
 });
 
 /**
@@ -127,6 +143,11 @@ function get() {
     pageSize,
     smtpUser: val('SMTP_USER'),
     smtpAppPassword: val('SMTP_APP_PASSWORD'),
+    micDeviceId: val('MIC_DEVICE_ID'),
+    micDeviceLabel: val('MIC_DEVICE_LABEL'),
+    liveTranscriptEnabled: val('LIVE_TRANSCRIPT_ENABLED') === '1',
+    liveModel: val('LIVE_MODEL').toLowerCase() === 'base' ? 'base' : 'small',
+    uiZoom: val('UI_ZOOM'),
     configPath: loadedPath || candidates[0],
   };
 }

@@ -4,6 +4,8 @@
 // only switches screens, keeps the active state honest, and announces screen
 // changes so screens can refresh on entry.
 
+import { closeModal } from './modalKit.js';
+
 const SCREENS = {
   meeting: 'screen-meeting',
   activity: 'screen-activity',
@@ -45,7 +47,12 @@ function updateActive() {
   };
   for (const [id, active] of Object.entries(states)) {
     const el = document.getElementById(id);
-    if (el) el.classList.toggle('active', Boolean(active));
+    if (!el) continue;
+    el.classList.toggle('active', Boolean(active));
+    // "active" was a class and nothing else — a screen reader had no way to
+    // know which of five identical buttons was the one you were on.
+    if (active) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   }
 }
 
@@ -87,9 +94,9 @@ export function initNav() {
 }
 
 // Opening a screen should dismiss any open sheet so nav reads as one place.
-function closeSheets() {
+export function closeSheets() {
   for (const id of ['history-modal', 'settings-modal']) {
     const el = document.getElementById(id);
-    if (el && !el.hidden) el.hidden = true;
+    if (el && !el.hidden) closeModal(el);
   }
 }

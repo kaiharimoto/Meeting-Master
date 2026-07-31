@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import re
+import shlex
 from pathlib import Path
 
 from .. import config
@@ -28,6 +29,43 @@ _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 # whisper.cpp with --print-progress emits lines like
 #   "whisper_print_progress_callback: progress =  40%"
 _PROGRESS_RE = re.compile(r"progress\s*=\s*(\d{1,3})\s*%")
+
+# A phrase repeated this many times IN A ROW is a transcription loop, not a
+# meeting. Six is comfortably above anything real speech does ("yeah yeah yeah"
+# tops out well below it) and well below the dozens a loop produces.
+_LOOP_RUN = 6
+
+
+def detect_repetition_loop(segments: list[TranscriptSegment]) -> str | None:
+    """Describe the worst repetition loop in a transcript, or None if clean.
+
+    Whisper hallucinates a filler phrase over quiet or non-speech audio and,
+    with prompt carry-over enabled, repeats it — sometimes for pages. The
+    transcript still LOOKS like a transcript, so it flows into the summary and
+    the Q&A extraction as if it were speech. Saying so is the difference
+    between "the notes are strangely thin" and knowing why.
+    """
+    longest_run, longest_text = 0, ""
+    run_text, run_len = None, 0
+    for seg in segments:
+        text = seg.text.strip().casefold()
+        if not text:
+            continue
+        if text == run_text:
+            run_len += 1
+        else:
+            run_text, run_len = text, 1
+        if run_len > longest_run:
+            longest_run, longest_text = run_len, seg.text.strip()
+    if longest_run < _LOOP_RUN:
+        return None
+    return (
+        f'The transcript repeats "{longest_text}" {longest_run} times in a row — '
+        "that is a transcription loop over quiet or unclear audio, not speech. "
+        "The notes from it will be poor. Check the recording's levels around "
+        "that point; if the audio is fine, lower whisper's max-context "
+        "(WHISPER_MAX_CONTEXT) or try the fallback model."
+    )
 
 
 def _pick_model_file(settings: Settings, meeting: MeetingMeta) -> Path:
@@ -75,7 +113,12 @@ async def run(
         "-of", str(out_base),
         "-l", settings.WHISPER_LANGUAGE,
         "--print-progress",  # emit "progress = N%" to stderr for the UI
+        # See WHISPER_MAX_CONTEXT: 0 breaks the feedback loop that turns a quiet
+        # stretch of a meeting into "I don't know." repeated for pages.
+        "-mc", str(max(0, int(settings.WHISPER_MAX_CONTEXT))),
     ]
+    if settings.WHISPER_EXTRA_ARGS.strip():
+        cmd += shlex.split(settings.WHISPER_EXTRA_ARGS)
     log.info("Transcribing %s with %s", norm_path.name, model_file.name)
     # stdout goes to the JSON file (-oj -of); read stderr line-by-line so we can
     # surface live progress instead of blocking silently in communicate().
@@ -142,4 +185,7 @@ async def run(
         )
         if text:
             texts.append(text)
-    return Transcript(text=" ".join(texts), segments=segments)
+    warning = detect_repetition_loop(segments)
+    if warning:
+        log.warning("Transcript quality: %s", warning)
+    return Transcript(text=" ".join(texts), segments=segments, warning=warning)

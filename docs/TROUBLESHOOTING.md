@@ -48,15 +48,29 @@ Everything updates from the **home server's dashboard** (Overview → Updates):
   pasted once into the dashboard's Settings tab. "check failed" with an HTTP
   401/403/404 usually means the token is missing, expired, or lacks that
   permission.
-- **Operator laptop:** updates fully automatically — it downloads new versions
-  from the home server in the background and shows a "Restart to update" toast
-  (it also installs on the next quit). Your licensed fonts are safe: they live
-  in the update-proof fonts folder (Settings → Open fonts folder).
-- **Home server machine (v0.3.0+):** the app updates itself the same way from
-  its own cached feed — use tray → **"Restart to update"** (or just quit and
-  relaunch) and the bundled server updates with it. Prefer doing this while no
-  meeting is mid-pipeline; a job interrupted by the restart shows as failed
-  and the recording can simply be re-submitted.
+- **Nothing waits for a restart unless you want it to.** Once a version is
+  downloaded there are three ways to apply it *now*, and they all do the same
+  thing: the dashboard's Updates card → **Install now**, the version label in
+  the app's sidebar footer (it becomes a button reading
+  "v0.18.0 → v0.19.0 — restart"), or tray → **Restart to update**. Leaving it
+  alone is also fine — it installs whenever the app next quits.
+- **Operator laptop:** downloads new versions from the home server in the
+  background and shows an "Update ready" toast with an install action. Your
+  licensed fonts are safe: they live in the update-proof fonts folder
+  (Settings → Open fonts folder).
+- **Home server machine (v0.3.0+):** the app installs the update and the
+  bundled server comes back up with it, so the install restarts the app (a few
+  seconds). Prefer doing it while no meeting is mid-pipeline — the app refuses
+  while a job is still processing rather than killing it, and a job interrupted
+  by a restart shows as failed and can simply be re-submitted.
+- **A server running on its own** (not inside the app — an adopted or legacy
+  standalone install) installs the cached installer itself and restarts only
+  the server: dashboard → Updates → **Install now**. No app restart involved.
+- **The Updates card shows no install button.** Before v0.19.1 it never
+  appeared inside the app window (a stylesheet rule hid the only row that
+  worked there) and appeared *unconditionally* in a browser, where clicking it
+  only produced an explanation page. Update to v0.19.1+; until then use the
+  sidebar version label or the tray.
 - A laptop only sees an update **after** the home server has cached it, so
   if the laptop seems behind, run "Check for updates" on the dashboard first.
 
@@ -202,6 +216,56 @@ passes `preferCSSPageSize: true` to keep the `@page` margins). If you've
 touched `app/src/main/pdf.js`, check those options are still there;
 `print.css` additionally sets `print-color-adjust: exact` as belt-and-braces.
 
+## Live suggestions never appear during a meeting
+
+The rail beside the Q&A panel now tells you which of these it is — read its
+status line first (it is one quiet sentence under the heading, deliberately not
+a popup).
+
+- **"Live suggestions are switched off on the home server."** Turn them on:
+  dashboard → **Settings** → **Live suggestions** → tick the box → **Save**.
+- **"The home server's AI is not answering…" / "Last request failed…"** The ask
+  reached the server and failed. Click **Test live suggestions** on that same
+  card — it runs the real request over a fixed sample and reports the actual
+  error, the model, and the latency.
+- **"Live suggestions are paused — … Retrying every 2 minutes."** Three failures
+  in a row. Almost always the model being too slow to answer inside a meeting.
+- **"The home server's GPU is busy processing another meeting."** A previous
+  meeting is still being transcribed or summarised on the same GPU. Nothing is
+  broken: live suggestions stand aside so both aren't slowed down, and resume by
+  themselves when the job finishes.
+- **"Nothing new heard for N min — still listening."** The loop only asks when
+  there is enough new draft transcript to be worth a GPU call, and it is telling
+  you how long it has been quiet. If the meeting is definitely talking, the live
+  *transcript* is the thing to check, not suggestions.
+- **The rail never appears at all.** Suggestions ride on the live transcript, so
+  **Live transcript (beta)** must be ticked in the Record panel (and its model
+  downloaded via Settings → Live transcription). No live transcript, nothing to
+  ask about.
+- **Suggestions appear but you never see them.** The rail lives on the Meeting
+  screen. While you are on Activity or the Dashboard, the count rides on the
+  sidebar's **Meeting** item instead — click it to triage.
+- **Nothing but "Listening…" for the whole meeting.** A real meeting often
+  genuinely contains no answered questions for minutes at a time. After five
+  quiet minutes the rail says how long it has been quiet, so a working-but-quiet
+  loop is distinguishable from a stuck one.
+
+Two settings do most of the work when it is slow (dashboard → Settings → Live
+suggestions):
+
+- **Live model** — blank means the summary model, which is sized for quality
+  after the meeting, not for answering during one. Naming a smaller installed
+  model here is the single most effective fix.
+- **Ask every** — raise it above the measured latency. An ask that takes longer
+  than the interval lands on top of the next one.
+
+Historical note, in case you are reading an older build's behaviour: before
+v0.19.0 the laptop gave up after 45 seconds while the server allowed itself 60,
+so a home PC running a big model failed *every* ask from the client side while
+answering perfectly well — and nothing on screen said so. The laptop now
+derives its timeout from the server's (`GET /live/config`) and is always the
+more patient of the two.
+
 ## Summary covers only the end of the meeting
 
 Classic silent-truncation symptom: the model only ever saw the tail of the
@@ -211,15 +275,60 @@ transcript because the context window was too small.
   `options.num_ctx` (it does — `server/app/pipeline/summarize.py`). The
   OpenAI-compatible `/v1` endpoint **ignores** `num_ctx` and truncates at the
   default 2048 tokens.
-- The server sets `NUM_CTX=32768`. **Verify what Ollama actually loaded:** while
-  a summarize stage is running, run `ollama ps` on the home PC — the `CONTEXT`
-  column must show `32768`. If it shows `2048`/`4096`, an old Ollama version or
-  a modified request payload is dropping the option.
-- A bigger context needs more VRAM; if `ollama ps` shows a CPU/GPU split, the
-  model no longer fits — see the next section.
+- The server sets `NUM_CTX=32768`. **Verify what Ollama actually loaded:** the
+  dashboard's Settings tab → **Fit to your GPU** shows a "Loaded right now" line
+  with the context and the percentage of the model on the GPU (the same thing
+  `ollama ps` reports, without the terminal). If the context shows `2048`/`4096`,
+  an old Ollama version or a modified request payload is dropping the option.
+- A bigger context needs more VRAM. **Anything under 100% on the GPU means
+  layers spilled to the CPU** — that is the real cause of most "the AI is slow"
+  reports, and the fix is a smaller context or a smaller model, both of which
+  that panel will size for you.
 - Transcripts that still exceed the 32k window are handled by the chunked
   map-reduce fallback in `summarize.py` (summarize portions, then summarize
   the summaries) — slower, but nothing is dropped.
+
+## "The context window is too small for the … stage"
+
+The three numbers have to add up: `NUM_CTX` must hold the tokens a stage
+reserves for its **answer**, plus the prompt, plus some transcript. Lower the
+context far enough (or raise a stage's max output tokens far enough) and there
+is nothing left for the meeting.
+
+The AI stage now fails immediately with a message naming all three numbers and
+the minimum that would work, and the dashboard refuses to *save* such a
+combination in the first place. Fix it by raising the context window (Settings →
+Fit to your GPU suggests one that fits your card) or lowering that stage's max
+output tokens.
+
+Before v0.19.2 this did not error — it hung. The budget went negative, the
+transcript was split into one-token pieces, and a 60,000-character meeting
+became 20,000 sequential Ollama calls each seeing three characters. If you ever
+saw an AI stage run for hours with the GPU busy and no progress, that was this.
+
+## The transcript repeats a phrase over and over ("I don't know. I don't know…")
+
+That is a whisper repetition loop over quiet or unclear audio, not something
+anybody said. Two things drive it, and both are handled from v0.19.3:
+
+- **Prompt carry-over.** whisper.cpp feeds the previous window's text into the
+  next window as context. Once a filler phrase appears, it is in the prompt that
+  produces the next window, which makes it likelier again — a self-sustaining
+  loop. `WHISPER_MAX_CONTEXT=0` (the new default) switches carry-over off. Set
+  it back to `-1` for whisper.cpp's own behaviour if you prefer.
+- **The audio.** Loops start where there is little to transcribe: a long silence,
+  a muted stretch, room noise, or a microphone that dropped out. Check the
+  recording's level around the point where the repetition starts.
+
+The server now detects it (a phrase repeated 6+ times in a row) and the laptop
+raises **"This transcript looks damaged"** with the phrase and the count *before*
+you press Start AI. A looped transcript makes genuinely bad notes, so it is worth
+re-recording or trimming the dead audio rather than summarizing it.
+
+**It is not the live transcript.** The live draft is never used for the notes —
+see [ARCHITECTURE.md](ARCHITECTURE.md) ("Two transcripts, and which one becomes
+the notes"). The notes always come from the home server's full-quality pass over
+the uploaded recording, and that is enforced by a test rather than by convention.
 
 ## Transcription failed or produced garbage
 

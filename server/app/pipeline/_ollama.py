@@ -26,9 +26,51 @@ _ASCII_CHARS_PER_TOKEN = 3
 # Headroom reserved for the system prompt, meeting context, and chat framing.
 PROMPT_OVERHEAD_TOKENS = 1000
 
+# The least transcript a chunk may carry and still be worth sending. Below this
+# the map-reduce split stops being a safeguard and becomes a catastrophe: at
+# NUM_CTX=2048 with SUMMARY_NUM_PREDICT=1400 the budget goes NEGATIVE, the old
+# `max(budget, 1)` turned that into one-token chunks, and a 60k-character
+# transcript became 20,000 sequential Ollama calls each seeing three characters.
+# It never errored — it just never finished, which is the worst way to fail.
+MIN_INPUT_BUDGET_TOKENS = 1024
+
 # Generation can take minutes for a long transcript on a local model, hence the
 # generous read timeout (connect stays snappy).
 DEFAULT_TIMEOUT = httpx.Timeout(600.0, connect=10.0)
+
+
+# Which models advertise a "thinking" capability, cached per model name so the
+# probe costs one request per model per server run rather than one per stage.
+_THINKING_CACHE: dict[str, bool] = {}
+
+
+async def supports_thinking(
+    client: httpx.AsyncClient, settings: Settings, model: str
+) -> bool:
+    """Does this model have a reasoning/thinking mode? (cached, never raises)
+
+    It matters because every stage here asks for STRICT JSON with a small
+    num_predict. A thinking model left to think spends that budget on reasoning
+    and can return no JSON at all — which surfaces as "the summary failed" with
+    a model that is in fact working perfectly. Knowing lets us turn it off.
+    """
+    if model in _THINKING_CACHE:
+        return _THINKING_CACHE[model]
+    supported = False
+    try:
+        resp = await client.post(
+            f"{settings.OLLAMA_URL.rstrip('/')}/api/show", json={"model": model}
+        )
+        resp.raise_for_status()
+        caps = resp.json().get("capabilities") or []
+        supported = any(str(c).lower() == "thinking" for c in caps)
+    except Exception:
+        # Older Ollama, or the model vanished. Assume no thinking mode: sending
+        # `think` to a model that doesn't support it is an error, so the safe
+        # default is to say nothing.
+        supported = False
+    _THINKING_CACHE[model] = supported
+    return supported
 
 
 def estimate_tokens(text: str) -> int:
@@ -53,9 +95,28 @@ def split_by_token_budget(text: str, budget_tokens: int) -> list[str]:
     return chunks or [text]
 
 
-def input_budget_tokens(settings: Settings, num_predict: int) -> int:
-    """How many transcript tokens fit alongside the prompt + reserved output."""
-    return settings.NUM_CTX - num_predict - PROMPT_OVERHEAD_TOKENS
+def input_budget_tokens(settings: Settings, num_predict: int, stage: str = "AI") -> int:
+    """How many transcript tokens fit alongside the prompt + reserved output.
+
+    Raises when the three numbers leave no usable room, naming all three: the
+    context window is the setting people reach for when a model won't fit in
+    VRAM, and lowering it far enough silently inverts this arithmetic. Failing
+    here is loud, immediate, and tells the operator exactly which number to
+    change — the alternative was a job that hung forever splitting the
+    transcript into one-token pieces.
+    """
+    budget = settings.NUM_CTX - num_predict - PROMPT_OVERHEAD_TOKENS
+    if budget < MIN_INPUT_BUDGET_TOKENS:
+        needed = num_predict + PROMPT_OVERHEAD_TOKENS + MIN_INPUT_BUDGET_TOKENS
+        raise ValueError(
+            f"The context window is too small for the {stage} stage: NUM_CTX="
+            f"{settings.NUM_CTX} minus {num_predict} reserved output tokens and "
+            f"{PROMPT_OVERHEAD_TOKENS} for the prompt leaves {budget} for the "
+            f"transcript. Raise the context window to at least {needed}, or "
+            f"lower the stage's max output tokens. (Dashboard → Settings → AI "
+            f"models; 'Fit to your GPU' suggests values that work on your card.)"
+        )
+    return budget
 
 
 def meeting_context(meeting: MeetingMeta) -> str:
@@ -105,6 +166,8 @@ async def chat_json(
     *,
     num_predict: int,
     temperature: float,
+    model: str | None = None,
+    keep_alive: str | None = None,
 ):
     """One /api/chat turn constrained to JSON output, parsed defensively.
 
@@ -112,9 +175,15 @@ async def chat_json(
     supported, unlike a full JSON-schema which needs a recent Ollama). The
     concrete SHAPE is still the model's choice, so callers must tolerate
     missing keys. Returns the parsed value (dict/list) or raises ValueError.
+
+    ``model`` overrides OLLAMA_MODEL (the live path may run a smaller, faster
+    model), and ``keep_alive`` asks Ollama to hold it in VRAM afterwards so a
+    repeated call doesn't pay the load cost again. NOTE: num_ctx is deliberately
+    NOT overridable — changing it forces Ollama to reload the model, which
+    mid-meeting would stall every other stage.
     """
     payload = {
-        "model": settings.OLLAMA_MODEL,
+        "model": model or settings.OLLAMA_MODEL,
         "stream": False,
         "format": "json",
         "options": {
@@ -127,6 +196,16 @@ async def chat_json(
             {"role": "user", "content": user_prompt},
         ],
     }
+    if keep_alive:
+        payload["keep_alive"] = keep_alive
+    # A thinking model asked for strict JSON on a small output budget can spend
+    # the whole budget reasoning and return nothing usable. Turn thinking off
+    # for these calls when the model has it — but only then, because Ollama
+    # rejects `think` outright for models that don't.
+    if settings.OLLAMA_DISABLE_THINKING and await supports_thinking(
+        client, settings, payload["model"]
+    ):
+        payload["think"] = False
     url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
     resp = await client.post(url, json=payload)
     resp.raise_for_status()

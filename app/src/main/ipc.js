@@ -13,6 +13,12 @@ const sseClient = require('./sseClient');
 const updater = require('./updater');
 const paths = require('./paths');
 const serverManager = require('./serverManager');
+const recorder = require('./recorder');
+const whisperLocator = require('./whisperLocator');
+const modelManager = require('./modelManager');
+const liveTranscriber = require('./liveTranscriber');
+const liveFlagger = require('./liveFlagger');
+const miniManager = require('./miniManager');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -120,6 +126,14 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return homeClient.applyJobNames(jobId, mapping || {});
   });
 
+  handle(CHANNELS.JOB_DRAFT_ANSWERS, (jobId, questions, attendees) => {
+    if (!jobId) throw new Error('Upload the meeting first — answers are drafted from its transcript.');
+    return homeClient.draftAnswers(jobId, {
+      questions: Array.isArray(questions) ? questions : [],
+      attendees: Array.isArray(attendees) ? attendees : [],
+    });
+  });
+
   handle(CHANNELS.JOB_PROMPT, async (jobId) => {
     if (!jobId) throw new Error('No job to fetch a prompt for.');
     return { text: await homeClient.getJobPrompt(jobId) };
@@ -127,9 +141,19 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
 
   // ---- PDF -------------------------------------------------------------------
 
-  handle(CHANNELS.PDF_RENDER, (meeting, transcript, summary) => {
+  handle(CHANNELS.PDF_RENDER, (meeting, summary) => {
     const cfg = config.get();
-    return pdf.renderMeetingPdf({ meeting, transcript, summary, pageSize: cfg.pageSize });
+    return pdf.renderMeetingPdf({ meeting, summary, pageSize: cfg.pageSize });
+  });
+
+  handle(CHANNELS.PDF_PREVIEW, (meeting, summary) => {
+    const cfg = config.get();
+    return pdf.openPdfPreview({
+      meeting,
+      summary,
+      pageSize: cfg.pageSize,
+      parent: getMainWindow(),
+    });
   });
 
   handle(CHANNELS.PDF_OPEN, async (pdfPath) => {
@@ -192,6 +216,131 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     if (!filePath) throw new Error('No file path to save to.');
     require('fs').writeFileSync(filePath, String(text ?? ''), 'utf8');
     return { ok: true, path: filePath };
+  });
+
+  // ---- In-app recording (v0.8.0) --------------------------------------------
+  // handleLocal: the dashboard page shares this preload and must never be able
+  // to start capture or probe the recordings folder.
+
+  handleLocal(CHANNELS.REC_START, (meta) => recorder.start(meta || {}));
+
+  handleLocal(CHANNELS.REC_APPEND, (recId, seq, chunk, elapsedMs) =>
+    recorder.append(recId, seq, chunk, elapsedMs)
+  );
+
+  handleLocal(CHANNELS.REC_STOP, (recId, info) => {
+    const out = recorder.stop(recId, info || {});
+    // "Stop recording and close" (window close guard): main.js waits for the
+    // session to finalize before letting the window actually close.
+    if (typeof hooks.onRecordingStopped === 'function') hooks.onRecordingStopped();
+    return out;
+  });
+
+  handleLocal(CHANNELS.REC_DISCARD, (recId) => {
+    const out = recorder.discard(recId);
+    if (typeof hooks.onRecordingStopped === 'function') hooks.onRecordingStopped();
+    return out;
+  });
+
+  handleLocal(CHANNELS.REC_ORPHANS, () => ({ orphans: recorder.listOrphans() }));
+
+  handleLocal(CHANNELS.REC_ORPHAN_RESOLVE, (recId, action) =>
+    recorder.resolveOrphan(recId, action)
+  );
+
+  handleLocal(CHANNELS.REC_STAT, (filePath) => recorder.stat(filePath));
+
+  handleLocal(CHANNELS.REC_OPEN_FOLDER, async () => {
+    const dir = paths.recordingsDir();
+    const failure = await shell.openPath(dir); // '' on success
+    if (failure) throw new Error(`Could not open the recordings folder: ${failure}`);
+    return { ok: true, path: dir };
+  });
+
+  // ---- Live mid-meeting transcription (v0.9.0) ------------------------------
+  // handleLocal throughout: local processes + the recording bus are involved.
+
+  function pushTo(channel) {
+    return (payload) => {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+    };
+  }
+  liveTranscriber.setEmitter(pushTo(CHANNELS.LIVE_EVENT));
+  liveFlagger.setEmitter(pushTo(CHANNELS.LIVE_EVENT));
+  modelManager.setEmitter(pushTo(CHANNELS.LIVE_MODEL_EVENT));
+
+  handleLocal(CHANNELS.LIVE_SUPPORT_GET, () => whisperLocator.support());
+  handleLocal(CHANNELS.LIVE_MODEL_DOWNLOAD, (name) => modelManager.download(name));
+  handleLocal(CHANNELS.LIVE_MODEL_DELETE, (name) => modelManager.remove(name));
+
+  handleLocal(CHANNELS.LIVE_START, (opts) => {
+    const input = opts || {};
+    const model = config.get().liveModel || 'small';
+    const out = liveTranscriber.start({
+      attendees: Array.isArray(input.attendees) ? input.attendees : [],
+      model,
+    });
+    liveFlagger.start(); // silent-skip loop; dies with the transcriber session
+    return out;
+  });
+
+  handleLocal(CHANNELS.LIVE_PCM, (chunk, rms) => liveTranscriber.feed(chunk, rms));
+
+  handleLocal(CHANNELS.LIVE_STOP, () => {
+    liveFlagger.stop();
+    return liveTranscriber.stop();
+  });
+
+  // ---- Usability batch (v0.10.0) --------------------------------------------
+
+  // Pre-flight readiness probe for the Record panel's status chips.
+  handleLocal(CHANNELS.PREFLIGHT_GET, async () => {
+    let freeBytes = null;
+    try {
+      const s = require('fs').statfsSync(paths.recordingsDir());
+      freeBytes = Number(s.bavail) * Number(s.bsize);
+    } catch {
+      // Unknown free space — the chip is simply omitted.
+    }
+    const server = { ok: false, error: null };
+    try {
+      await homeClient.health();
+      server.ok = true;
+    } catch (err) {
+      server.error = err.message;
+    }
+    const live = whisperLocator.support();
+    const model = config.get().liveModel || 'small';
+    return {
+      freeBytes,
+      server,
+      live: {
+        supported: live.supported,
+        modelReady: Boolean(live.models[model] && live.models[model].downloaded),
+      },
+    };
+  });
+
+  // Mini mode: the strip window is a remote control for the recording that
+  // lives in the MAIN window's renderer (see miniManager.js).
+  handleLocal(CHANNELS.MINI_OPEN, () => miniManager.open(getMainWindow));
+
+  handleLocal(CHANNELS.MINI_CMD, (cmd) => {
+    const c = String(cmd || '');
+    if (c === 'expand' || c === 'q') {
+      miniManager.close(); // restores + focuses the main window
+    }
+    if (c !== 'expand') {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send(CHANNELS.MINI_CMD, { cmd: c });
+    }
+    return { ok: true };
+  });
+
+  handleLocal(CHANNELS.MINI_STATUS, (payload) => {
+    miniManager.forwardStatus(payload, getMainWindow);
+    return { ok: true };
   });
 
   // ---- App shell ---------------------------------------------------------------
@@ -277,6 +426,11 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       emailMode: cfg.emailMode,
       pageSize: cfg.pageSize,
       hasToken: Boolean(cfg.bearerToken),
+      micDeviceId: cfg.micDeviceId,
+      micDeviceLabel: cfg.micDeviceLabel,
+      liveTranscriptEnabled: cfg.liveTranscriptEnabled,
+      liveModel: cfg.liveModel,
+      uiZoom: cfg.uiZoom,
       configPath: cfg.configPath,
     };
   });
@@ -291,6 +445,11 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       smtpUser: cfg.smtpUser,
       hasToken: Boolean(cfg.bearerToken),
       hasSmtpPassword: Boolean(cfg.smtpAppPassword),
+      micDeviceId: cfg.micDeviceId,
+      micDeviceLabel: cfg.micDeviceLabel,
+      liveTranscriptEnabled: cfg.liveTranscriptEnabled,
+      liveModel: cfg.liveModel,
+      uiZoom: cfg.uiZoom,
       configPath: cfg.configPath,
     };
   }
@@ -307,6 +466,11 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       pageSize: input.pageSize,
       smtpUser: input.smtpUser,
       smtpPassword: input.smtpPassword,
+      micDeviceId: input.micDeviceId,
+      micDeviceLabel: input.micDeviceLabel,
+      liveTranscriptEnabled: input.liveTranscriptEnabled,
+      liveModel: input.liveModel,
+      uiZoom: input.uiZoom,
     };
 
     // A pasted connection code wins over any typed URL/token fields.
@@ -328,6 +492,8 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     // New URL/token: reconnect the live event stream and re-point the updater.
     sseClient.restart();
     updater.onConfigChanged();
+    // A changed UI-size setting should take effect without a restart.
+    require('./zoom').apply(getMainWindow());
     return safeFull(config.get());
   });
 }

@@ -2,6 +2,10 @@
 // (to review, regenerate the PDF, or re-send). Stored in localStorage,
 // separate from the single "current meeting" state.
 
+import { showError } from './status.js';
+import { buildEmptyState } from './emptyState.js';
+import { openModal, closeModal } from './modalKit.js';
+
 const HISTORY_KEY = 'meetingmaster.history.v1';
 const MAX_SNAPSHOTS = 60;
 
@@ -9,16 +13,18 @@ const MAX_SNAPSHOTS = 60;
 const SNAPSHOT_FIELDS = [
   'meetingId', 'details', 'cards', 'recipients', 'options', 'summary',
   'questions', 'extractedQuestions', 'questionsReviewed', 'transcript',
-  'pdfPath', 'job',
+  'pdfPath', 'job', 'recording',
 ];
 
 let ctx = null;
 let onOpened = null;
+let onStartFrom = null;
 let backdrop, listHost, saveBtn, closeBtn;
 
 export function initHistory(context, opts) {
   ctx = context;
   onOpened = (opts && opts.onOpened) || function () {};
+  onStartFrom = (opts && opts.onStartFrom) || function () {};
 
   backdrop = document.getElementById('history-modal');
   listHost = document.getElementById('history-list');
@@ -84,9 +90,9 @@ export function saveCurrentToHistory() {
   return true;
 }
 
-function openHistory() {
+export function openHistory() {
   renderList();
-  backdrop.hidden = false;
+  openModal(backdrop, closeBtn);
 }
 
 function fmtSaved(iso) {
@@ -105,10 +111,13 @@ function renderList() {
   listHost.replaceChildren();
 
   if (list.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'history-empty';
-    empty.textContent = 'No saved meetings yet. Generate a PDF or click “Save current” to keep one here.';
-    listHost.append(empty);
+    listHost.append(
+      buildEmptyState({
+        icon: 'clock',
+        title: 'No saved meetings yet',
+        hint: 'Generating a PDF saves one automatically — or click “Save current”.',
+      })
+    );
     return;
   }
 
@@ -138,6 +147,15 @@ function renderList() {
     open.textContent = 'Open';
     open.addEventListener('click', () => openSnapshot(snap));
 
+    const reuse = document.createElement('button');
+    reuse.type = 'button';
+    reuse.className = 'btn btn-secondary btn-small';
+    reuse.textContent = 'Start like this';
+    reuse.title =
+      'Start a NEW meeting with this one\u2019s title, attendees and recipients — ' +
+      'and none of its content';
+    reuse.addEventListener('click', () => startFrom(snap));
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn btn-secondary btn-small history-del';
@@ -148,13 +166,51 @@ function renderList() {
       renderList();
     });
 
-    actions.append(open, del);
+    actions.append(open, reuse, del);
     row.append(info, actions);
     listHost.append(row);
   });
 }
 
+// The same people, the same title, the same distribution list, week after
+// week — and today none of it carries over, so a recurring review costs two
+// minutes of retyping before anyone has said anything. This copies the SETUP
+// and nothing else: no cards, no recording, no transcript, no summary, no job.
+function startFrom(snap) {
+  if (typeof ctx.recActive === 'function' && ctx.recActive()) {
+    showError('A recording is in progress — stop or discard it before starting a new meeting.');
+    return;
+  }
+  // app.js owns the reset (and snapshotting the outgoing meeting to History,
+  // exactly as "New meeting" does) — this only says what to seed it with.
+  const details = (snap.details && typeof snap.details === 'object') ? snap.details : {};
+  onStartFrom({
+    details: {
+      title: details.title || '',
+      // Today's meeting is today's, whatever the template says.
+      date: todayIso(),
+      time: details.time || '11:00',
+      attendees: Array.isArray(details.attendees) ? [...details.attendees] : [],
+    },
+    recipients: Array.isArray(snap.recipients) ? [...snap.recipients] : [],
+    options: snap.options && typeof snap.options === 'object' ? { ...snap.options } : null,
+  });
+  close();
+}
+
+// Local (not UTC) yyyy-mm-dd — the same rule app.js uses for a new meeting.
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+}
+
 function openSnapshot(snap) {
+  if (typeof ctx.recActive === 'function' && ctx.recActive()) {
+    showError('A recording is in progress — stop or discard it before opening a saved meeting.');
+    return;
+  }
   const cur = ctx.state;
   const dirty = hasContent() && (!cur.meetingId || cur.meetingId !== snap.meetingId);
   if (dirty && !confirm(
@@ -169,11 +225,14 @@ function openSnapshot(snap) {
   SNAPSHOT_FIELDS.forEach((f) => {
     if (snap[f] !== undefined) ctx.state[f] = snap[f];
   });
+  // Legacy snapshots predate audio attachments — never leave another
+  // meeting's recording attached to the one just opened.
+  if (snap.recording === undefined) ctx.state.recording = null;
   ctx.persist();
   close();
   onOpened();
 }
 
 function close() {
-  backdrop.hidden = true;
+  closeModal(backdrop);
 }
