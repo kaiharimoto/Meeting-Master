@@ -103,11 +103,23 @@
       </div>
       <div class="bar" data-bar="update-check"><i></i></div>
       <div class="taskmsg" data-msg="update-check"></div>
+      <!-- Two install paths, because two topologies. Inside the Meeting Master
+           app the APP owns installing (electron-updater): this link is
+           intercepted by main.js and installs the already-downloaded update
+           immediately. A server running on its own installs the cached
+           installer itself, no app restart involved. -->
       <div class="sub" id="up-app-update-row" hidden>
         <span class="lbl">A new version is ready for this machine</span>
         <a class="linkbtn" href="/setup/action/app-update"
-           title="The Meeting Master app fetches and installs it, then restarts">Update &amp; restart app</a>
+           title="Installs the downloaded update now and restarts the app (a few seconds). Nothing is lost — the server comes back up with it.">Install now &amp; restart</a>
       </div>
+      <div class="sub" id="up-server-update-row" hidden>
+        <span class="lbl">A new version is downloaded and ready to install</span>
+        <button class="ghost small" id="up-server-update-btn" data-install="server-update" type="button"
+                title="Installs the cached installer silently and restarts this server — the app does not need to restart">Install now</button>
+      </div>
+      <div class="bar" data-bar="server-update"><i></i></div>
+      <div class="taskmsg" data-msg="server-update"></div>
       <div class="taskmsg" id="up-laptop-note"></div>
     </div>
 

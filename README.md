@@ -171,8 +171,11 @@ Import AI output** brings its JSON reply back for the PDF
 **Updates are automatic** (v0.2.1+): the home server watches GitHub for new
 releases (add a read-only GitHub token on its dashboard while the repo is
 private) and serves them to every machine; the app downloads updates in the
-background and applies them on restart. Licensed fonts live in an update-proof
-folder (operator **Settings → Open fonts folder**).
+background. Apply a downloaded one whenever you like — dashboard → Updates →
+**Install now**, the version label in the sidebar footer, or tray → **Restart
+to update** — or leave it and it installs the next time the app quits.
+Licensed fonts live in an update-proof folder
+(operator **Settings → Open fonts folder**).
 
 ## Quickstart
 

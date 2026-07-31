@@ -48,15 +48,29 @@ Everything updates from the **home server's dashboard** (Overview → Updates):
   pasted once into the dashboard's Settings tab. "check failed" with an HTTP
   401/403/404 usually means the token is missing, expired, or lacks that
   permission.
-- **Operator laptop:** updates fully automatically — it downloads new versions
-  from the home server in the background and shows a "Restart to update" toast
-  (it also installs on the next quit). Your licensed fonts are safe: they live
-  in the update-proof fonts folder (Settings → Open fonts folder).
-- **Home server machine (v0.3.0+):** the app updates itself the same way from
-  its own cached feed — use tray → **"Restart to update"** (or just quit and
-  relaunch) and the bundled server updates with it. Prefer doing this while no
-  meeting is mid-pipeline; a job interrupted by the restart shows as failed
-  and the recording can simply be re-submitted.
+- **Nothing waits for a restart unless you want it to.** Once a version is
+  downloaded there are three ways to apply it *now*, and they all do the same
+  thing: the dashboard's Updates card → **Install now**, the version label in
+  the app's sidebar footer (it becomes a button reading
+  "v0.18.0 → v0.19.0 — restart"), or tray → **Restart to update**. Leaving it
+  alone is also fine — it installs whenever the app next quits.
+- **Operator laptop:** downloads new versions from the home server in the
+  background and shows an "Update ready" toast with an install action. Your
+  licensed fonts are safe: they live in the update-proof fonts folder
+  (Settings → Open fonts folder).
+- **Home server machine (v0.3.0+):** the app installs the update and the
+  bundled server comes back up with it, so the install restarts the app (a few
+  seconds). Prefer doing it while no meeting is mid-pipeline — the app refuses
+  while a job is still processing rather than killing it, and a job interrupted
+  by a restart shows as failed and can simply be re-submitted.
+- **A server running on its own** (not inside the app — an adopted or legacy
+  standalone install) installs the cached installer itself and restarts only
+  the server: dashboard → Updates → **Install now**. No app restart involved.
+- **The Updates card shows no install button.** Before v0.19.1 it never
+  appeared inside the app window (a stylesheet rule hid the only row that
+  worked there) and appeared *unconditionally* in a browser, where clicking it
+  only produced an explanation page. Update to v0.19.1+; until then use the
+  sidebar version label or the tray.
 - A laptop only sees an update **after** the home server has cached it, so
   if the laptop seems behind, run "Check for updates" on the dashboard first.
 

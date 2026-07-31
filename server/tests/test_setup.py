@@ -11,6 +11,7 @@ import importlib
 import json
 import os
 import sys
+import time
 import types
 
 import pytest
@@ -361,3 +362,40 @@ def test_ai_helper_endpoints(client):
 
     remote = TestClient(app, client=("203.0.113.9", 40012))
     assert remote.post("/setup/ai-test", json={}).status_code == 403
+
+
+def test_server_update_install_is_reachable(client, monkeypatch):
+    """The dashboard's "Install now" button posts to /setup/install/server-update.
+
+    The button is declarative (data-install="server-update"), so a rename on
+    either side would silently orphan it — this pins the contract. The task's
+    own refusal message is what the dashboard then renders.
+    """
+    from fastapi.testclient import TestClient
+
+    from app import updates
+    from app.main import app
+    from app.setup import bootstrap
+
+    assert updates.APPLY_TASK == "server-update"
+    assert "server-update" in bootstrap._COMPONENTS
+
+    local = TestClient(app, client=("127.0.0.1", 40016))
+    # Inside the app (MM_SIDECAR=1) the APP owns installing, so the task must
+    # refuse with a message pointing there rather than half-installing.
+    monkeypatch.setenv("MM_SIDECAR", "1")
+    resp = local.post("/setup/install/server-update")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["started"] is True
+
+    for _ in range(50):
+        task = bootstrap.task_state("server-update")
+        if task.get("state") in {"failed", "done"}:
+            break
+        time.sleep(0.05)
+    task = bootstrap.task_state("server-update")
+    assert task["state"] == "failed"
+    assert "inside the Meeting Master app" in task["message"]
+
+    # An unknown component is still a 404, not a silent no-op.
+    assert local.post("/setup/install/not-a-component").status_code == 404

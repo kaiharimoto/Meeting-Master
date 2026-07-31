@@ -8,8 +8,9 @@
 //   GET  /setup/events         SSE: hello/job/log (live updates)
 (function () {
   "use strict";
-  // Inside the Meeting Master app's Dashboard tab (iframe): the app itself
-  // owns "open notes" and "update & restart", so hide those links here.
+  // Inside the Meeting Master app's Dashboard tab (iframe): the meeting UI is
+  // one sidebar click away, so the "open notes" link is redundant here. The
+  // UPDATE link is not — the app intercepts it, so framed is where it works.
   if (window.self !== window.top) document.documentElement.classList.add("framed");
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -257,17 +258,22 @@
       status.style.color = "var(--ink-faint)";
       status.title = "";
     }
-    // The app (not this server) installs updates. In the app window the
-    // button below is intercepted by Electron and runs the whole chain;
-    // in a plain browser it lands on an explanation page.
+    // Two install paths, one per topology (see setup.html). Inside the app the
+    // link is intercepted by Electron and installs the downloaded update now;
+    // a server running on its own installs the cached installer itself.
+    var hasUpdate = semverNewer(up.latest, up.current);
     var appRow = $("#up-app-update-row");
-    if (appRow) appRow.hidden = !(up.sidecar && semverNewer(up.latest, up.current));
+    if (appRow) appRow.hidden = !(up.sidecar && hasUpdate);
+    var srvRow = $("#up-server-update-row");
+    if (srvRow) srvRow.hidden = !(!up.sidecar && hasUpdate);
     var notesLink = $("#open-notes-link");
     if (notesLink) notesLink.hidden = !up.sidecar;
     var upNotes = [];
     if (up.sidecar)
       upNotes.push("This server runs inside the Meeting Master app — updates " +
-                   "download in the background and install when the app restarts.");
+                   "download in the background. Install one the moment it is " +
+                   "ready with the button above, or just leave it: it also " +
+                   "installs whenever the app next restarts.");
     if (up.laptopReady)
       upNotes.push("Update feed ready — operator laptops fetch updates from " +
                    "this server automatically.");

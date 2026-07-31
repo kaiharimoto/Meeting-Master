@@ -171,3 +171,91 @@ test('the dashboard tabs are a real tablist, not four buttons with a class', asy
   await page.keyboard.press('ArrowRight'); // wraps
   await expect(page.locator('#tabbtn-overview')).toBeFocused();
 });
+
+// ---- Updates card: the install control must actually be there ---------------
+//
+// Regression: the app intercepts the dashboard's update link (main.js grew a
+// will-frame-navigate handler *specifically* so it works inside the Dashboard
+// tab's iframe), but dashboard.css still hid that row whenever the page was
+// framed — i.e. in the only place it worked. On a normal install the Updates
+// card announced a cached update and offered nothing to click, while the card's
+// own copy promised to update "itself with one click below".
+
+function withUpdates(extra) {
+  return {
+    ...STATE,
+    updates: {
+      current: '0.18.0',
+      latest: '0.19.0',
+      tag: 'v0.19.0',
+      checkedAt: new Date().toISOString(),
+      error: null,
+      laptopReady: true,
+      ...extra,
+    },
+  };
+}
+
+test('a cached update offers an install control inside the app window', async ({ page }) => {
+  await page.addInitScript((state) => {
+    window.__origFetch = window.fetch;
+    window.fetch = async (url, opts) => {
+      if (String(url).includes('/setup/state')) return { ok: true, json: async () => state };
+      return window.__origFetch(url, opts);
+    };
+  }, withUpdates({ sidecar: true }));
+  await page.goto(DASH_URL);
+  // Being framed is what used to hide the row; assert it stays visible.
+  await page.evaluate(() => document.documentElement.classList.add('framed'));
+
+  const appRow = page.locator('#up-app-update-row');
+  await expect(appRow).toBeVisible();
+  await expect(appRow.locator('a')).toHaveText(/Install now/);
+  await expect(page.locator('#up-status')).toHaveText('update available');
+  // The self-install button is for a server running on its own, not this one.
+  await expect(page.locator('#up-server-update-row')).toBeHidden();
+  // And the note no longer implies a restart is the only way.
+  await expect(page.locator('#up-laptop-note')).toContainText('the button above');
+});
+
+test('a server running on its own installs the cached installer itself', async ({ page }) => {
+  await page.addInitScript((state) => {
+    window.__posts = [];
+    window.__origFetch = window.fetch;
+    window.fetch = async (url, opts) => {
+      if (String(url).includes('/setup/state')) return { ok: true, json: async () => state };
+      if (String(url).includes('/setup/install/')) {
+        window.__posts.push(String(url));
+        return { ok: true, json: async () => ({ started: true, task: { state: 'running', message: 'Installing…' } }) };
+      }
+      return window.__origFetch(url, opts);
+    };
+  }, withUpdates({ sidecar: false }));
+  await page.goto(DASH_URL);
+
+  // No app to restart here — this path installs and restarts the server only.
+  await expect(page.locator('#up-app-update-row')).toBeHidden();
+  const btn = page.locator('#up-server-update-btn');
+  await expect(btn).toBeVisible();
+  await btn.click();
+
+  const posts = await page.evaluate(() => window.__posts);
+  expect(posts.some((u) => u.endsWith('/setup/install/server-update'))).toBe(true);
+  // Progress + result render through the same task machinery as every install.
+  await expect(page.locator('[data-msg="server-update"]')).toContainText('Installing');
+});
+
+test('no update, no install controls', async ({ page }) => {
+  await page.addInitScript((state) => {
+    window.__origFetch = window.fetch;
+    window.fetch = async (url, opts) => {
+      if (String(url).includes('/setup/state')) return { ok: true, json: async () => state };
+      return window.__origFetch(url, opts);
+    };
+  }, withUpdates({ latest: '0.18.0', tag: 'v0.18.0', sidecar: true }));
+  await page.goto(DASH_URL);
+
+  await expect(page.locator('#up-status')).toHaveText('up to date');
+  await expect(page.locator('#up-app-update-row')).toBeHidden();
+  await expect(page.locator('#up-server-update-row')).toBeHidden();
+});
