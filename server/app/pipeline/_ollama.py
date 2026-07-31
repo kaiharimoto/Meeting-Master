@@ -39,6 +39,40 @@ MIN_INPUT_BUDGET_TOKENS = 1024
 DEFAULT_TIMEOUT = httpx.Timeout(600.0, connect=10.0)
 
 
+# Which models advertise a "thinking" capability, cached per model name so the
+# probe costs one request per model per server run rather than one per stage.
+_THINKING_CACHE: dict[str, bool] = {}
+
+
+async def supports_thinking(
+    client: httpx.AsyncClient, settings: Settings, model: str
+) -> bool:
+    """Does this model have a reasoning/thinking mode? (cached, never raises)
+
+    It matters because every stage here asks for STRICT JSON with a small
+    num_predict. A thinking model left to think spends that budget on reasoning
+    and can return no JSON at all — which surfaces as "the summary failed" with
+    a model that is in fact working perfectly. Knowing lets us turn it off.
+    """
+    if model in _THINKING_CACHE:
+        return _THINKING_CACHE[model]
+    supported = False
+    try:
+        resp = await client.post(
+            f"{settings.OLLAMA_URL.rstrip('/')}/api/show", json={"model": model}
+        )
+        resp.raise_for_status()
+        caps = resp.json().get("capabilities") or []
+        supported = any(str(c).lower() == "thinking" for c in caps)
+    except Exception:
+        # Older Ollama, or the model vanished. Assume no thinking mode: sending
+        # `think` to a model that doesn't support it is an error, so the safe
+        # default is to say nothing.
+        supported = False
+    _THINKING_CACHE[model] = supported
+    return supported
+
+
 def estimate_tokens(text: str) -> int:
     ascii_chars = sum(1 for ch in text if ord(ch) < 128)
     return ascii_chars // _ASCII_CHARS_PER_TOKEN + (len(text) - ascii_chars)
@@ -164,6 +198,14 @@ async def chat_json(
     }
     if keep_alive:
         payload["keep_alive"] = keep_alive
+    # A thinking model asked for strict JSON on a small output budget can spend
+    # the whole budget reasoning and return nothing usable. Turn thinking off
+    # for these calls when the model has it — but only then, because Ollama
+    # rejects `think` outright for models that don't.
+    if settings.OLLAMA_DISABLE_THINKING and await supports_thinking(
+        client, settings, payload["model"]
+    ):
+        payload["think"] = False
     url = f"{settings.OLLAMA_URL.rstrip('/')}/api/chat"
     resp = await client.post(url, json=payload)
     resp.raise_for_status()

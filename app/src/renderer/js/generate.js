@@ -36,6 +36,9 @@ let pollGeneration = 0;
 // percent can be projected into "~N min left".
 let transcribeStartedAt = null;
 let lastPolledState = null;
+// Which job's transcript-quality warning has already been raised, so a poll
+// every few seconds doesn't re-raise the same card.
+let transcriptWarningShownFor = null;
 
 // Jobs whose recipient list the operator has confirmed this session (the
 // preset list lives on the server and is otherwise invisible from here).
@@ -312,6 +315,28 @@ async function pollOnce() {
       localStorage.setItem(FIRST_TRANSCRIPT_KEY, '1');
     } catch {
       // Storage unavailable — the checklist item just stays open.
+    }
+    // A damaged transcript (a whisper repetition loop over quiet audio) still
+    // LOOKS like a transcript, so it would flow into the summary and the Q&A
+    // extraction unremarked and produce thin, strange notes. Say so before the
+    // operator clicks Start AI — this is the one moment the warning can change
+    // what they do.
+    if (job.transcript.warning && transcriptWarningShownFor !== job.id) {
+      transcriptWarningShownFor = job.id;
+      showProblem({
+        id: 'transcript-quality',
+        title: 'This transcript looks damaged',
+        detail: job.transcript.warning,
+        actions: [
+          {
+            label: 'Read the transcript',
+            primary: true,
+            onClick: () => els.copyTranscript && els.copyTranscript.click(),
+          },
+        ],
+      });
+    } else if (!job.transcript.warning) {
+      clearProblem('transcript-quality');
     }
   }
   if (job.summary !== null && job.summary !== undefined) {

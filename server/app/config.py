@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.19.2"
+APP_VERSION = "0.19.3"
 
 
 def config_home() -> Path:
@@ -112,6 +112,19 @@ class Settings(BaseSettings):
     WHISPER_MODEL_FALLBACK: str = "large-v3"
     WHISPER_LANGUAGE: str = "auto"
     WHISPER_TIMEOUT_SEC: int = 3600
+    # Tokens of PREVIOUS transcript whisper.cpp carries into the next window.
+    # 0 disables it, and 0 is the default here on purpose: carry-over is the
+    # engine of whisper's repetition loops. Once it emits "I don't know", that
+    # text is in the prompt for the next window, which makes "I don't know"
+    # likelier again — and a stretch of quiet audio turns into pages of it.
+    # whisper.cpp's own default (-1, keep everything) trades exactly this risk
+    # for slightly better continuity across window boundaries; for meeting
+    # audio with real silences in it, that is the wrong side of the trade.
+    WHISPER_MAX_CONTEXT: int = 0
+    # Extra whisper-cli flags, appended verbatim (shell-style splitting). An
+    # escape hatch for tuning thresholds (-et, -lpt, …) or enabling VAD on a
+    # build that has it, without waiting for a release.
+    WHISPER_EXTRA_ARGS: str = ""
 
     # --- Summarization + Q&A extraction (native Ollama /api/chat, NOT /v1) ---
     OLLAMA_URL: str = "http://127.0.0.1:11434"
@@ -126,6 +139,12 @@ class Settings(BaseSettings):
     # question/answer pairs; keep the temperature low for faithful extraction.
     EXTRACT_NUM_PREDICT: int = 1500
     EXTRACT_TEMPERATURE: float = 0.2
+    # Turn a reasoning model's thinking OFF for these calls. Every stage asks
+    # for strict JSON with a small output budget, and a thinking model spends
+    # that budget on reasoning instead — which looks like "the summary failed"
+    # when the model is working fine. Only sent to models that advertise the
+    # capability (Ollama errors on the rest), so this is safe to leave on.
+    OLLAMA_DISABLE_THINKING: bool = True
 
     # --- Mid-meeting live suggestions (POST /live/questions) ---
     # Q&A pairs AND key insights the operator can approve while the meeting is

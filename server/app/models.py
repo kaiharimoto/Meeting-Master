@@ -171,6 +171,11 @@ class TranscriptSegment(BaseModel):
 class Transcript(BaseModel):
     text: str
     segments: list[TranscriptSegment] = Field(default_factory=list)
+    # Set when the transcript looks damaged in a way that will quietly poison
+    # the notes made from it — currently a whisper repetition loop over quiet
+    # audio. Not an error: the transcript is still delivered, and the operator
+    # decides. None means it looked clean.
+    warning: str | None = None
 
 
 class PdfInfo(BaseModel):

@@ -181,7 +181,8 @@ Job record shape:
   "meeting": { "…": "MeetingJSON as uploaded" },
   "transcript": {
     "text": "str",
-    "segments": [ { "start": 0.0, "end": 9.2, "text": "str" } ]
+    "segments": [ { "start": 0.0, "end": 9.2, "text": "str" } ],
+    "warning": "str or null"
   },
   "summary": {
     "keyTakeaways": ["str"],
@@ -231,6 +232,36 @@ Job record shape:
 
   An empty `answer` means the window did not contain one — the laptop leaves
   that card blank rather than inventing something.
+
+### Two transcripts, and which one becomes the notes
+
+There are two transcripts in this system, and they never mix:
+
+| | Live draft | Notes transcript |
+| --- | --- | --- |
+| Made by | whisper.cpp `small`/`base` on the **laptop**, 15-second windows | whisper.cpp `large-v3-turbo` on the **home server**, whole recording |
+| Exists | during the meeting | after the recording is uploaded |
+| Stored | in memory only (`liveTranscript.js`, a module-local string) | `job.transcript`, persisted |
+| Feeds | the operator's own reading, and the live-suggestion loop | the summary, the Q&A extraction, answer drafting, the AI prompt, the PDF |
+
+**The live draft never reaches the AI that writes the notes.** It is a rough
+pass from a small model over short windows and it is not good enough to base a
+document on. The guarantee is structural, not a convention: the live pane keeps
+its text in a module-local and never touches `ctx.state`, the uploaded meeting
+JSON has no transcript field for draft text to ride along in, and every
+assignment to `state.transcript` comes from a server job.
+`app/test/unit/transcriptSource.test.js` enumerates those writers and fails if a
+new one appears, because "keep the live text so the AI has more to work with" is
+a change that looks helpful and silently degrades every meeting.
+
+**Transcript damage is reported, not hidden.** Whisper hallucinates a filler
+phrase over quiet or non-speech audio and repeats it, sometimes for pages — the
+transcript still *looks* like a transcript, so it flows into the summary as if
+it were speech. `transcribe.detect_repetition_loop` catches a phrase repeated
+6+ times consecutively and sets `transcript.warning`; the laptop raises it as a
+problem card before Start AI, which is the one moment it can change what the
+operator does. The cause is also addressed: `WHISPER_MAX_CONTEXT=0` disables the
+prompt carry-over that makes such a loop self-sustaining.
 
 ### Mid-meeting live suggestions
 

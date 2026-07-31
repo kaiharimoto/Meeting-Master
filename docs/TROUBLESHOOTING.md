@@ -306,6 +306,30 @@ transcript was split into one-token pieces, and a 60,000-character meeting
 became 20,000 sequential Ollama calls each seeing three characters. If you ever
 saw an AI stage run for hours with the GPU busy and no progress, that was this.
 
+## The transcript repeats a phrase over and over ("I don't know. I don't know…")
+
+That is a whisper repetition loop over quiet or unclear audio, not something
+anybody said. Two things drive it, and both are handled from v0.19.3:
+
+- **Prompt carry-over.** whisper.cpp feeds the previous window's text into the
+  next window as context. Once a filler phrase appears, it is in the prompt that
+  produces the next window, which makes it likelier again — a self-sustaining
+  loop. `WHISPER_MAX_CONTEXT=0` (the new default) switches carry-over off. Set
+  it back to `-1` for whisper.cpp's own behaviour if you prefer.
+- **The audio.** Loops start where there is little to transcribe: a long silence,
+  a muted stretch, room noise, or a microphone that dropped out. Check the
+  recording's level around the point where the repetition starts.
+
+The server now detects it (a phrase repeated 6+ times in a row) and the laptop
+raises **"This transcript looks damaged"** with the phrase and the count *before*
+you press Start AI. A looped transcript makes genuinely bad notes, so it is worth
+re-recording or trimming the dead audio rather than summarizing it.
+
+**It is not the live transcript.** The live draft is never used for the notes —
+see [ARCHITECTURE.md](ARCHITECTURE.md) ("Two transcripts, and which one becomes
+the notes"). The notes always come from the home server's full-quality pass over
+the uploaded recording, and that is enforced by a test rather than by convention.
+
 ## Transcription failed or produced garbage
 
 - **Check the job record** (the app shows the error; `GET /jobs/{id}` → `error`).
