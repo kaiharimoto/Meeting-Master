@@ -26,6 +26,19 @@ const miniManager = require('./miniManager');
  * @param {{setOverlayTheme?: (theme: string) => void}} [hooks]
  *        Main-process callbacks that don't belong to any service module.
  */
+// Font extension -> the MIME type a data: URI needs. Anything unrecognized
+// gets the generic type; browsers sniff the actual format anyway.
+const FONT_MIME = {
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.otf': 'font/otf',
+  '.ttf': 'font/ttf',
+};
+
+function fontMimeType(filePath) {
+  return FONT_MIME[require('path').extname(filePath).toLowerCase()] || 'application/octet-stream';
+}
+
 function registerIpcHandlers(getMainWindow, hooks = {}) {
   function sendProgress(payload) {
     const win = getMainWindow();
@@ -377,6 +390,38 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     const failure = await shell.openPath(dir); // '' on success
     if (failure) throw new Error(`Could not open the fonts folder: ${failure}`);
     return { ok: true, path: dir };
+  });
+
+  // The brand font for the RENDERER (the PDF gets its own copy via
+  // insertCSS in pdf.js). Sent as data: URIs rather than file:// paths
+  // because the renderer's CSP is origin-scoped and the fonts live outside
+  // the app directory in <userData>/fonts — a path that also differs between
+  // dev and packaged builds, which is the same problem pdf.js works around.
+  //
+  // Only the weights the UI actually uses: Medium for reading, Roman as the
+  // stand-in when no licensed Medium file was ever dropped in. Missing fonts
+  // are not an error — callers fall back to the system stack.
+  handleLocal(CHANNELS.FONTS_FACES, async () => {
+    const wanted = [
+      { base: 'NeueHaasGrotesk-Medium', weight: 500 },
+      { base: 'NeueHaasGrotesk-Roman', weight: 400 },
+    ];
+    const faces = [];
+    for (const { base, weight } of wanted) {
+      const file = paths.findFont(base);
+      if (!file) continue;
+      try {
+        const bytes = await require('fs/promises').readFile(file);
+        faces.push({
+          weight,
+          family: 'Neue Haas Grotesk',
+          dataUrl: `data:${fontMimeType(file)};base64,${bytes.toString('base64')}`,
+        });
+      } catch {
+        // Unreadable font file — behave as if it were absent.
+      }
+    }
+    return { faces };
   });
 
   // ---- App mode + sidecar (v0.3.0) ------------------------------------------

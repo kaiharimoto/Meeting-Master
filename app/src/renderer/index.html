@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://127.0.0.1:* http://localhost:*"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; frame-src http://127.0.0.1:* http://localhost:*"
   />
   <title>Meeting Master</title>
   <script src="js/themeBoot.js"></script>
@@ -225,6 +225,8 @@
               <label class="log-follow">
                 <input id="live-follow-check" type="checkbox" checked /> Follow
               </label>
+              <button id="live-read-btn" type="button" class="btn btn-secondary btn-small"
+                      title="Read this full screen in large type (Ctrl+Shift+L)">Read</button>
               <button id="live-copy-btn" type="button" class="btn btn-secondary btn-small">Copy</button>
             </div>
             <div id="live-view" class="log-view" aria-live="off"></div>
@@ -802,6 +804,42 @@
     </div>
   </div>
 
+  <!-- ============ Immersive transcript reader (Ctrl+Shift+L, hidden) ============
+       Full-window rather than a .modal--sheet: the point is to leave the
+       chrome behind and just read. -->
+  <div id="immersive-modal" class="modal-backdrop immersive-backdrop" hidden>
+    <div class="modal immersive-modal" role="dialog" aria-modal="true"
+         aria-labelledby="immersive-title">
+      <div class="immersive-head">
+        <div class="immersive-heading">
+          <h3 id="immersive-title">Transcript</h3>
+          <p id="immersive-note" class="immersive-note"></p>
+        </div>
+        <div class="immersive-tools">
+          <label class="immersive-search-field">
+            <span class="sr-only">Search the transcript</span>
+            <input id="immersive-search" type="search" placeholder="Search…"
+                   autocomplete="off" spellcheck="false" />
+          </label>
+          <span id="immersive-count" class="immersive-count" role="status" aria-live="polite"></span>
+          <button id="immersive-prev-btn" type="button" class="btn btn-secondary btn-small"
+                  title="Previous match (Shift+Enter)" disabled>&uarr;</button>
+          <button id="immersive-next-btn" type="button" class="btn btn-secondary btn-small"
+                  title="Next match (Enter)" disabled>&darr;</button>
+          <label class="log-follow">
+            <input id="immersive-follow-check" type="checkbox" checked /> Follow
+          </label>
+          <button id="immersive-smaller-btn" type="button" class="btn btn-secondary btn-small"
+                  title="Smaller text">A&minus;</button>
+          <button id="immersive-bigger-btn" type="button" class="btn btn-secondary btn-small"
+                  title="Bigger text">A+</button>
+          <button id="immersive-close-btn" type="button" class="btn btn-primary btn-small">Close</button>
+        </div>
+      </div>
+      <div id="immersive-body" class="immersive-body" tabindex="0" aria-live="off"></div>
+    </div>
+  </div>
+
   <!-- ============ Keyboard shortcuts modal (hidden by default) ============ -->
   <div id="shortcuts-modal" class="modal-backdrop" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
@@ -817,6 +855,7 @@
         <div class="shortcut-row"><kbd>A</kbd><span>Add or edit the focused question's answer</span></div>
         <div class="shortcut-row"><kbd>Del</kbd><span>Delete the focused question (undoable)</span></div>
         <div class="shortcut-row"><kbd>Alt</kbd>+<kbd>&uarr;</kbd><kbd>&darr;</kbd><span>Reorder the focused question</span></div>
+        <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd><span>Read the transcript full screen, in large type</span></div>
         <div class="shortcut-row"><kbd>Esc</kbd><span>Close the open dialog, or abandon an edit</span></div>
         <div class="shortcut-row"><kbd>?</kbd><span>Show these shortcuts</span></div>
       </div>

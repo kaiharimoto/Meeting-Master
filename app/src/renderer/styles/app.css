@@ -85,6 +85,14 @@
   --fs-base: calc(15px * var(--fs-scale));
   --fs-md: calc(17px * var(--fs-scale));
   --fs-lg: calc(21px * var(--fs-scale));
+  /* Seventh step, for the immersive reader only: read at arm's length, not
+     leaned into. The reader's own A-/A+ stepper is a separate multiplier
+     (--reader-scale) applied at the point of use, NOT folded in here — a
+     custom property resolves its own var() references against the element it
+     is declared on, so a --reader-scale set on the backdrop would never reach
+     a --fs-reader declared up here. */
+  --reader-scale: 1.25;
+  --fs-reader: calc(19px * var(--fs-scale));
 
   --lh-tight: 1.15;
   --lh-snug: 1.3;
@@ -2563,6 +2571,148 @@ kbd {
 .live-wrap .log-line.live-note {
   color: var(--warn-ink);
   font-style: italic;
+}
+
+/* ---- Immersive transcript reader ------------------------------------------
+   Full-window, unlike .modal--sheet: it covers the sidebar and the titlebar
+   (z-index 90) so there is nothing to read but the transcript. Toasts (200)
+   still win, because a failing recording outranks comfortable reading.
+
+   The type is the PDF's: Neue Haas Grotesk at Medium. It is loaded on first
+   open as data: URIs (brandFont.js) and the family is only switched in once
+   [data-brand-font] says it can actually render — swapping font-family under
+   the reader mid-sentence would reflow the line you are on. Without licensed
+   fonts installed this stays on the same Helvetica/Arial fallback the PDF
+   template names. */
+
+.immersive-backdrop {
+  z-index: 120;
+  background: var(--bg);
+  padding: 0;
+  align-items: stretch;
+  justify-content: center;
+  animation: mm-fade-in 120ms ease;
+  overflow: hidden;
+}
+
+.immersive-modal {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg);
+  padding: 0;
+  animation: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* let .immersive-body own the scrolling, not the dialog */
+}
+
+.immersive-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.immersive-heading h3 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.immersive-note {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+
+.immersive-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.immersive-search-field input {
+  font-size: var(--fs-sm);
+  padding: 5px 10px;
+  min-width: 200px;
+}
+
+.immersive-count {
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  min-width: 74px; /* reserve the width so the buttons don't jitter per keystroke */
+}
+
+.immersive-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px max(24px, calc((100% - 46em) / 2)) 30vh;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-weight: var(--fw-medium);
+  /* --reader-scale inherits from .immersive-backdrop, where the stepper sets it. */
+  font-size: calc(var(--fs-reader) * var(--reader-scale));
+  line-height: var(--lh-loose);
+  color: var(--ink);
+}
+
+/* Bottom padding is deep on purpose: the last line of a live draft should be
+   able to sit mid-screen rather than pinned to the bottom edge. */
+
+:root[data-brand-font='on'] .immersive-body {
+  font-family: 'Neue Haas Grotesk', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.immersive-line {
+  margin: 0 0 0.75em;
+  display: flex;
+  gap: 0.9em;
+  align-items: baseline;
+  border-radius: var(--r-sm);
+}
+
+.immersive-time {
+  flex: none;
+  /* Doesn't scale with the reader stepper: the timestamp is a locator, not
+     something being read, and it should not crowd the words. */
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint); /* held at 4.5:1 in both themes — a timestamp is content */
+  user-select: none;
+  min-width: 4.5em;
+  text-align: right;
+}
+
+.immersive-text {
+  flex: 1;
+}
+
+.immersive-line.is-note .immersive-text {
+  color: var(--warn-ink);
+  font-style: italic;
+}
+
+.immersive-line.is-match {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 6px var(--accent-soft);
+}
+
+.immersive-line.is-current {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+}
+
+.immersive-empty {
+  margin: 0;
+  color: var(--ink-soft);
 }
 
 /* Live question suggestions: the peripheral rail beside the Meeting screen.

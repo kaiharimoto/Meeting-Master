@@ -33,6 +33,9 @@ const CHANNELS = Object.freeze({
   UPDATE_CHECK: 'update:check',
   UPDATE_INSTALL: 'update:install',
   FONTS_OPEN: 'fonts:open',
+  // The brand font as data: URIs, so the app UI can use it too and not just
+  // the PDF (v0.20.0 — the immersive transcript reader).
+  FONTS_FACES: 'fonts:faces',
   // One app, two modes (v0.3.0)
   MODE_GET: 'mode:get',
   MODE_SET: 'mode:set',

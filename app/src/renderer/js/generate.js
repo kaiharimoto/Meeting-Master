@@ -71,6 +71,7 @@ export function initGenerate(context) {
   // can't (context overflow etc.); its JSON reply imports via Edit summary.
   els.copyTranscript = document.getElementById('copy-transcript-btn');
   els.saveTranscript = document.getElementById('save-transcript-btn');
+  els.readTranscript = document.getElementById('read-transcript-btn'); // opened by immersive.js
   els.copyPrompt = document.getElementById('copy-ai-prompt-btn');
   els.savePrompt = document.getElementById('save-ai-prompt-btn');
   if (els.copyTranscript) els.copyTranscript.addEventListener('click', () => guarded(onCopyTranscript));
@@ -612,6 +613,8 @@ export function updateButtons(context) {
   els.send.disabled = !hasApi || !c.state.pdfPath;
   const transcriptText = c.state.transcript && c.state.transcript.text;
   if (els.copyTranscript) els.copyTranscript.disabled = !transcriptText;
+  // Reading needs no API bridge at all — it renders state we already hold.
+  if (els.readTranscript) els.readTranscript.disabled = !transcriptText;
   if (els.saveTranscript) {
     els.saveTranscript.disabled =
       !transcriptText || !hasApi || typeof c.api.saveTextFile !== 'function';

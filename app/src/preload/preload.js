@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdate: () => call(CHANNELS.UPDATE_CHECK),
   installUpdate: () => call(CHANNELS.UPDATE_INSTALL),
   openFontsFolder: () => call(CHANNELS.FONTS_OPEN),
+  getFontFaces: () => call(CHANNELS.FONTS_FACES),
 
   // One app, two modes (v0.3.0)
   getMode: () => call(CHANNELS.MODE_GET),

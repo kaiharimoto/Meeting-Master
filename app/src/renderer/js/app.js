@@ -15,6 +15,7 @@ import { initNameFix, openNameFix } from './nameFix.js';
 import { initHistory, saveCurrentToHistory } from './history.js';
 import { initRecorder, renderNote, updateWindowTitle, updateRecordGuard } from './recorder.js';
 import { initLiveTranscript, hideLivePane } from './liveTranscript.js';
+import { initImmersive } from './immersive.js';
 import { initLiveFlags, renderLiveFlags } from './liveFlags.js';
 import { initStage, refreshStage } from './stage.js';
 import { initPreflight, refreshPreflight } from './preflight.js';
@@ -153,6 +154,7 @@ function boot() {
   initGenerate(ctx);
   initRecorder(ctx); // after initGenerate — it drives the upload buttons' state
   initLiveTranscript(ctx);
+  initImmersive(ctx); // after initLiveTranscript — it reads that module's buffer
   initLiveFlags(ctx); // approvals commit through capture.js's addCard()
   initStage(ctx);
   initPreflight(ctx);
