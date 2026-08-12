@@ -432,8 +432,9 @@
         var pLink = document.createElement("a");
         pLink.className = "job-link";
         pLink.href = "/setup/jobs/" + encodeURIComponent(job.id) + "/prompt";
-        pLink.target = "_blank";
-        pLink.title = "Prompt for an external AI (paste its JSON reply back via Edit summary → Import)";
+        // Downloads now (the route sets Content-Disposition), so no _blank —
+        // it would open and immediately abandon a blank tab.
+        pLink.title = "Download the prompt for an external AI (paste its JSON reply back via Edit summary → Import)";
         pLink.textContent = "AI prompt";
         row.appendChild(pLink);
       }

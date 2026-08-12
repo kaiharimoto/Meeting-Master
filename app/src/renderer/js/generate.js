@@ -9,6 +9,8 @@ import { showToast } from './toast.js';
 import { showProblem, clearProblem } from './problems.js';
 import { FIRST_TRANSCRIPT_KEY } from './checklist.js';
 import { copyText } from './clipboard.js';
+import { saveTextAs, fileStem } from './saveText.js';
+import { segmentsToTimestampedText } from './timecode.js';
 import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
 import { refreshFillButton } from './answerFill.js';
 import { applyKeptInsights } from './liveInsights.js';
@@ -70,9 +72,11 @@ export function initGenerate(context) {
   els.copyTranscript = document.getElementById('copy-transcript-btn');
   els.saveTranscript = document.getElementById('save-transcript-btn');
   els.copyPrompt = document.getElementById('copy-ai-prompt-btn');
+  els.savePrompt = document.getElementById('save-ai-prompt-btn');
   if (els.copyTranscript) els.copyTranscript.addEventListener('click', () => guarded(onCopyTranscript));
   if (els.saveTranscript) els.saveTranscript.addEventListener('click', () => guarded(onSaveTranscript));
   if (els.copyPrompt) els.copyPrompt.addEventListener('click', () => guarded(onCopyAiPrompt));
+  if (els.savePrompt) els.savePrompt.addEventListener('click', () => guarded(onSaveAiPrompt));
   els.startAi = document.getElementById('start-ai-btn');
   if (els.startAi) els.startAi.addEventListener('click', () => guarded(startAi));
 
@@ -612,11 +616,14 @@ export function updateButtons(context) {
     els.saveTranscript.disabled =
       !transcriptText || !hasApi || typeof c.api.saveTextFile !== 'function';
   }
-  if (els.copyPrompt) {
-    // The server composes the prompt, so it needs the job to still exist there.
-    const jobId = c.state.job && c.state.job.id;
-    els.copyPrompt.disabled =
-      !hasApi || !jobId || !transcriptText || typeof c.api.getJobPrompt !== 'function';
+  // The server composes the prompt, so both prompt buttons need the job to
+  // still exist there; saving additionally needs the file-write bridge.
+  const promptJobId = c.state.job && c.state.job.id;
+  const promptUnavailable =
+    !hasApi || !promptJobId || !transcriptText || typeof c.api.getJobPrompt !== 'function';
+  if (els.copyPrompt) els.copyPrompt.disabled = promptUnavailable;
+  if (els.savePrompt) {
+    els.savePrompt.disabled = promptUnavailable || typeof c.api.saveTextFile !== 'function';
   }
   if (els.startAi) {
     const jobId = c.state.job && c.state.job.id;
@@ -673,22 +680,20 @@ async function onCopyTranscript() {
 async function onSaveTranscript() {
   const text = transcriptOrExplain();
   if (!text) return;
-  const title = (ctx.state.details && ctx.state.details.title) || 'meeting';
-  const safe = title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'meeting';
-  const { filePath } = await ctx.api.pickSavePath(`${safe}-transcript.txt`);
+  // The saved file is for going BACK to a moment in the recording, so it gets
+  // the per-segment timestamps whisper already produced. The clipboard copy
+  // deliberately stays flat: it is pasted into things that want prose.
+  const segments = ctx.state.transcript && ctx.state.transcript.segments;
+  const body = segmentsToTimestampedText(segments) || text;
+  const safe = fileStem(ctx.state.details && ctx.state.details.title);
+  const filePath = await saveTextAs(ctx.api, `${safe}-transcript.txt`, body);
   if (!filePath) return;
-  await ctx.api.saveTextFile(filePath, text); // renderer has no fs — main writes it
   setStatus(`Transcript saved: ${filePath}`);
 }
 
 async function onCopyAiPrompt() {
-  const jobId = ctx.state.job && ctx.state.job.id;
-  if (!jobId) {
-    showError('No AI job for this meeting — upload the recording first (the prompt embeds the transcript held by the server).');
-    return;
-  }
-  setStatus('Fetching the AI prompt…', { busy: true });
-  const { text } = await ctx.api.getJobPrompt(jobId);
+  const text = await fetchPromptOrExplain();
+  if (!text) return;
   if (!(await copyText(text))) {
     // The prompt isn't shown anywhere to select by hand, so offer the file
     // route rather than leaving the operator with no way to get at it.
@@ -709,14 +714,37 @@ async function onCopyAiPrompt() {
   });
 }
 
+/** The prompt text for this meeting's job, or null with the reason shown. */
+async function fetchPromptOrExplain() {
+  const jobId = ctx.state.job && ctx.state.job.id;
+  if (!jobId) {
+    showError('No AI job for this meeting — upload the recording first (the prompt embeds the transcript held by the server).');
+    return null;
+  }
+  setStatus('Fetching the AI prompt…', { busy: true });
+  const { text } = await ctx.api.getJobPrompt(jobId);
+  return text;
+}
+
+/** Save AI prompt: the phone-friendly route out of the app. Copying a whole
+ *  transcript by hand is unreliable on a touch device, and the prompt is not
+ *  rendered anywhere to select — a file is the dependable handoff. */
+async function onSaveAiPrompt() {
+  const text = await fetchPromptOrExplain();
+  if (!text) return;
+  await savePromptToFile(text);
+}
+
 async function savePromptToFile(text) {
-  if (!ctx.api || typeof ctx.api.pickSavePath !== 'function') return;
-  const title = (ctx.state.details && ctx.state.details.title) || 'meeting';
-  const safe = title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'meeting';
-  const { filePath } = await ctx.api.pickSavePath(`${safe}-ai-prompt.txt`);
+  const safe = fileStem(ctx.state.details && ctx.state.details.title);
+  const filePath = await saveTextAs(ctx.api, `${safe}-ai-prompt.txt`, text);
   if (!filePath) return;
-  await ctx.api.saveTextFile(filePath, text);
-  setStatus(`AI prompt saved: ${filePath}`);
+  setStatus(`AI prompt saved: ${filePath} — open it on your phone, paste into your model, then import the JSON reply via Edit summary.`);
+  showToast({
+    kind: 'success',
+    title: 'AI prompt saved',
+    message: 'Import the model’s JSON reply via Edit summary → Import AI output.',
+  });
 }
 
 // ---- Dev shortcut ----------------------------------------------------------------

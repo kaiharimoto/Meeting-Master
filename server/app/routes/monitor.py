@@ -163,12 +163,20 @@ def summarize_retry_response(request: Request, job_id: str) -> dict:
 def prompt_response(request: Request, job_id: str) -> PlainTextResponse:
     """The full prompt harness (system prompt + task + this job's transcript),
     ready to paste into any external chatbot; its JSON reply round-trips back
-    in through the app's summary editor Import button."""
+    in through the app's summary editor Import button.
+
+    Sent as a download, like transcript_response: the prompt embeds a whole
+    transcript, and selecting that much rendered text by hand — especially on a
+    phone, which is where this escape hatch actually gets used — does not work
+    reliably. A file always does."""
     from ..pipeline import summarize  # late import — pipeline pulls httpx
 
     record = _job_with_transcript(request, job_id)
     return PlainTextResponse(
-        summarize.external_prompt(record.transcript.text, record.meeting)
+        summarize.external_prompt(record.transcript.text, record.meeting),
+        headers={
+            "Content-Disposition": f'attachment; filename="meeting-ai-prompt-{job_id}.txt"'
+        },
     )
 
 
