@@ -126,6 +126,26 @@ class Settings(BaseSettings):
     # build that has it, without waiting for a release.
     WHISPER_EXTRA_ARGS: str = ""
 
+    # --- Which model writes the notes ---
+    # "ollama" (default) or "claude_cli". Ollama is the default because it
+    # needs no account, no internet, and no sign-in that can lapse — the
+    # premise of a self-hosted pipeline. "claude_cli" shells out to the Claude
+    # Code CLI on this machine, authenticated once with `claude login` against
+    # an existing subscription; it exists because the operator's WORK network
+    # blocks AI services while this machine's does not, so the home PC can do
+    # the round trip that otherwise means retyping a prompt on a phone.
+    # See pipeline/_claude_cli.py for the trade-offs (usage limits, sign-in).
+    AI_PROVIDER: str = "ollama"
+    # Blank = find it on PATH, then the usual install locations. Set this when
+    # the service's PATH differs from the desktop session that installed it,
+    # which on Windows it usually does.
+    CLAUDE_CLI_PATH: str = ""
+    # Blank = whatever the CLI is configured to use.
+    CLAUDE_MODEL: str = ""
+    # Generous: a whole-meeting summary is one long call, and the cost of
+    # waiting is lower than the cost of giving up on a finished meeting.
+    CLAUDE_CLI_TIMEOUT_SEC: int = 900
+
     # --- Summarization + Q&A extraction (native Ollama /api/chat, NOT /v1) ---
     OLLAMA_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "gemma4:26b"
@@ -233,6 +253,10 @@ class Settings(BaseSettings):
 # Keys the setup page is allowed to write to server.env, in file order.
 WRITABLE_KEYS = (
     "BEARER_TOKEN",
+    "AI_PROVIDER",
+    "CLAUDE_CLI_PATH",
+    "CLAUDE_MODEL",
+    "CLAUDE_CLI_TIMEOUT_SEC",
     "OLLAMA_MODEL",
     "OLLAMA_URL",
     "NUM_CTX",

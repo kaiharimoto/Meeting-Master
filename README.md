@@ -15,8 +15,14 @@ Insights / Decisions / Action Items / Key Figures / Topics) and extracts
 candidate Q&A pairs for the operator to approve. The laptop then renders a print-perfect PDF locally (Neue
 Haas Grotesk, medical-blue accent, ruled Q&A table + presentation-style summary
 deck) and sends it back to the home PC, which emails it via Gmail SMTP to a
-preset recipient list. No cloud AI, no third-party services — just your two
-machines and your tailnet.
+preset recipient list. Out of the box: no cloud AI, no third-party services —
+just your two machines and your tailnet.
+
+If the local model can't do a meeting justice, the home PC can hand the
+summary to Claude instead, signed in once with an existing subscription
+(**Settings → Who writes the notes**). That is opt-in and reversible: Ollama
+stays the default and the fallback, and the transcript is stored before any
+model reads it. See [docs/SETUP_HOMEPC.md](docs/SETUP_HOMEPC.md).
 
 ## How the two machines talk
 
@@ -245,7 +251,7 @@ document the keys the setup page manages:
 
 | Template (reference) | Where the real values live | Used by |
 | --- | --- | --- |
-| `config/server.env.example` | `%APPDATA%\MeetingMaster\server.env` (written by the setup page) | Home server — token, models, SMTP |
+| `config/server.env.example` | `%APPDATA%\MeetingMaster\server.env` (written by the setup page) | Home server — token, AI provider, models, SMTP |
 | `config/recipients.example.json` | `%APPDATA%\MeetingMaster\recipients.json` (set on the setup page) | Home server — preset recipient list |
 | `config/email_template.example.txt` | `%APPDATA%\MeetingMaster\email_template.txt` (set on the setup page) | Home server — email subject/body template |
 | `config/laptop.env.example` | app Settings (from the Connection Code); dev: `app/laptop.env` | Laptop app — server URL, token, email mode, page size |

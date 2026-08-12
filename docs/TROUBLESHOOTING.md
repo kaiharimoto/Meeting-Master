@@ -82,11 +82,17 @@ survives** and the job completes with an empty summary. The escape hatch
 (v0.4.0+) lets any external model (Claude, ChatGPT, …) write the summary in
 exactly the format Meeting Master needs:
 
-1. **Get the prompt:** on the Meeting screen click **Copy AI prompt** (or on
-   the dashboard's Jobs tab click **AI prompt**). It contains the full
+1. **Get the prompt:** on the Meeting screen click **Copy AI prompt**, or
+   **Save AI prompt** to write it to a `.txt` file. It contains the full
    instructions + the transcript, ready to paste into your model. (**Copy
    transcript** / **Save transcript** / the dashboard's **transcript** link
-   give you the raw text alone.)
+   give you the raw text alone; the saved transcript carries `[m:ss]`
+   timestamps so you can find a moment in the recording again.)
+
+   **Use the file if the model you're pasting into is on a phone.** The prompt
+   embeds a whole transcript, and selecting that much rendered text by hand on
+   a touch device is unreliable — that is what the save button is for. The
+   dashboard's Jobs tab **AI prompt** link downloads the same file.
 2. **Run it** in your online model and copy its JSON reply.
 3. **Import it:** back in Meeting Master, **Edit summary → Import AI output**,
    paste, **Apply import**, then **Save**. Generate the PDF and send the email
@@ -98,6 +104,12 @@ screen (**Open in Meeting**), then follow the steps above. When a summary
 fails you also get an error toast with a one-click **Retry summary** — worth
 trying right after lowering the context window (Dashboard tab → Settings →
 AI models).
+
+**If this keeps happening, you can skip the round trip entirely.** The home
+server can call Claude itself with your existing subscription — see
+[SETUP_HOMEPC.md](SETUP_HOMEPC.md) *"Letting Claude write the notes instead"*.
+That machine's network is not the one blocking AI, which is the whole reason
+the prompt had to leave the building in the first place.
 
 ## Email didn't send — send it yourself
 
@@ -287,6 +299,32 @@ transcript because the context window was too small.
 - Transcripts that still exceed the 32k window are handled by the chunked
   map-reduce fallback in `summarize.py` (summarize portions, then summarize
   the summaries) — slower, but nothing is dropped.
+
+## The AI stage failed and you're using Claude (usage limit / sign-in)
+
+With **AI provider** set to *Claude*, two failures are specific to it and both
+say so in the stage error on the Activity screen.
+
+**"Usage limit reached…"** — the subscription's cap, not a bug. Wait for the
+window to reset, or switch **AI provider** back to *Ollama* on the dashboard's
+Settings tab and press **Start AI** again. Note the server deliberately does
+*not* retry a limit error: the message contains the word "context", which used
+to trip the halve-the-context-window remedy meant for Ollama, and retrying only
+spends a second call against a quota that is already gone.
+
+**"The Claude CLI returned nothing"** — an expired sign-in exits quietly, so
+this is what it looks like. Run `claude login` on the home PC and try again.
+
+**"The Claude CLI is not installed on this server"** — it isn't on the PATH the
+server sees, which on Windows is often a different PATH from your desktop
+session even after a successful install. Put the full path in **Claude CLI
+path** on the Settings tab. The card also reports whether the CLI can be found
+right now, so you can tell "not installed" from "installed but not signed in"
+without running a meeting to find out.
+
+In every case **the transcript is safe** — it is stored on the server before
+any AI runs, so nothing needs re-recording or re-uploading. Only the summary
+and Q&A detection have to be re-run.
 
 ## "The context window is too small for the … stage"
 

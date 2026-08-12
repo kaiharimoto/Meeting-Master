@@ -148,6 +148,8 @@ a { color: var(--accent); }
 }
 .card h2 { font-size: 16px; margin: 0 0 4px; }
 .card .hint { color: var(--ink-faint); font-size: 13px; margin: 0 0 16px; }
+/* A parenthetical inside a <label>, for saying what blank means. */
+.hint-inline { color: var(--ink-faint); font-size: 12px; font-weight: 400; }
 
 .cards-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

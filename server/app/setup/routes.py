@@ -153,6 +153,14 @@ async def build_state() -> dict:
         "whisperModel": settings.WHISPER_MODEL_DEFAULT,
         # Hands-on AI engine tuning (v0.4.3): shown on the Settings tab.
         "aiParams": {
+            "aiProvider": settings.AI_PROVIDER,
+            "claudeCliPath": settings.CLAUDE_CLI_PATH,
+            "claudeModel": settings.CLAUDE_MODEL,
+            "claudeCliTimeoutSec": settings.CLAUDE_CLI_TIMEOUT_SEC,
+            # Whether the CLI can actually be found right now — the difference
+            # between "not installed" and "installed but not signed in", which
+            # the operator otherwise only discovers when a meeting fails.
+            "claudeCliFound": _claude_cli_found(settings),
             "ollamaUrl": settings.OLLAMA_URL,
             "numCtx": settings.NUM_CTX,
             "summaryNumPredict": settings.SUMMARY_NUM_PREDICT,
@@ -179,6 +187,17 @@ async def build_state() -> dict:
     }
 
 
+def _claude_cli_found(settings) -> bool:
+    """Is the Claude CLI resolvable? Best effort — never let a probe break the
+    settings page."""
+    try:
+        from ..pipeline import _claude_cli
+
+        return _claude_cli.resolve_cli(settings) is not None
+    except Exception:
+        return False
+
+
 def _updates_snapshot() -> dict:
     from .. import updates  # local import — updates imports bootstrap from this package
 
@@ -195,6 +214,11 @@ class SaveBody(BaseModel):
     ollamaModel: str | None = None
     whisperModel: str | None = None
     githubToken: str = ""
+    # Which backend writes the notes — "ollama" or "claude_cli".
+    aiProvider: str | None = None
+    claudeCliPath: str | None = None
+    claudeModel: str | None = None
+    claudeCliTimeoutSec: int | None = None
     # AI engine tuning — None means "leave as saved".
     ollamaUrl: str | None = None
     numCtx: int | None = None
@@ -327,6 +351,19 @@ async def save(body: SaveBody) -> dict:
     # pipeline (e.g. a 0-token context). None/blank leaves the saved value.
     def _clamp(value, lo, hi):
         return max(lo, min(hi, value))
+
+    # Which backend writes the notes. An unrecognized name is stored as
+    # "ollama" rather than rejected: the local model is the safe landing spot,
+    # and _provider treats anything else that way too.
+    if body.aiProvider is not None:
+        wanted = body.aiProvider.strip().lower()
+        values["AI_PROVIDER"] = "claude_cli" if wanted == "claude_cli" else "ollama"
+    if body.claudeCliPath is not None:
+        values["CLAUDE_CLI_PATH"] = body.claudeCliPath.strip()
+    if body.claudeModel is not None:
+        values["CLAUDE_MODEL"] = body.claudeModel.strip()
+    if body.claudeCliTimeoutSec is not None:
+        values["CLAUDE_CLI_TIMEOUT_SEC"] = _clamp(int(body.claudeCliTimeoutSec), 60, 3600)
 
     if body.ollamaUrl and body.ollamaUrl.strip():
         values["OLLAMA_URL"] = body.ollamaUrl.strip().rstrip("/")
@@ -664,6 +701,8 @@ async def setup_live_test(body: LiveTestBody) -> dict:
 
 class AiTestBody(BaseModel):
     numCtx: int | None = None
+    # Test the provider currently selected in the form, not the saved one.
+    aiProvider: str | None = None
 
 
 @router.post("/ai-test")
@@ -675,17 +714,22 @@ async def setup_ai_test(body: AiTestBody) -> dict:
 
     import httpx
 
-    from ..pipeline import _ollama
+    from ..pipeline import _provider
 
     settings = config.get_settings()
     if body.numCtx:
         settings = settings.model_copy(
             update={"NUM_CTX": max(2048, min(131072, int(body.numCtx)))}
         )
+    if body.aiProvider:
+        # Test what the operator has just selected, not what is still saved —
+        # otherwise switching provider and pressing Test reports on the old one.
+        settings = settings.model_copy(update={"AI_PROVIDER": body.aiProvider})
+    claude = _provider.uses_claude_cli(settings)
     start = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=5.0)) as client:
-            await _ollama.chat_json(
+            await _provider.chat_json(
                 client, settings,
                 'You are a health check. Respond with ONLY the JSON {"ok": true}.',
                 "Reply now.",
@@ -697,7 +741,10 @@ async def setup_ai_test(body: AiTestBody) -> dict:
     return {
         "ok": error is None,
         "latencyMs": int((time.monotonic() - start) * 1000),
-        "model": settings.OLLAMA_MODEL,
-        "numCtx": settings.NUM_CTX,
+        "provider": _provider.provider_name(settings),
+        # NUM_CTX is an Ollama knob; reporting it for the CLI would imply this
+        # test proved something about a setting it never touched.
+        "model": (settings.CLAUDE_MODEL or "default") if claude else settings.OLLAMA_MODEL,
+        "numCtx": None if claude else settings.NUM_CTX,
         "error": error,
     }

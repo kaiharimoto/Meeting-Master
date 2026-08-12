@@ -11,7 +11,7 @@ import logging
 
 from .config import get_settings
 from .models import JobState, MeetingSummary
-from .pipeline import extract, normalize, summarize, transcribe
+from .pipeline import _provider, extract, normalize, summarize, transcribe
 from .store import JobStore
 
 log = logging.getLogger(__name__)
@@ -81,7 +81,18 @@ async def process(store: JobStore, job) -> None:
         store.update(job, state=JobState.failed, error=str(exc))
 
 
-def _looks_like_context_error(exc: Exception) -> bool:
+def _looks_like_context_error(exc: Exception, settings=None) -> bool:
+    """Does this failure look like Ollama ran out of context or VRAM?
+
+    Only ever true for Ollama. NUM_CTX is an Ollama setting, so halving it does
+    nothing for another backend — and the keywords below are broad enough to
+    match things that are not context problems at all. "Usage limit reached for
+    this 5-hour context window" from the Claude CLI contains "context" and
+    would otherwise buy a second doomed call against a quota that is already
+    spent.
+    """
+    if settings is not None and _provider.uses_claude_cli(settings):
+        return False
     text = str(exc).lower()
     return any(k in text for k in ("context", "out of memory", "oom", "kv cache", "memory"))
 
@@ -91,8 +102,8 @@ async def run_ai_stages(store: JobStore, job, transcript_text: str) -> None:
     failures on the job (never silently swallowing them). Used by the normal
     pipeline AND by the retry endpoint (POST /jobs/{id}/summarize).
 
-    Auto-remedy: a failure that smells like a context/VRAM problem is retried
-    ONCE with half the configured context window before being reported.
+    Auto-remedy: an Ollama failure that smells like a context/VRAM problem is
+    retried ONCE with half the configured context window before being reported.
     """
     settings = get_settings()
 
@@ -100,7 +111,7 @@ async def run_ai_stages(store: JobStore, job, transcript_text: str) -> None:
     try:
         summary = await summarize.run(transcript_text, job.meeting, settings)
     except Exception as exc:
-        if _looks_like_context_error(exc):
+        if _looks_like_context_error(exc, settings):
             log.warning("Job %s: summary hit a context-like error (%s) — retrying "
                         "with NUM_CTX %d", job.id, exc, settings.NUM_CTX // 2)
             try:

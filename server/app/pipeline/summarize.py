@@ -14,7 +14,7 @@ import httpx
 
 from ..config import Settings
 from ..models import ActionItem, MeetingMeta, MeetingSummary
-from . import _ollama
+from . import _ollama, _provider
 
 log = logging.getLogger(__name__)
 
@@ -233,7 +233,7 @@ async def run(
     context = _ollama.meeting_context(meeting)
     num_predict = settings.SUMMARY_NUM_PREDICT
     temperature = settings.SUMMARY_TEMPERATURE
-    budget_tokens = _ollama.input_budget_tokens(settings, num_predict, "summary")
+    budget_tokens = _provider.input_budget_tokens(settings, num_predict, "summary")
 
     async with httpx.AsyncClient(timeout=_ollama.DEFAULT_TIMEOUT) as client:
         if _ollama.estimate_tokens(transcript_text) <= budget_tokens:
@@ -243,7 +243,7 @@ async def run(
                 "sections described:\n\n"
                 f"{transcript_text}"
             )
-            parsed = await _ollama.chat_json(
+            parsed = await _provider.chat_json(
                 client, settings, SYSTEM_PROMPT, user_prompt,
                 num_predict=num_predict, temperature=temperature,
             )
@@ -265,7 +265,7 @@ async def run(
                 "substantive point in this portion:\n\n"
                 f"{chunk}"
             )
-            parsed = await _ollama.chat_json(
+            parsed = await _provider.chat_json(
                 client, settings, SYSTEM_PROMPT, prompt,
                 num_predict=num_predict, temperature=temperature,
             )
@@ -279,7 +279,7 @@ async def run(
                 "Merge these partial structured summaries into one:\n\n"
                 + merged.model_dump_json(indent=2)
             )
-            parsed = await _ollama.chat_json(
+            parsed = await _provider.chat_json(
                 client, settings, _MERGE_SYSTEM_PROMPT, merge_prompt,
                 num_predict=num_predict, temperature=temperature,
             )

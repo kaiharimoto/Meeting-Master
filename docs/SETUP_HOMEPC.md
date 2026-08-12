@@ -77,6 +77,38 @@ Untick **Send live suggestions to the laptop during meetings** to switch the
 feature off; the laptop then says so in its rail instead of looking broken, and
 the post-meeting AI still finds everything.
 
+### a2b. Letting Claude write the notes instead (optional)
+
+The **Who writes the notes** card picks which model writes the summary and
+finds the Q&A pairs. **Ollama** — running on this machine — is the default, and
+it is the right default: no account, no internet, nothing that can expire.
+
+**Claude** is worth switching to when the local model can't do a meeting
+justice, and it is especially worth it if the machine you paste prompts from is
+locked down. This machine reaches the internet freely, so it can make the call
+that otherwise means carrying the prompt to a phone.
+
+Set it up once:
+
+1. Install Claude Code on this machine.
+2. Run `claude login` in a terminal here and sign in. It uses your existing
+   Claude subscription — there is no API key to create and no per-token bill.
+3. On **Settings**, set **AI provider** to *Claude*, then click **Test AI now**.
+   The card tells you whether the CLI was found; the test tells you whether the
+   sign-in works.
+
+If the CLI isn't found automatically — likely on Windows, where the service and
+your desktop session have different PATHs — put its full path in **Claude CLI
+path**.
+
+Two limits worth knowing before you rely on it. Subscription plans have usage
+caps, and a long meeting summarized at a busy time can hit one. The sign-in can
+also lapse. Neither costs you the meeting: the transcript is already stored, so
+switch **AI provider** back to *Ollama* and press **Start AI** again.
+
+The **AI models** card below configures Ollama only. Claude ignores those
+settings — its context is large enough that the chunking they size is skipped.
+
 ### a3. Choosing a model for your GPU
 
 Open **Settings → Fit to your GPU**, enter your card's memory, and click

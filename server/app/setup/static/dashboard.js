@@ -21,7 +21,8 @@
   var editedTemplate = false, editedRecipients = false, editedUser = false,
       editedFrom = false, editedOllama = false, editedWhisper = false;
   // AI engine tuning fields share one edited-flag map + numeric parsing.
-  var AI_FIELDS = ["ollamaUrl", "numCtx", "summaryNumPredict",
+  var AI_FIELDS = ["aiProvider", "claudeCliPath", "claudeModel", "claudeCliTimeoutSec",
+                   "ollamaUrl", "numCtx", "summaryNumPredict",
                    "summaryTemperature", "extractNumPredict", "extractTemperature"];
   // Live-suggestion fields work the same way, off state.liveParams. The
   // checkbox is listed separately because it round-trips .checked, not .value.
@@ -206,6 +207,7 @@
       if (el && !editedAi[f] && document.activeElement !== el)
         el.value = ai[f] != null ? ai[f] : "";
     });
+    syncProviderFields(ai);
     var live = state.liveParams || {};
     LIVE_FIELDS.forEach(function (f) {
       var el = $("#" + f);
@@ -340,7 +342,11 @@
       liveWindowChars: parseInt($("#liveWindowChars").value, 10) || null,
       liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
       liveKeepAliveMin: $("#liveKeepAliveMin").value === "" ? null : parseInt($("#liveKeepAliveMin").value, 10),
-      liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null
+      liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null,
+      aiProvider: $("#aiProvider").value,
+      claudeCliPath: $("#claudeCliPath").value.trim(),
+      claudeModel: $("#claudeModel").value.trim(),
+      claudeCliTimeoutSec: parseInt($("#claudeCliTimeoutSec").value, 10) || null
     };
     fetch("/setup/save", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -551,6 +557,26 @@
   if (liveOnBox) liveOnBox.addEventListener("change", function () {
     editedAi.liveSuggestions = true;
   });
+  var providerSel = $("#aiProvider");
+  if (providerSel) providerSel.addEventListener("change", function () {
+    editedAi.aiProvider = true;
+    syncProviderFields(null); // reveal/hide immediately, before any save
+  });
+
+  // Claude's extra fields are noise while Ollama is selected, and the
+  // found/not-found line is the difference between "not installed" and
+  // "installed but not signed in" — a distinction the operator would
+  // otherwise only discover when a real meeting fails.
+  function syncProviderFields(ai) {
+    var sel = $("#aiProvider"), fields = $("#claudeFields"), status = $("#claudeStatus");
+    if (!sel || !fields) return;
+    var isClaude = sel.value === "claude_cli";
+    fields.hidden = !isClaude;
+    if (!status || !ai) return;
+    status.textContent = ai.claudeCliFound
+      ? "Claude CLI found on this machine. If notes fail with a sign-in error, run `claude login` here."
+      : "Claude CLI not found. Install it on this machine and run `claude login`, or set the path below.";
+  }
 
   // ---- AI helpers: installed-model picker, suggested context, live test ----
   var ollamaModels = [];

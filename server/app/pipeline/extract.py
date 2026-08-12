@@ -22,7 +22,7 @@ from ..models import (
     LiveSuggestions,
     MeetingMeta,
 )
-from . import _ollama
+from . import _ollama, _provider
 
 log = logging.getLogger(__name__)
 
@@ -280,7 +280,7 @@ async def run_live(
         f"{window_text}"
     )
     async with httpx.AsyncClient(timeout=_live_timeout(settings)) as client:
-        parsed = await _ollama.chat_json(
+        parsed = await _provider.chat_json(
             client, settings, LIVE_SYSTEM_PROMPT, user_prompt,
             num_predict=settings.LIVE_EXTRACT_NUM_PREDICT,
             temperature=settings.EXTRACT_TEMPERATURE,
@@ -312,7 +312,7 @@ async def warm_live_model(settings: Settings) -> None:
     failure so the caller can report WHY live suggestions won't work.
     """
     async with httpx.AsyncClient(timeout=_live_timeout(settings)) as client:
-        await _ollama.chat_json(
+        await _provider.chat_json(
             client, settings,
             'You are a health check. Respond with ONLY the JSON {"ok": true}.',
             "Reply now.",
@@ -329,7 +329,7 @@ async def run(
     context = _ollama.meeting_context(meeting)
     num_predict = settings.EXTRACT_NUM_PREDICT
     temperature = settings.EXTRACT_TEMPERATURE
-    budget_tokens = _ollama.input_budget_tokens(settings, num_predict, "Q&A extraction")
+    budget_tokens = _provider.input_budget_tokens(settings, num_predict, "Q&A extraction")
 
     async with httpx.AsyncClient(timeout=_ollama.DEFAULT_TIMEOUT) as client:
         if _ollama.estimate_tokens(transcript_text) <= budget_tokens:
@@ -339,7 +339,7 @@ async def run(
                 "transcript:\n\n"
                 f"{transcript_text}"
             )
-            parsed = await _ollama.chat_json(
+            parsed = await _provider.chat_json(
                 client, settings, SYSTEM_PROMPT, user_prompt,
                 num_predict=num_predict, temperature=temperature,
             )
@@ -360,7 +360,7 @@ async def run(
                 f"{len(chunks)} of a longer meeting transcript:\n\n"
                 f"{chunk}"
             )
-            parsed = await _ollama.chat_json(
+            parsed = await _provider.chat_json(
                 client, settings, SYSTEM_PROMPT, prompt,
                 num_predict=num_predict, temperature=temperature,
             )
@@ -421,7 +421,7 @@ async def run_answers(
         )
         async with semaphore:
             try:
-                parsed = await _ollama.chat_json(
+                parsed = await _provider.chat_json(
                     client, settings, _ANSWER_SYSTEM_PROMPT, user_prompt,
                     num_predict=settings.LIVE_EXTRACT_NUM_PREDICT,
                     temperature=settings.EXTRACT_TEMPERATURE,

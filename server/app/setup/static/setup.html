@@ -268,8 +268,50 @@
     </div>
 
     <div class="card">
+      <h2>Who writes the notes</h2>
+      <p class="hint">
+        Ollama runs on this machine and needs no account or internet — that is
+        the default, and the fallback. Claude writes better notes for long or
+        difficult meetings, and this machine can reach it even when the
+        work network cannot.
+      </p>
+      <div class="row2">
+        <div>
+          <label for="aiProvider">AI provider</label>
+          <select id="aiProvider">
+            <option value="ollama">Ollama — local, on this machine</option>
+            <option value="claude_cli">Claude — via the Claude CLI on this machine</option>
+          </select>
+        </div>
+        <div>
+          <label for="claudeModel">Claude model <span class="hint-inline">(blank = the CLI's default)</span></label>
+          <input id="claudeModel" type="text" autocomplete="off" placeholder="default" />
+        </div>
+      </div>
+      <div id="claudeFields" hidden>
+        <p class="hint" id="claudeStatus"></p>
+        <div class="row2">
+          <div>
+            <label for="claudeCliPath">Claude CLI path <span class="hint-inline">(blank = find it automatically)</span></label>
+            <input id="claudeCliPath" type="text" autocomplete="off" placeholder="claude" />
+          </div>
+          <div>
+            <label for="claudeCliTimeoutSec">Claude timeout (seconds)</label>
+            <input id="claudeCliTimeoutSec" type="number" min="60" max="3600" step="30" placeholder="900" />
+          </div>
+        </div>
+        <p class="hint">
+          Sign in once on this machine by running <code>claude login</code> in a
+          terminal. It uses your existing Claude subscription — no API key. If a
+          meeting fails with a limit or sign-in error, switch back to Ollama and
+          the notes still get written.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>AI models</h2>
-      <p class="hint">Which local models this server uses. Changing the summary model requires pulling it in Ollama first (Overview tab).</p>
+      <p class="hint">Which local models this server uses. Changing the summary model requires pulling it in Ollama first (Overview tab). These settings apply to Ollama; Claude ignores them.</p>
       <div class="row2">
         <div>
           <label for="ollamaModel">Summary model (Ollama)</label>
