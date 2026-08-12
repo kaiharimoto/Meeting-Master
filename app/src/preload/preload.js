@@ -29,11 +29,13 @@ async function call(channel, ...args) {
 contextBridge.exposeInMainWorld('api', {
   uploadMeeting: (meeting, wavFilePath) => call(CHANNELS.JOB_UPLOAD, meeting, wavFilePath),
   getJobStatus: (jobId) => call(CHANNELS.JOB_STATUS, jobId),
-  // No transcript argument: it is deliberately not part of the printed
-  // document (see src/main/pdf.js), and it used to be sent here only to be
-  // ignored.
-  renderPdf: (meeting, summary) => call(CHANNELS.PDF_RENDER, meeting, summary),
-  previewPdf: (meeting, summary) => call(CHANNELS.PDF_PREVIEW, meeting, summary),
+  // The transcript is OPT-IN and off by default (see src/main/pdf.js): the
+  // renderer passes it only when "Include the transcript" is ticked, and
+  // undefined produces exactly the lean notes document it always did.
+  renderPdf: (meeting, summary, transcript) =>
+    call(CHANNELS.PDF_RENDER, meeting, summary, transcript),
+  previewPdf: (meeting, summary, transcript) =>
+    call(CHANNELS.PDF_PREVIEW, meeting, summary, transcript),
   draftAnswers: (jobId, questions, attendees) =>
     call(CHANNELS.JOB_DRAFT_ANSWERS, jobId, questions, attendees),
   openPdf: (pdfPath) => call(CHANNELS.PDF_OPEN, pdfPath),

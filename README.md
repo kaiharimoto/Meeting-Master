@@ -142,9 +142,19 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    size and margins the PDF will use, so it is a proof rather than an
    impression; press Preview again after an edit and the same window refreshes.
    Then click **Generate PDF** — saved under `Documents\MeetingMaster\`; click
-   **Open PDF** to review it.
+   **Open PDF** to review it. Tick **Include the full transcript in the PDF**
+   first if this document needs to be the lasting copy — it appends a
+   timestamped transcript on its own pages. Off by default, because it is
+   usually longer than the notes it follows.
 11. Click **Send email**. The home server emails the PDF to the preset
    recipient list using the preset template. Done.
+
+**Reading the transcript.** `Ctrl`+`Shift`+`L` (or **Read transcript**, or
+**Read** in the live pane) opens it full screen in large type — the PDF's
+Neue Haas Grotesk rather than the log pane's 12px monospace — with per-segment
+timestamps, a search that jumps between matches, and A−/A+. It works on the
+live draft while a meeting runs and on the finished transcript afterwards.
+**Save transcript** writes the same timestamps to a `.txt`.
 
 **Accessibility.** Settings carries two controls that stay out of each other's
 way: **Text size** scales type only (90/100/112/125%), while **Display zoom**

@@ -38,6 +38,15 @@
  * NOTE: no @page margins — src/main/pdf.js passes margins to printToPDF.
  */
 
+/* The `hidden` attribute has to actually hide. Several elements here set an
+   explicit display (the colophon is a flex row, sections are blocks), and any
+   such rule outranks the UA stylesheet's [hidden] { display: none } — so a
+   hidden colophon printed anyway. app.css carries the same rule for the app
+   window; this is the print template's copy. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   --ink: #16191d;        /* near-black, slightly cool */
   --ink-soft: #23282e;   /* answers, summary body */
@@ -256,7 +265,11 @@ section#summary {
   text-transform: uppercase;
 }
 
-.summary-rule {
+/* The appendix is a peer of the summary and wears the same rule. Separate
+   class rather than a shared one so each section's rule stays uniquely
+   selectable — print.spec.js pins .summary-rule's colour by itself. */
+.summary-rule,
+.transcript-rule {
   margin-top: 8pt;
   height: 3pt;
   background: var(--accent);
@@ -540,6 +553,55 @@ section#summary {
 .colophon-date {
   font-size: 11pt;
   font-weight: 400;
+  color: var(--ink);
+}
+
+/* ---- Transcript appendix (opt-in; see src/main/pdf.js) ---------------------
+   Own page, like the summary. Every size below is a step already on the scale
+   at the top of this file — 20pt header (shared with Meeting Summary), 11pt
+   body (action items, key figures), 9.5pt uppercase micro-label for the
+   timestamp. Nothing new: the scale is a contract. */
+
+section#transcript {
+  margin-top: 34pt;
+  break-before: page;
+  page-break-before: always;
+}
+
+.transcript-note {
+  font-size: 9.5pt;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 14pt;
+}
+
+.transcript-line {
+  display: flex;
+  gap: 10pt;
+  align-items: baseline;
+  margin-bottom: 5pt;
+  /* One utterance should not straddle a page break — the same rule .qa-card
+     and .sum-section already follow. */
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.transcript-time {
+  flex: none;
+  width: 42pt;
+  text-align: right;
+  font-size: 9.5pt;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.transcript-text {
+  flex: 1;
+  font-size: 11pt;
+  line-height: 1.45;
   color: var(--ink);
 }
 

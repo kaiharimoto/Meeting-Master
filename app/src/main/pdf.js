@@ -69,7 +69,7 @@ async function uniquePdfPath(dir, base) {
 // Load print.html into `win`, inject the brand fonts, render the meeting into
 // it and wait for the fonts to settle. Shared by the PDF and the preview.
 // Returns {fontUsed, warning}.
-async function renderIntoWindow(win, { meeting, summary }) {
+async function renderIntoWindow(win, { meeting, summary, transcript }) {
   await win.loadFile(paths.printHtmlPath());
 
   // ---- Font injection ----------------------------------------------------
@@ -105,16 +105,22 @@ async function renderIntoWindow(win, { meeting, summary }) {
   }
 
   // ---- Inject the data ---------------------------------------------------
-  // NOTE ON THE TRANSCRIPT: it is deliberately NOT part of the printed
-  // document — a full transcript would swamp a notes PDF, and the app offers
-  // Copy transcript / Save transcript for the raw text. It used to be passed
-  // in here and silently ignored by print.html; the argument is gone rather
-  // than left looking meaningful.
+  // NOTE ON THE TRANSCRIPT: it is OPT-IN, and off by default. A full
+  // transcript swamps a notes PDF — that is why it was removed from this
+  // payload entirely, and the default is unchanged. What changed is that
+  // operators want to find a moment in the recording by keyword afterwards,
+  // which needs the timestamped text somewhere durable, so "Include the
+  // transcript" on the Generate panel appends it as a final section. The
+  // caller passes transcript ONLY when that box is ticked; undefined here
+  // means the same lean document as before.
   //
   // JSON is not quite a subset of JS source: U+2028/U+2029 are valid in JSON
   // strings but are line terminators in JS, so escape them or the
   // executeJavaScript call would throw a SyntaxError.
-  const data = Object.assign({}, meeting, { summary: summary || null });
+  const data = Object.assign({}, meeting, {
+    summary: summary || null,
+    transcript: transcript || null,
+  });
   const payload = JSON.stringify(data)
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
@@ -140,7 +146,7 @@ async function renderIntoWindow(win, { meeting, summary }) {
  * @param {object} args {meeting, summary, pageSize ('Letter'|'A4')}
  * @returns {Promise<{pdfPath: string, fontUsed: boolean, warning: string|null}>}
  */
-async function renderMeetingPdf({ meeting, summary, pageSize }) {
+async function renderMeetingPdf({ meeting, summary, transcript, pageSize }) {
   const win = new BrowserWindow({
     show: false,
     webPreferences: {
@@ -150,7 +156,7 @@ async function renderMeetingPdf({ meeting, summary, pageSize }) {
   });
 
   try {
-    const { fontUsed, warning } = await renderIntoWindow(win, { meeting, summary });
+    const { fontUsed, warning } = await renderIntoWindow(win, { meeting, summary, transcript });
 
     // ---- Print (gotcha #2) -------------------------------------------------
     // printBackground:true or the accent rules (background-color divs) drop.
@@ -191,7 +197,7 @@ let previewWin = null;
  * @param {object} args {meeting, summary, pageSize, parent}
  * @returns {Promise<{ok: true, fontUsed: boolean, warning: string|null}>}
  */
-async function openPdfPreview({ meeting, summary, pageSize, parent }) {
+async function openPdfPreview({ meeting, summary, transcript, pageSize, parent }) {
   if (!previewWin || previewWin.isDestroyed()) {
     previewWin = new BrowserWindow({
       width: 900,
@@ -214,7 +220,7 @@ async function openPdfPreview({ meeting, summary, pageSize, parent }) {
   }
 
   const win = previewWin;
-  const { fontUsed, warning } = await renderIntoWindow(win, { meeting, summary });
+  const { fontUsed, warning } = await renderIntoWindow(win, { meeting, summary, transcript });
   await win.webContents.insertCSS(pageChromeCss(pageSize));
 
   if (win.isDestroyed()) return { ok: true, fontUsed, warning };

@@ -31,9 +31,22 @@
     <h2 class="summary-header">Meeting Summary</h2>
     <div class="summary-rule"></div>
     <div id="summary-body"></div>
-    <div class="colophon">
+    <div class="colophon" id="summary-colophon">
       <span class="colophon-title" id="colophon-title"></span>
       <span class="colophon-date" id="colophon-date"></span>
+    </div>
+  </section>
+
+  <!-- Opt-in appendix (off by default). The colophon closes whichever section
+       ends the document, so exactly one of the two is ever shown. -->
+  <section id="transcript" hidden>
+    <h2 class="summary-header">Transcript</h2>
+    <div class="transcript-rule"></div>
+    <p class="transcript-note" id="transcript-note"></p>
+    <div id="transcript-body"></div>
+    <div class="colophon" id="transcript-colophon">
+      <span class="colophon-title" id="colophon-title-2"></span>
+      <span class="colophon-date" id="colophon-date-2"></span>
     </div>
   </section>
 
@@ -332,7 +345,77 @@
 
     // Contents index (page 1): section names + item counts, dot-leader style.
     // A quick map of what's inside; shown only when there are >= 2 sections.
-    function renderContents(cards, summary) {
+    // "1:05" / "1:02:05" — mirrors renderer/js/timecode.js. Duplicated rather
+    // than imported because this template runs in its own window with no
+    // module loader; the app/test/unit/timecode.test.js format is the contract.
+    function formatTimecode(seconds) {
+      var value = Number(seconds);
+      var total = isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+      var hours = Math.floor(total / 3600);
+      var minutes = Math.floor((total % 3600) / 60);
+      var secs = String(total % 60);
+      if (secs.length < 2) secs = '0' + secs;
+      if (hours > 0) {
+        var mm = String(minutes);
+        if (mm.length < 2) mm = '0' + mm;
+        return hours + ':' + mm + ':' + secs;
+      }
+      return minutes + ':' + secs;
+    }
+
+    // The opt-in appendix. Returns how many lines were rendered (0 = no
+    // transcript asked for, or nothing usable in it) so the caller can decide
+    // whether the section and its contents row exist at all.
+    function renderTranscript(transcript) {
+      var section = document.getElementById('transcript');
+      var host = document.getElementById('transcript-body');
+      var note = document.getElementById('transcript-note');
+      host.textContent = '';
+      if (!transcript) {
+        section.hidden = true;
+        return 0;
+      }
+
+      var segments = Array.isArray(transcript.segments) ? transcript.segments : [];
+      var lines = [];
+      segments.forEach(function (seg) {
+        var text = seg && typeof seg.text === 'string' ? seg.text.trim() : '';
+        // whisper emits empty segments for silence; a page of bare timestamps
+        // helps nobody.
+        if (text) lines.push({ at: formatTimecode(seg.start), text: text });
+      });
+      // A meeting from before segments were stored still has the flat text —
+      // print it without timestamps rather than dropping the appendix.
+      if (lines.length === 0 && transcript.text) {
+        lines.push({ at: null, text: String(transcript.text) });
+      }
+      if (lines.length === 0) {
+        section.hidden = true;
+        return 0;
+      }
+
+      note.textContent =
+        'Automatic transcription — times are offsets into the recording.';
+      lines.forEach(function (line) {
+        var row = document.createElement('div');
+        row.className = 'transcript-line';
+        if (line.at !== null) {
+          var at = document.createElement('span');
+          at.className = 'transcript-time';
+          at.textContent = line.at;
+          row.appendChild(at);
+        }
+        var body = document.createElement('span');
+        body.className = 'transcript-text';
+        body.textContent = line.text;
+        row.appendChild(body);
+        host.appendChild(row);
+      });
+      section.hidden = false;
+      return lines.length;
+    }
+
+    function renderContents(cards, summary, transcriptLines) {
       var section = document.getElementById('contents');
       var rows = document.getElementById('contents-rows');
       rows.textContent = '';
@@ -348,6 +431,7 @@
       } else if (typeof summary === 'string' && summary.trim()) {
         entries.push(['Meeting Summary', 1]);
       }
+      if (transcriptLines > 0) entries.push(['Transcript', transcriptLines]);
 
       var present = entries.filter(function (e) { return e[1] > 0; });
       if (present.length < 2) {
@@ -452,16 +536,25 @@
         cardsHost.appendChild(el);
       });
 
+      // ---- Transcript appendix (opt-in; absent unless asked for) ----
+      var transcriptLines = renderTranscript(data.transcript);
+
       // ---- Contents index (page 1) ----
-      renderContents(cards, data.summary);
+      renderContents(cards, data.summary, transcriptLines);
 
       // ---- Summary (structured presentation-style sections) ----
       renderSummary(document.getElementById('summary-body'), data.summary);
 
       // ---- Colophon ----
+      // It closes the document, so it belongs to whichever section is last.
+      var hasTranscript = transcriptLines > 0;
+      document.getElementById('summary-colophon').hidden = hasTranscript;
+      document.getElementById('transcript-colophon').hidden = !hasTranscript;
+      var monthYear = formatMonthYear(details.date);
       document.getElementById('colophon-title').textContent = title;
-      document.getElementById('colophon-date').textContent =
-        formatMonthYear(details.date);
+      document.getElementById('colophon-date').textContent = monthYear;
+      document.getElementById('colophon-title-2').textContent = title;
+      document.getElementById('colophon-date-2').textContent = monthYear;
     };
   </script>
 </body>

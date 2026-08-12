@@ -81,6 +81,23 @@ export function initGenerate(context) {
   els.startAi = document.getElementById('start-ai-btn');
   if (els.startAi) els.startAi.addEventListener('click', () => guarded(startAi));
 
+  // Whether the PDF carries a transcript appendix. Persisted with the meeting
+  // (state.options) rather than as an app-wide setting: it is a property of
+  // this document — a board pack wants it, a weekly stand-up does not.
+  els.includeTranscript = document.getElementById('include-transcript-check');
+  if (els.includeTranscript) {
+    els.includeTranscript.checked = Boolean(
+      (ctx.state.options || {}).includeTranscriptInPdf
+    );
+    els.includeTranscript.addEventListener('change', () => {
+      ctx.state.options = {
+        ...(ctx.state.options || {}),
+        includeTranscriptInPdf: els.includeTranscript.checked,
+      };
+      ctx.persist();
+    });
+  }
+
   // Dev nicety: Ctrl+Shift+M loads the mock meeting fixture.
   document.addEventListener('keydown', onDevMockShortcut);
 
@@ -467,6 +484,21 @@ function fmtEta(ms) {
 
 // ---- Generate / open PDF ------------------------------------------------------
 
+/** The transcript to print, or undefined for the lean notes document.
+ *
+ *  Off by default and deliberately so — a full transcript swamps a notes PDF,
+ *  which is why it was kept out of the printed document for so long. The
+ *  checkbox exists because a transcript that only lives in the app is no use
+ *  for finding a moment in the recording months later, once the meeting has
+ *  scrolled out of History. */
+function transcriptForPdf() {
+  // Read the state, not the checkbox: restoring a meeting from History swaps
+  // the state out from under the DOM, and the printed document must follow
+  // the meeting rather than whatever the box happened to be left on.
+  if (!(ctx.state.options || {}).includeTranscriptInPdf) return undefined;
+  return ctx.state.transcript || undefined;
+}
+
 async function onGeneratePdf() {
   const api = requireApi();
   setStatus('Rendering the PDF…', { busy: true });
@@ -474,7 +506,8 @@ async function onGeneratePdf() {
   // placeholder when summary is null.
   const { pdfPath, fontUsed, warning } = await api.renderPdf(
     buildMeetingJson(),
-    ctx.state.summary
+    ctx.state.summary,
+    transcriptForPdf()
   );
 
   ctx.state.pdfPath = pdfPath;
@@ -501,7 +534,11 @@ async function onPreviewPdf() {
     return;
   }
   setStatus('Opening the preview…', { busy: true });
-  const { warning } = await api.previewPdf(buildMeetingJson(), ctx.state.summary);
+  const { warning } = await api.previewPdf(
+    buildMeetingJson(),
+    ctx.state.summary,
+    transcriptForPdf()
+  );
   setStatus(warning ? `Preview open — ${warning}` : 'Preview open in its own window.');
 }
 
@@ -615,6 +652,11 @@ export function updateButtons(context) {
   if (els.copyTranscript) els.copyTranscript.disabled = !transcriptText;
   // Reading needs no API bridge at all — it renders state we already hold.
   if (els.readTranscript) els.readTranscript.disabled = !transcriptText;
+  if (els.includeTranscript) {
+    // Follows the meeting, so a History restore moves it (see transcriptForPdf).
+    els.includeTranscript.checked = Boolean((c.state.options || {}).includeTranscriptInPdf);
+    els.includeTranscript.disabled = !transcriptText;
+  }
   if (els.saveTranscript) {
     els.saveTranscript.disabled =
       !transcriptText || !hasApi || typeof c.api.saveTextFile !== 'function';

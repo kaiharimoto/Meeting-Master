@@ -22,9 +22,18 @@ const PRINT_URL = pathToFileURL(
   path.resolve(__dirname, '..', '..', 'src', 'renderer', 'print', 'print.html')
 ).href;
 
-const fixture = JSON.parse(
+const raw = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, '..', 'fixtures', 'mockMeeting.json'), 'utf8')
 );
+
+// What src/main/pdf.js actually sends. It always sets `transcript` explicitly
+// — null unless "Include the full transcript" was ticked — so the DEFAULT
+// document has no appendix even though the fixture carries a transcript for
+// the app-side tests to use. Rendering the bare fixture here would silently
+// test the opt-in document as if it were the default.
+const fixture = Object.assign({}, raw, { transcript: null });
+// The same meeting with the box ticked.
+const withTranscript = Object.assign({}, raw, { transcript: raw.transcript });
 
 const ACCENT = 'rgb(62, 124, 166)'; // #3e7ca6 medical blue
 
@@ -279,4 +288,87 @@ test('the preview draws the same page the PDF prints', async ({ page }) => {
   await page.addStyleTag({ content: pageChromeCss('A4') });
   const a4 = await page.evaluate(() => document.body.getBoundingClientRect().width);
   expect(inches(a4)).toBeCloseTo(PAPER_IN.A4.width, 2);
+});
+
+// ---- Transcript appendix (opt-in) -------------------------------------------
+
+test('no transcript in the payload means no appendix and no contents row', async ({ page }) => {
+  await page.goto(PRINT_URL);
+  // The default document, unchanged: this is what every PDF looked like
+  // before the appendix existed, and what it still looks like unticked.
+  await page.evaluate((data) => window.renderMeeting(data), fixture);
+
+  await expect(page.locator('#transcript')).toBeHidden();
+  await expect(page.locator('#contents')).not.toContainText('Transcript');
+  // The colophon closes the document, so it stays with the summary.
+  await expect(page.locator('#summary-colophon')).toBeVisible();
+  await expect(page.locator('#transcript-colophon')).toBeHidden();
+});
+
+test('a transcript in the payload prints as a timestamped appendix', async ({ page }) => {
+  await page.goto(PRINT_URL);
+  await page.evaluate((data) => window.renderMeeting(data), withTranscript);
+
+  const section = page.locator('#transcript');
+  await expect(section).toBeVisible();
+
+  const lines = section.locator('.transcript-line');
+  await expect(lines).toHaveCount(raw.transcript.segments.length);
+  await expect(lines.first().locator('.transcript-time')).toHaveText('0:00');
+  await expect(lines.first().locator('.transcript-text')).toContainText(
+    raw.transcript.segments[0].text
+  );
+
+  // It reuses the documented type scale rather than inventing sizes:
+  // 11pt body (~14.67px), 9.5pt timestamp (~12.67px).
+  const size = (sel) =>
+    section.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(await size('.transcript-text')).toBeCloseTo(14.67, 1);
+  expect(await size('.transcript-time')).toBeCloseTo(12.67, 1);
+
+  // Own page, like the summary.
+  const breakBefore = await section.evaluate((el) => getComputedStyle(el).breakBefore);
+  expect(breakBefore).toBe('page');
+
+  // The colophon moved to the section that now ends the document.
+  await expect(page.locator('#summary-colophon')).toBeHidden();
+  await expect(page.locator('#transcript-colophon')).toBeVisible();
+  await expect(page.locator('#contents')).toContainText('Transcript');
+});
+
+test('an older meeting with only flat text still gets an appendix', async ({ page }) => {
+  await page.goto(PRINT_URL);
+  // Meetings recorded before segments were stored must not lose the appendix
+  // entirely — they just have nothing to timestamp.
+  await page.evaluate(
+    (data) =>
+      window.renderMeeting(
+        Object.assign({}, data, { transcript: { text: 'A transcript with no segments.' } })
+      ),
+    fixture
+  );
+
+  await expect(page.locator('#transcript')).toBeVisible();
+  await expect(page.locator('#transcript .transcript-text')).toHaveText(
+    'A transcript with no segments.'
+  );
+  await expect(page.locator('#transcript .transcript-time')).toHaveCount(0);
+});
+
+test('a transcript of nothing but silence does not print an empty appendix', async ({ page }) => {
+  await page.goto(PRINT_URL);
+  // whisper emits empty segments for silence; a page of bare timestamps is
+  // worse than no appendix.
+  await page.evaluate(
+    (data) =>
+      window.renderMeeting(
+        Object.assign({}, data, {
+          transcript: { text: '', segments: [{ start: 0, end: 2, text: '  ' }] },
+        })
+      ),
+    fixture
+  );
+
+  await expect(page.locator('#transcript')).toBeHidden();
+  await expect(page.locator('#summary-colophon')).toBeVisible();
 });

@@ -6,8 +6,10 @@
 // would pass every browser test and do nothing in the app. These assertions are
 // cheap and they close exactly that gap.
 //
-// They also pin the removal of the transcript argument from renderPdf — the
-// kind of change that silently half-lands.
+// They also pin the transcript appendix, which is OPT-IN and off by default.
+// That default is the load-bearing part: a full transcript swamps a notes PDF,
+// which is why it was kept out of the printed document for years. The argument
+// exists again so an operator can ask for it — not so it can drift back on.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -36,7 +38,10 @@ test('every PDF channel has an ipcMain handler', () => {
 
 test('the preload exposes previewPdf on the same channel', () => {
   const preload = read('src/preload/preload.js');
-  assert.match(preload, /previewPdf: \(meeting, summary\) =>\s*call\(CHANNELS\.PDF_PREVIEW/);
+  assert.match(
+    preload,
+    /previewPdf: \(meeting, summary, transcript\) =>\s*call\(CHANNELS\.PDF_PREVIEW/
+  );
 });
 
 test('the preview and the PDF share one render path', () => {
@@ -51,16 +56,44 @@ test('the preview and the PDF share one render path', () => {
   assert.match(pdf, /let previewWin = null;/);
 });
 
-test('the transcript is no longer passed into the print payload', () => {
+test('the transcript reaches the print payload, all three layers', () => {
   const pdf = read('src/main/pdf.js');
   const preload = read('src/preload/preload.js');
   const ipc = read('src/main/ipc.js');
-  const generate = read('src/renderer/js/generate.js');
 
-  assert.doesNotMatch(pdf, /transcript: transcript/);
-  assert.match(preload, /renderPdf: \(meeting, summary\)/);
-  assert.match(ipc, /handle\(CHANNELS\.PDF_RENDER, \(meeting, summary\)/);
-  assert.doesNotMatch(generate, /renderPdf\([\s\S]{0,80}ctx\.state\.transcript/);
+  // Half-wiring this is the failure mode: a checkbox that ticks and changes
+  // nothing, because one of the three hops still drops the argument.
+  assert.match(preload, /renderPdf: \(meeting, summary, transcript\)/);
+  assert.match(ipc, /handle\(CHANNELS\.PDF_RENDER, \(meeting, summary, transcript\)/);
+  assert.match(ipc, /handle\(CHANNELS\.PDF_PREVIEW, \(meeting, summary, transcript\)/);
+  assert.match(pdf, /async function renderIntoWindow\(win, \{ meeting, summary, transcript \}\)/);
+  assert.match(pdf, /transcript: transcript \|\| null/);
   // …and the decision is written down where the next reader will look.
   assert.match(pdf, /NOTE ON THE TRANSCRIPT/);
+});
+
+test('the appendix is opt-in: nothing is printed unless it was asked for', () => {
+  const generate = read('src/renderer/js/generate.js');
+
+  // The gate reads the meeting's own option, NOT the checkbox element — a
+  // History restore swaps the state out from under the DOM, and the printed
+  // document has to follow the meeting.
+  assert.match(
+    generate,
+    /function transcriptForPdf\(\)[\s\S]*?options \|\| \{\}\)\.includeTranscriptInPdf\) return undefined;/
+  );
+  // Both render paths go through that gate — a preview that prints a
+  // transcript the PDF won't (or vice versa) is a preview that lies.
+  const gated = generate.match(/transcriptForPdf\(\)/g) || [];
+  assert.ok(gated.length >= 3, 'defined once, used by both renderPdf and previewPdf');
+});
+
+test('the print template hides the appendix when there is no transcript', () => {
+  const html = read('src/renderer/print/print.html');
+  // hidden by default in the markup, and renderTranscript is what unhides it.
+  assert.match(html, /<section id="transcript" hidden>/);
+  assert.match(html, /function renderTranscript\(transcript\) \{[\s\S]*?if \(!transcript\) \{[\s\S]*?section\.hidden = true;/);
+  // The colophon closes the document, so exactly one section may own it.
+  assert.match(html, /getElementById\('summary-colophon'\)\.hidden = hasTranscript;/);
+  assert.match(html, /getElementById\('transcript-colophon'\)\.hidden = !hasTranscript;/);
 });

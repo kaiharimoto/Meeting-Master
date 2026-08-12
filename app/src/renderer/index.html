@@ -273,6 +273,16 @@
                     title="Transcribe an audio file from disk instead of the in-app recording">Upload audio file…</button>
           </div>
 
+          <label class="settings-check pdf-transcript-opt">
+            <input id="include-transcript-check" type="checkbox" />
+            Include the full transcript in the PDF
+          </label>
+          <p class="settings-help">
+            Off by default — it adds a timestamped appendix that is usually
+            longer than the notes. Worth it when the PDF is the only copy you
+            will still have in a year.
+          </p>
+
           <div id="problem-host" class="problem-host" hidden></div>
 
           <div id="status-line" class="status-line" role="status" aria-live="polite"
