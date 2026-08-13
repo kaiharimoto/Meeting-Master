@@ -15,6 +15,11 @@ month before anyone noticed. Two consecutive sessions started from v0.7.0
 believing it was current. A short-lived branch for a risky experiment is fine;
 a long-lived one is how work gets lost.
 
+As of v0.20.2 there are no other branches: the five stale ones were deleted
+(every commit on them was already on `main`, one set of three having been
+redone there rather than merged), and `build-installers.yml` builds `main`
+only. Commit to `main`, push to `main`, tag from `main`.
+
 ## Every session that ships, ships a release
 
 There is no separate release process. Finish the work, then:

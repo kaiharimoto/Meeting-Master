@@ -16,12 +16,11 @@ name: build-installers
 
 on:
   push:
-    # The working branch this repo is developed on, plus main/master once
-    # merged. Add/remove branches as the default branch changes.
+    # main, and only main — see CLAUDE.md. This list used to carry a topic
+    # branch as well, which is how the repository ended up with the newest
+    # release on one branch and the default pointer on another.
     branches:
-      - claude/meeting-notes-generator-o80jz1
       - main
-      - master
     tags:
       - "v*" # a v-prefixed tag (e.g. v0.1.0) triggers a published Release
   workflow_dispatch: {} # allow manual runs from the Actions tab
