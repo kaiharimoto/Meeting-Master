@@ -74,7 +74,13 @@ SYSTEM_PROMPT = (
     "- topics: the subjects discussed, as short noun phrases (2-5 words), not "
     "sentences.\n\n"
     "String array elements carry no leading bullet character. Omit a section "
-    "(empty array) only if the transcript truly has none. " + _SCHEMA_HINT
+    "(empty array) only if the transcript truly has none.\n\n"
+    "EMPHASIS: in each keyTakeaway, keyInsight, decision, actionItem task, and "
+    "keyFigure, wrap the single most load-bearing phrase in **double "
+    "asterisks** (markdown bold) — the words a reader skimming the printed "
+    "page must not miss. At most one or two SHORT bold spans per item; never "
+    "bold a whole sentence, and use no other markdown anywhere. Leave topics "
+    "and owner/due fields unmarked. " + _SCHEMA_HINT
 )
 
 # A single low-token-cost consolidation of per-chunk partials for long
@@ -85,7 +91,9 @@ _MERGE_SYSTEM_PROMPT = (
     "specific wording, and preserve every distinct takeaway, insight, decision, "
     "action item, figure, and topic. Keep keyTakeaways (what happened) and "
     "keyInsights (lessons to apply in future) strictly separate — never move a "
-    "point from one into the other. Invent nothing. " + _SCHEMA_HINT
+    "point from one into the other. Keep any **bold** emphasis markers on the "
+    "phrases they wrap; a merged point keeps the emphasis of the wording you "
+    "kept. Invent nothing. " + _SCHEMA_HINT
 )
 
 

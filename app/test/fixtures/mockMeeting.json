@@ -9,8 +9,8 @@
   "cards": [
     {
       "id": "c1",
-      "question": "What is the renewal price for the next contract term?",
-      "answer": "A 12% increase over the current rate, locked in for 24 months with no mid-term adjustments.",
+      "question": "What is the **renewal price** for the next contract term?",
+      "answer": "A **12% increase** over the current rate, locked in for 24 months with no mid-term adjustments.",
       "participant": "Bob Ramirez"
     },
     {
@@ -59,30 +59,30 @@
   ],
   "summary": {
     "keyTakeaways": [
-      "The vendor's renewal offer is a 12% price increase locked for 24 months with no mid-term adjustments — down from the 20% floated in May.",
-      "A 30-minute P1 incident response window was secured (from 2 hours), contingent on adopting the vendor's new incident intake API.",
-      "The data migration has a hard deadline of November 15th, with a two-week buffer before the legacy platform is decommissioned."
+      "The vendor's renewal offer is a **12% price increase locked for 24 months** with no mid-term adjustments — down from the 20% floated in May.",
+      "A **30-minute P1 incident response window** was secured (from 2 hours), contingent on adopting the vendor's new incident intake API.",
+      "The data migration has a **hard deadline of November 15th**, with a two-week buffer before the legacy platform is decommissioned."
     ],
     "keyInsights": [
-      "Open renewal talks a full quarter earlier — this one was settled two days before the deadline because nobody chased the vendor.",
-      "Tie every SLA concession to the integration work it depends on, so the commitment and its cost are agreed together.",
-      "Budget a buffer before decommissioning a legacy platform, not after the migration date."
+      "Open renewal talks **a full quarter earlier** — this one was settled two days before the deadline because nobody chased the vendor.",
+      "Tie every SLA concession to **the integration work it depends on**, so the commitment and its cost are agreed together.",
+      "Budget a buffer **before decommissioning** a legacy platform, not after the migration date."
     ],
     "decisions": [
-      "Accept the 12% renewal, locked for 24 months with no mid-term adjustments.",
-      "Adopt the vendor's incident intake API to secure the 30-minute P1 SLA."
+      "**Accept the 12% renewal**, locked for 24 months with no mid-term adjustments.",
+      "Adopt the vendor's incident intake API to secure the **30-minute P1 SLA**."
     ],
     "actionItems": [
-      { "task": "Own integration testing; add QA regression coverage in the final two sprints.", "owner": "Platform team", "due": "Final two sprints", "priority": "normal" },
-      { "task": "Complete the data migration before the legacy platform is decommissioned.", "owner": "Priya Natarajan", "due": "Nov 15", "priority": "high" },
-      { "task": "Circulate the redlined contract for review.", "owner": "Bob Ramirez", "due": "In two weeks", "priority": "normal" },
-      { "task": "Confirm the incident intake API integration scope.", "owner": "", "due": "", "priority": "low" }
+      { "task": "Own integration testing; add **QA regression coverage** in the final two sprints.", "owner": "Platform team", "due": "Final two sprints", "priority": "normal" },
+      { "task": "**Complete the data migration** before the legacy platform is decommissioned.", "owner": "Priya Natarajan", "due": "Nov 15", "priority": "high" },
+      { "task": "Circulate the **redlined contract** for review.", "owner": "Bob Ramirez", "due": "In two weeks", "priority": "normal" },
+      { "task": "Confirm the **incident intake API integration scope**.", "owner": "", "due": "", "priority": "low" }
     ],
     "keyFigures": [
-      "12% price increase, locked 24 months",
-      "P1 response: 30 minutes (down from 2 hours)",
-      "Migration deadline: November 15th",
-      "Earlier vendor ask: 20% (May)"
+      "**12%** price increase, locked 24 months",
+      "P1 response: **30 minutes** (down from 2 hours)",
+      "Migration deadline: **November 15th**",
+      "Earlier vendor ask: **20%** (May)"
     ],
     "topics": [
       "Contract pricing",

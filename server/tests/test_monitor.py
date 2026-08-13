@@ -277,6 +277,10 @@ def test_transcript_and_prompt_endpoints(client):
     assert "keyTakeaways" in prompt.text          # schema the reply must use
     assert resp.text.strip()[:40] in prompt.text  # transcript embedded
     assert "Import AI output" in prompt.text      # round-trip instructions
+    # The phone-pasted prompt must ask for the same **bold** emphasis the
+    # local model is asked for — the PDF renders it either way, so an external
+    # answer that omits it silently produces a flatter document.
+    assert "**double asterisks**" in prompt.text
 
     # Loopback dashboard mirrors (no bearer, loopback-only).
     from fastapi.testclient import TestClient

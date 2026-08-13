@@ -55,6 +55,31 @@
     // print test). Everything goes through textContent / createElement so the
     // meeting data is never interpreted as HTML.
 
+    // The AI wraps the single load-bearing phrase of each item in **double
+    // asterisks** (see server/app/pipeline/summarize.py). Render those as
+    // <strong> and drop the markers, so a skimmer's eye lands on the phrase
+    // that matters instead of the first words of every line.
+    //
+    // Deliberately NOT a markdown parser and deliberately not innerHTML: it
+    // recognises exactly one construct and builds real nodes, so a transcript
+    // full of asterisks can never become markup. Text with no markers — or
+    // with an unclosed marker — comes through byte-for-byte.
+    function setEmphasizedText(el, text) {
+      el.textContent = '';
+      var s = String(text == null ? '' : text);
+      var re = /\*\*([^*]+)\*\*/g;
+      var last = 0;
+      var m;
+      while ((m = re.exec(s)) !== null) {
+        if (m.index > last) el.appendChild(document.createTextNode(s.slice(last, m.index)));
+        var strong = document.createElement('strong');
+        strong.textContent = m[1];
+        el.appendChild(strong);
+        last = m.index + m[0].length;
+      }
+      if (last < s.length) el.appendChild(document.createTextNode(s.slice(last)));
+    }
+
     var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -169,7 +194,7 @@
 
         var task = document.createElement('span');
         task.className = 'ai-task';
-        task.textContent = a.task;
+        setEmphasizedText(task, a.task);
         row.appendChild(task);
 
         var owner = document.createElement('span');
@@ -219,7 +244,7 @@
           .filter(Boolean);
         paras.forEach(function (para, i) {
           var p = document.createElement('p');
-          p.textContent = para;
+          setEmphasizedText(p, para);
           if (paras.length % 2 === 1 && i === paras.length - 1) p.className = 'span-all';
           host.appendChild(p);
         });
@@ -251,7 +276,7 @@
           num.textContent = (i + 1 < 10 ? '0' : '') + (i + 1);
           var body = document.createElement('span');
           body.className = 'takeaway-text';
-          body.textContent = text;
+          setEmphasizedText(body, text);
           li.appendChild(num);
           li.appendChild(body);
           return li;
@@ -270,7 +295,7 @@
           li.className = 'insight';
           var body = document.createElement('span');
           body.className = 'insight-text';
-          body.textContent = text;
+          setEmphasizedText(body, text);
           li.appendChild(body);
           return li;
         }
@@ -294,7 +319,7 @@
           li.className = 'decision';
           var body = document.createElement('span');
           body.className = 'decision-text';
-          body.textContent = text;
+          setEmphasizedText(body, text);
           li.appendChild(body);
           return li;
         }
@@ -315,7 +340,7 @@
           li.className = 'figure';
           var body = document.createElement('span');
           body.className = 'figure-text';
-          body.textContent = text;
+          setEmphasizedText(body, text);
           li.appendChild(body);
           return li;
         }
@@ -407,6 +432,9 @@
         }
         var body = document.createElement('span');
         body.className = 'transcript-text';
+        // textContent, not setEmphasizedText: an appendix is a verbatim record
+        // of what was said. Asterisks in it are asterisks somebody spoke or
+        // whisper mis-heard, and the AI never touches this text.
         body.textContent = line.text;
         row.appendChild(body);
         host.appendChild(row);
@@ -429,9 +457,11 @@
         entries.push(['Key Figures', cleanStrings(summary.keyFigures).length]);
         entries.push(['Topics Discussed', cleanStrings(summary.topics).length]);
       } else if (typeof summary === 'string' && summary.trim()) {
-        entries.push(['Meeting Summary', 1]);
+        // No unit: "1 items" is worse than no unit at all, and a prose summary
+        // is one section rather than a count of anything.
+        entries.push(['Meeting Summary', 1, '']);
       }
-      if (transcriptLines > 0) entries.push(['Transcript', transcriptLines]);
+      if (transcriptLines > 0) entries.push(['Transcript', transcriptLines, 'lines']);
 
       var present = entries.filter(function (e) { return e[1] > 0; });
       if (present.length < 2) {
@@ -453,6 +483,15 @@
         row.appendChild(name);
         row.appendChild(dots);
         row.appendChild(count);
+        // A bare number at the end of a dot-leader row reads as a page number.
+        // These are counts, and the PDF has no page numbers.
+        var unit = e[2] === undefined ? 'items' : e[2];
+        if (unit) {
+          var u = document.createElement('span');
+          u.className = 'toc-unit';
+          u.textContent = e[1] === 1 ? unit.replace(/s$/, '') : unit;
+          row.appendChild(u);
+        }
         rows.appendChild(row);
       });
       section.hidden = false;
@@ -516,14 +555,14 @@
 
         var q = document.createElement('div');
         q.className = 'question';
-        q.textContent = card.question || '';
+        setEmphasizedText(q, card.question || '');
         el.appendChild(q);
 
         var right = document.createElement('div');
         right.className = 'q-right';
         var a = document.createElement('div');
         a.className = 'answer';
-        a.textContent = card.answer || '';
+        setEmphasizedText(a, card.answer || '');
         right.appendChild(a);
         if (card.participant) {
           var who = document.createElement('div');

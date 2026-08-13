@@ -92,7 +92,11 @@ SYSTEM_PROMPT = (
     "answer, otherwise 'low'. Use 'low' whenever the answerer is a guess or "
     "unknown.\n\n"
     "Use ONLY information in the transcript — never invent questions, answers, "
-    "or names. If no genuine Q&A pairs exist, return an empty questions array. "
+    "or names. If no genuine Q&A pairs exist, return an empty questions array.\n\n"
+    "EMPHASIS: in the question and in the answer, wrap the key phrase in "
+    "**double asterisks** (markdown bold) so it stands out on the printed "
+    "page. At most one or two SHORT bold spans each; never bold a whole "
+    "sentence, and use no other markdown. Leave the name fields unmarked. "
     + _SCHEMA_HINT
 )
 

@@ -1,13 +1,18 @@
 'use strict';
 
 // Verifies the PDF template's contract against the pinned mockMeeting.json
-// fixture: the ruled Q&A table (13pt text, medical-blue Q index) and the
+// fixture: the ruled Q&A table (14pt text, medical-blue Q index) and the
 // structured presentation-style summary — Key Takeaways (accent-numbered), Key
 // Insights (arrow markers), Decisions, Action Items, Key Figures, and Topics
 // Discussed (outline accent chips) — plus a non-transparent accent rule
 // (printBackground) and a real
 // multi-kB PDF. The documented nine-step type scale is asserted against the
 // computed sizes, and a long fixture exercises pagination.
+//
+// The scale is set for large print (14pt body, nothing under 10pt) and lives
+// entirely in --fs-* tokens, both of which are asserted here — against the
+// computed sizes AND against the stylesheet, so a literal pt value cannot
+// creep back in.
 //
 // (This header used to describe a "Follow-Up Points" section that the template
 // had already stopped rendering — copied verbatim from print.css's header,
@@ -37,6 +42,10 @@ const withTranscript = Object.assign({}, raw, { transcript: raw.transcript });
 
 const ACCENT = 'rgb(62, 124, 166)'; // #3e7ca6 medical blue
 
+// The fixture carries the AI's **emphasis** markers; the page renders them as
+// <strong> and drops the asterisks. Compare rendered text against this.
+const plain = (s) => s.replace(/\*\*/g, '');
+
 // The preview's page geometry, straight from the module the main process uses.
 const { pageChromeCss, MARGIN_IN, PAPER_IN } = require('../../src/main/printChrome');
 
@@ -47,12 +56,12 @@ test('print template renders the fixture with the contracted typography', async 
   // Details header carries the meeting title.
   await expect(page.locator('#details')).toContainText(fixture.details.title);
 
-  // Q&A text renders at 13pt => ~17.3333px computed.
+  // Q&A text renders at 14pt => ~18.6667px computed.
   const questionFontSize = await page
     .locator('.qa-card .question')
     .first()
     .evaluate((el) => getComputedStyle(el).fontSize);
-  expect(questionFontSize.startsWith('17.33')).toBeTruthy();
+  expect(questionFontSize.startsWith('18.66')).toBeTruthy();
 
   // The question index carries the calm medical-blue accent (#3e7ca6).
   const indexColor = await page
@@ -84,7 +93,7 @@ test('print template renders the fixture with the contracted typography', async 
   await expect(takeaways).toHaveCount(fixture.summary.keyTakeaways.length);
   await expect(page.locator('.takeaway-num').first()).toHaveText('01');
   await expect(takeaways.first()).toContainText(
-    fixture.summary.keyTakeaways[0].slice(0, 24)
+    plain(fixture.summary.keyTakeaways[0]).slice(0, 24)
   );
 
   // Key Insights: its own section, right after the takeaways it must not be
@@ -96,7 +105,7 @@ test('print template renders the fixture with the contracted typography', async 
   );
   const insights = page.locator('.insight');
   await expect(insights).toHaveCount(fixture.summary.keyInsights.length);
-  await expect(insights.first()).toContainText(fixture.summary.keyInsights[0].slice(0, 24));
+  await expect(insights.first()).toContainText(plain(fixture.summary.keyInsights[0]).slice(0, 24));
   // The forward-pointing arrow marker is a character, not a colour, so it
   // survives a grayscale print.
   const marker = await insights.first().evaluate((el) =>
@@ -161,23 +170,24 @@ test('the documented type scale is the type scale that renders', async ({ page }
     ['#qa .section-header', 20],
     ['.summary-header', 20],
     ['.takeaway-num', 18],
-    ['.question', 13],
-    ['.answer', 13],
-    ['.detail-value', 12],
-    ['.takeaway-text', 12],
-    ['.decision-text', 12],
-    ['.insight-text', 12],
-    ['.ai-task', 11],
-    ['.figure-text', 11],
-    ['.colophon-title', 11],
-    ['.toc-name', 10.5],
-    ['.ai-owner', 10.5],
-    ['.detail-label', 9.5],
-    ['.contents-head', 9.5],
-    ['.sum-heading', 9.5],
-    ['.ai-head span', 9.5],
-    ['.topic-chip', 9.5],
-    ['.participant-chip', 9.5],
+    ['.question', 14],
+    ['.answer', 14],
+    ['.detail-value', 13],
+    ['.takeaway-text', 13],
+    ['.decision-text', 13],
+    ['.insight-text', 13],
+    ['.ai-task', 12],
+    ['.figure-text', 12],
+    ['.colophon-title', 12],
+    ['.toc-name', 11.5],
+    ['.ai-owner', 11.5],
+    ['.detail-label', 10.5],
+    ['.contents-head', 10.5],
+    ['.sum-heading', 10.5],
+    ['.ai-head span', 10.5],
+    ['.topic-chip', 10.5],
+    ['.participant-chip', 10.5],
+    ['.toc-unit', 10.5],
   ];
 
   for (const [selector, pt] of EXPECTED_PT) {
@@ -197,10 +207,42 @@ test('the documented type scale is the type scale that renders', async ({ page }
     });
     return Array.from(seen);
   });
-  const allowed = [42, 22, 20, 18, 13, 12, 11, 10.5, 9.5].map((pt) =>
+  const allowed = [42, 22, 20, 18, 14, 13, 12, 11.5, 10.5].map((pt) =>
     ((pt * 4) / 3).toFixed(2)
   );
   expect(sizes.filter((s) => !allowed.includes(s))).toEqual([]);
+});
+
+test('the scale lives in tokens, so it can only be changed in one place', async () => {
+  // The document is set for large print, and the whole point of that is that
+  // the nine steps move together. A literal pt value anywhere in print.css is
+  // a tenth step in waiting — this is the same guard app.css already has in
+  // textscale.spec.js, which is what stopped that file drifting to fourteen
+  // sizes the way this one did.
+  const css = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'src', 'renderer', 'print', 'print.css'),
+    'utf8'
+  );
+
+  const literals = (css.match(/font-size:\s*[^;]+;/g) || []).filter(
+    (d) => !/var\(--fs-/.test(d)
+  );
+  expect(literals, 'every font-size must reference a --fs-* token').toEqual([]);
+
+  // …and all nine tokens are actually declared.
+  for (const token of [
+    '--fs-title', '--fs-index', '--fs-section', '--fs-subindex', '--fs-body',
+    '--fs-body-sm', '--fs-small', '--fs-meta', '--fs-micro',
+  ]) {
+    expect(css, `${token} is declared`).toContain(`${token}:`);
+  }
+
+  // Nothing below 10pt: the reason the scale was raised in the first place.
+  const declared = Array.from(css.matchAll(/--fs-[a-z-]+:\s*([\d.]+)pt/g)).map((m) =>
+    parseFloat(m[1])
+  );
+  expect(declared).toHaveLength(9);
+  expect(Math.min(...declared)).toBeGreaterThanOrEqual(10);
 });
 
 test('a long meeting paginates without emptying a section or breaking the grid', async ({
@@ -320,11 +362,11 @@ test('a transcript in the payload prints as a timestamped appendix', async ({ pa
   );
 
   // It reuses the documented type scale rather than inventing sizes:
-  // 11pt body (~14.67px), 9.5pt timestamp (~12.67px).
+  // --fs-small body (12pt => 16px), --fs-micro timestamp (10.5pt => 14px).
   const size = (sel) =>
     section.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  expect(await size('.transcript-text')).toBeCloseTo(14.67, 1);
-  expect(await size('.transcript-time')).toBeCloseTo(12.67, 1);
+  expect(await size('.transcript-text')).toBeCloseTo(16, 1);
+  expect(await size('.transcript-time')).toBeCloseTo(14, 1);
 
   // Own page, like the summary.
   const breakBefore = await section.evaluate((el) => getComputedStyle(el).breakBefore);
@@ -371,4 +413,52 @@ test('a transcript of nothing but silence does not print an empty appendix', asy
 
   await expect(page.locator('#transcript')).toBeHidden();
   await expect(page.locator('#summary-colophon')).toBeVisible();
+});
+
+// ---- **Emphasis** ------------------------------------------------------------
+
+test('**markers** print as bold and never as literal asterisks', async ({ page }) => {
+  await page.goto(PRINT_URL);
+  await page.evaluate((data) => window.renderMeeting(data), fixture);
+
+  // The fixture marks a phrase in every AI-written section, which is exactly
+  // the set the prompts ask the model to mark.
+  for (const sel of [
+    '.question', '.answer', '.takeaway-text', '.insight-text',
+    '.decision-text', '.ai-task', '.figure-text',
+  ]) {
+    await expect(page.locator(`${sel} strong`).first(), `${sel} renders bold`).toHaveCount(1);
+  }
+
+  // A marker that survives to the page is worse than no emphasis at all: it
+  // reads as a typo in a document somebody is about to email out.
+  const strays = await page.evaluate(() => document.body.innerText.includes('**'));
+  expect(strays, 'no ** survives anywhere on the page').toBe(false);
+
+  // The bold phrase is the AI's phrase, not the whole line.
+  const first = await page.locator('.takeaway-text').first().evaluate((el) => ({
+    all: el.textContent,
+    bold: el.querySelector('strong').textContent,
+  }));
+  expect(first.bold.length).toBeLessThan(first.all.length);
+});
+
+test('the appendix is verbatim: asterisks in speech stay asterisks', async ({ page }) => {
+  await page.goto(PRINT_URL);
+  // A transcript is a record of what was said. whisper transcribes "star star"
+  // as text like any other, and the AI never rewrites this section — so the
+  // emphasis parser must not run over it.
+  await page.evaluate(
+    (data) =>
+      window.renderMeeting(
+        Object.assign({}, data, {
+          transcript: { text: '', segments: [{ start: 0, end: 3, text: 'rated **five stars**' }] },
+        })
+      ),
+    fixture
+  );
+
+  const line = page.locator('#transcript .transcript-text').first();
+  await expect(line).toHaveText('rated **five stars**');
+  await expect(line.locator('strong')).toHaveCount(0);
 });

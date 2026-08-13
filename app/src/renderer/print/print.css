@@ -8,20 +8,31 @@
  *   boxed 3-column details band / "Q&A n" / ruled rows Qn|question|answer /
  *   page-broken GENERAL SUMMARY with 2-column body / end colophon.
  *
- * TYPE SCALE — nine steps, each with one job. This list is the contract;
- * anything not on it is a bug (it grew to fourteen sizes, five of them
- * separated by half a point, before this was written down honestly):
+ * TYPE SCALE — nine steps, each with one job, each a --fs-* custom property
+ * on :root so the whole document tunes from one place. This list is the
+ * contract; anything not on it is a bug, and a literal font-size anywhere in
+ * this file is a bug too (print.spec.js enforces both). It grew to fourteen
+ * sizes, five of them separated by half a point, before it was written down
+ * honestly.
  *
- *   42pt    document title
- *   22pt    Q&A index numeral (Q1, Q2 …)
- *   20pt    section headers — "Q&A" and "Meeting Summary"
- *   18pt    key-takeaway index numeral
- *   13pt    Q&A question + answer — the body of the document
- *   12pt    detail values, takeaway text, decision text
- *   11pt    action-item task, key figures, colophon, legacy prose, placeholder
- *   10.5pt  contents rows, action-item owner + due
- *    9.5pt  EVERY uppercase micro-label: topbar, detail labels, contents head,
- *           section kickers, table head, legend, participant, topic chips
+ * Sized for LARGE PRINT: 14pt body, nothing below 10pt, per APH large-print
+ * guidance. The bottom half of the scale moved up a step and the display
+ * sizes stayed put — small text is the accessibility bottleneck, not the
+ * title, and raising the headings too would just cost pages.
+ *
+ *   --fs-title     42pt    document title
+ *   --fs-index     22pt    Q&A index numeral (Q1, Q2 …)
+ *   --fs-section   20pt    section headers — "Q&A", "Meeting Summary",
+ *                          "Transcript"
+ *   --fs-subindex  18pt    key-takeaway index numeral
+ *   --fs-body      14pt    Q&A question + answer — the body of the document
+ *   --fs-body-sm   13pt    detail values, takeaway / insight / decision text
+ *   --fs-small     12pt    action-item task, key figures, transcript
+ *                          utterances, colophon, legacy prose, placeholder
+ *   --fs-meta    11.5pt    contents rows, action-item owner + due
+ *   --fs-micro   10.5pt    EVERY uppercase micro-label: topbar, detail
+ *                          labels, contents head, section kickers, table
+ *                          head, legend, participant, topic chips, timecodes
  *
  * The summary is a structured "deck": Key Takeaways (accent-numbered), Key
  * Insights (arrow markers — lessons to apply in future, as opposed to the
@@ -29,7 +40,7 @@
  * Action Items (ruled table with priority dots), and a lower band of Key
  * Figures beside Topics Discussed (outline accent chips). A legacy
  * plain-string summary falls back to 2-column prose via
- * #summary-body.is-prose. The e2e print spec asserts .question at 13pt, the
+ * #summary-body.is-prose. The e2e print spec asserts .question at 14pt, the
  * accent .sum-heading kicker, and the takeaway/insight/decision/action/figure/
  * topic counts.
  *
@@ -48,6 +59,16 @@
 }
 
 :root {
+  --fs-title: 42pt;      /* document title */
+  --fs-index: 22pt;      /* Q&A index numeral */
+  --fs-section: 20pt;    /* section headers — all of them are the same rank */
+  --fs-subindex: 18pt;   /* key-takeaway index numeral */
+  --fs-body: 14pt;       /* Q&A question + answer */
+  --fs-body-sm: 13pt;    /* detail values, takeaway/insight/decision text */
+  --fs-small: 12pt;      /* tasks, figures, utterances, colophon, prose */
+  --fs-meta: 11.5pt;     /* contents rows, action-item owner + due */
+  --fs-micro: 10.5pt;    /* every uppercase micro-label, and timecodes */
+
   --ink: #16191d;        /* near-black, slightly cool */
   --ink-soft: #23282e;   /* answers, summary body */
   --muted: #6a7076;      /* placeholders, colophon date */
@@ -62,7 +83,7 @@ body {
   font-family: 'Neue Haas Grotesk', 'Helvetica Neue', Arial, sans-serif;
   color: var(--ink);
   background: #ffffff;
-  font-size: 12pt;
+  font-size: var(--fs-body-sm);
   /* Never strand a single line of a paragraph on either side of a page break.
      break-inside:avoid already protects the blocks that must stay whole; this
      covers the ones that are allowed to split. */
@@ -82,7 +103,7 @@ body {
 
 .topbar-label,
 .topbar-tag {
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -98,7 +119,7 @@ body {
 
 #detail-title {
   margin-top: 26pt;
-  font-size: 42pt;
+  font-size: var(--fs-title);
   line-height: 1.02;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -125,7 +146,7 @@ body {
 }
 
 .detail-label {
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -134,7 +155,7 @@ body {
 
 .detail-value {
   margin-top: 4pt;
-  font-size: 12pt;
+  font-size: var(--fs-body-sm);
   line-height: 1.35;
   font-weight: 400;
   color: var(--ink);
@@ -146,7 +167,7 @@ body {
 section#contents { margin-top: 26pt; }
 
 .contents-head {
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -163,7 +184,7 @@ section#contents { margin-top: 26pt; }
   padding: 3.5pt 0;
 }
 
-.toc-name { font-size: 10.5pt; font-weight: 600; color: var(--ink); }
+.toc-name { font-size: var(--fs-meta); font-weight: 600; color: var(--ink); }
 
 .toc-dots {
   flex: 1;
@@ -172,10 +193,20 @@ section#contents { margin-top: 26pt; }
 }
 
 .toc-count {
-  font-size: 10.5pt;
+  font-size: var(--fs-meta);
   font-weight: 700;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+/* "items" after each count. Without a unit a dot-leader row reads as a real
+   table of contents and the number as a page number, which it is not — the
+   PDF has no page numbers and these are counts. */
+.toc-unit {
+  margin-left: 3pt;
+  font-size: var(--fs-micro);
+  font-weight: 400;
+  color: var(--muted);
 }
 
 /* ---- Q&A ------------------------------------------------------------------ */
@@ -189,7 +220,7 @@ section#qa { margin-top: 34pt; }
   display: flex;
   align-items: baseline;
   gap: 8pt;
-  font-size: 20pt;
+  font-size: var(--fs-section);
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -203,11 +234,16 @@ section#qa { margin-top: 34pt; }
 }
 
 /* Row: Q index | question | answer + attribution. Rules between rows only —
- * a row that lands at the top of a new page carries its rule with it. */
+ * a row that lands at the top of a new page carries its rule with it.
+ * Baseline alignment keeps the index, question and answer first lines on one
+ * baseline even though all three sizes and line-heights differ. The index
+ * column is narrow (nothing wider than "Q12" ever lands in it) so the extra
+ * width can go to the question, which needs it at 14pt. */
 .qa-card {
   display: grid;
-  grid-template-columns: 0.95in 2.5in 1fr;
+  grid-template-columns: 0.7in 2.9in 1fr;
   column-gap: 0.28in;
+  align-items: baseline;
   /* Symmetric: the rule between two rows has to sit midway between them, and
      16/18 put it a couple of points high on every single row. */
   padding: 17pt 0;
@@ -218,7 +254,7 @@ section#qa { margin-top: 34pt; }
 .qa-card + .qa-card { border-top: 1.5pt solid var(--ink); }
 
 .q-index {
-  font-size: 22pt;
+  font-size: var(--fs-index);
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -228,14 +264,14 @@ section#qa { margin-top: 34pt; }
 
 /* e2e asserts 13pt => 17.33px computed. */
 .question {
-  font-size: 13pt;
+  font-size: var(--fs-body);
   line-height: 1.4;
   font-weight: 700;
   color: var(--ink);
 }
 
 .answer {
-  font-size: 13pt;
+  font-size: var(--fs-body);
   line-height: 1.55;
   font-weight: 400;
   color: var(--ink-soft);
@@ -243,7 +279,7 @@ section#qa { margin-top: 34pt; }
 
 .participant-chip {
   margin-top: 8pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -259,7 +295,7 @@ section#summary {
 }
 
 .summary-header {
-  font-size: 20pt;
+  font-size: var(--fs-section);
   font-weight: 700;
   letter-spacing: 0.015em;
   text-transform: uppercase;
@@ -285,7 +321,7 @@ section#summary {
 }
 
 #summary-body.is-prose p {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   line-height: 1.6;
   color: var(--ink-soft);
 }
@@ -303,7 +339,7 @@ section#summary {
   display: flex;
   align-items: center;
   gap: 9pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -336,7 +372,7 @@ section#summary {
 }
 
 .takeaway-num {
-  font-size: 18pt;
+  font-size: var(--fs-subindex);
   line-height: 1;
   font-weight: 700;
   color: var(--accent);
@@ -344,7 +380,7 @@ section#summary {
 }
 
 .takeaway-text {
-  font-size: 12pt;
+  font-size: var(--fs-body-sm);
   line-height: 1.4;
   font-weight: 400;
   color: var(--ink);
@@ -380,13 +416,13 @@ section#summary {
 
 .insight::before {
   content: "\2192"; /* → — survives grayscale printing, unlike a color cue */
-  font-size: 12pt;
+  font-size: var(--fs-body-sm);
   line-height: 1.4;
   font-weight: 700;
   color: var(--accent);
 }
 
-.insight-text { font-size: 12pt; line-height: 1.4; color: var(--ink); }
+.insight-text { font-size: var(--fs-body-sm); line-height: 1.4; color: var(--ink); }
 
 /* Decisions — filled accent markers: settled, agreed points. */
 .sum-decisions { margin-bottom: 28pt; }
@@ -414,7 +450,7 @@ section#summary {
   border-radius: 2pt;
 }
 
-.decision-text { font-size: 12pt; line-height: 1.4; color: var(--ink); }
+.decision-text { font-size: var(--fs-body-sm); line-height: 1.4; color: var(--ink); }
 
 /* Action Items — a ruled table: priority dot · task · owner · due. */
 .sum-actions { margin-bottom: 28pt; }
@@ -423,7 +459,7 @@ section#summary {
 
 .ai-row {
   display: grid;
-  grid-template-columns: 16pt 1fr 1.2in 1in;
+  grid-template-columns: 16pt 1fr 1.3in 1.05in;
   column-gap: 12pt;
   align-items: baseline;
   padding: 8pt 0;
@@ -436,7 +472,7 @@ section#summary {
 .ai-head {
   border-top: none;
   padding: 0 0 6pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -456,10 +492,10 @@ section#summary {
 .ai-pri-normal { background: var(--accent-mid); }
 .ai-pri-low { background: #fff; border: 1pt solid var(--muted); }
 
-.ai-task { font-size: 11pt; line-height: 1.35; color: var(--ink); }
-.ai-owner { font-size: 10.5pt; font-weight: 700; color: var(--ink-soft); }
+.ai-task { font-size: var(--fs-small); line-height: 1.35; color: var(--ink); }
+.ai-owner { font-size: var(--fs-meta); font-weight: 700; color: var(--ink-soft); }
 .ai-due {
-  font-size: 10.5pt;
+  font-size: var(--fs-meta);
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -468,7 +504,7 @@ section#summary {
   margin-top: 9pt;
   display: flex;
   gap: 16pt;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   letter-spacing: 0.03em;
   color: var(--muted);
 }
@@ -508,7 +544,7 @@ section#summary {
 }
 
 .figure-text {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   line-height: 1.35;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -526,7 +562,7 @@ section#summary {
   padding: 4pt 11pt;
   border: 1pt solid var(--accent);
   border-radius: 999px;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--accent);
@@ -544,23 +580,24 @@ section#summary {
 }
 
 .colophon-title {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .colophon-date {
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-weight: 400;
   color: var(--ink);
 }
 
 /* ---- Transcript appendix (opt-in; see src/main/pdf.js) ---------------------
    Own page, like the summary. Every size below is a step already on the scale
-   at the top of this file — 20pt header (shared with Meeting Summary), 11pt
-   body (action items, key figures), 9.5pt uppercase micro-label for the
-   timestamp. Nothing new: the scale is a contract. */
+   at the top of this file — --fs-section for the header (shared with Meeting
+   Summary), --fs-small for the body (shared with action items and key
+   figures), --fs-micro for the timecode. Nothing new: the scale is a
+   contract. */
 
 section#transcript {
   margin-top: 34pt;
@@ -569,7 +606,7 @@ section#transcript {
 }
 
 .transcript-note {
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -592,7 +629,7 @@ section#transcript {
   flex: none;
   width: 42pt;
   text-align: right;
-  font-size: 9.5pt;
+  font-size: var(--fs-micro);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -600,7 +637,7 @@ section#transcript {
 
 .transcript-text {
   flex: 1;
-  font-size: 11pt;
+  font-size: var(--fs-small);
   line-height: 1.45;
   color: var(--ink);
 }
@@ -609,7 +646,7 @@ section#transcript {
 
 .placeholder {
   margin-top: 12pt;
-  font-size: 11pt;
+  font-size: var(--fs-small);
   font-style: italic;
   color: var(--muted);
 }
