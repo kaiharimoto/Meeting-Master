@@ -76,37 +76,65 @@ function autoUpdaterOrNull() {
   }
 }
 
+// Why the feed cannot be polled, in words the operator can act on — or null
+// when it can. This is deliberately a MESSAGE and not a boolean: "the feed
+// isn't configured" used to be indistinguishable from "no update exists", and
+// the tray then cheerfully reported "You're up to date (v0.19.3)" to someone
+// staring at a dashboard that said v0.20.0 was waiting. An update check that
+// could not run must never be reported as an update check that found nothing.
+function feedProblem(cfg) {
+  if (config.resolveMode(cfg) === 'server') {
+    if (!serverManager.serverBearerToken()) {
+      // The token is minted by the dashboard's "Save & Finish" (setup/routes
+      // save()), and the feed is bearer-gated, so an unfinished setup cannot
+      // self-update at all.
+      return (
+        'This server has not finished setup, so it has no access token yet — ' +
+        'and the update feed needs one. Open the Settings tab on the ' +
+        'dashboard and click "Save & Finish", then check again.'
+      );
+    }
+    return null;
+  }
+  if (!cfg.serverUrl || !cfg.bearerToken) {
+    return 'No home server is configured yet — add its address and token in Settings, then check again.';
+  }
+  return null;
+}
+
 function feedConfig() {
   const cfg = config.get();
+  if (feedProblem(cfg)) return null;
   if (config.resolveMode(cfg) === 'server') {
     // Server mode: this machine IS the update hub. The sidecar watches GitHub
     // and caches releases; we update from its own loopback feed, using the
     // server's bearer token (read from the shared config home).
-    const token = serverManager.serverBearerToken();
-    if (!token) return null; // server not configured yet — no feed to poll
     return {
       url: `http://127.0.0.1:${serverManager.serverPort()}/updates/laptop`,
-      token,
+      token: serverManager.serverBearerToken(),
     };
   }
-  if (!cfg.serverUrl || !cfg.bearerToken) return null;
   return { url: `${cfg.serverUrl.replace(/\/$/, '')}/updates/laptop`, token: cfg.bearerToken };
 }
 
 function configureFeed() {
   const autoUpdater = autoUpdaterOrNull();
-  if (!autoUpdater) return false;
-  const feed = feedConfig();
-  if (!feed) {
-    setState({ supported: false });
+  if (!autoUpdater) {
+    setState({ supported: false, error: 'This build has no updater component.' });
     return false;
   }
+  const problem = feedProblem(config.get());
+  if (problem) {
+    setState({ supported: false, error: problem });
+    return false;
+  }
+  const feed = feedConfig();
   autoUpdater.setFeedURL({ provider: 'generic', url: feed.url });
   autoUpdater.requestHeaders = { Authorization: `Bearer ${feed.token}` };
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true; // updates apply even with no click
   autoUpdater.allowPrerelease = true; // our releases are marked pre-release
-  setState({ supported: true });
+  setState({ supported: true, error: null });
   return true;
 }
 
@@ -131,8 +159,10 @@ function start(windowGetter) {
   started = true;
 
   if (!app.isPackaged) {
-    setState({ supported: false });
-    return; // dev runs never self-update
+    // Carries its reason like every other unsupported state: "no update" and
+    // "never looked" must stay tellable apart wherever this is read.
+    setState({ supported: false, error: 'Development builds do not self-update.' });
+    return;
   }
   const autoUpdater = autoUpdaterOrNull();
   if (!autoUpdater) return;

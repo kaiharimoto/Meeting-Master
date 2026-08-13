@@ -283,6 +283,14 @@
     if (up.laptopReady)
       upNotes.push("Update feed ready — operator laptops fetch updates from " +
                    "this server automatically.");
+    // The feed is bearer-gated and the token is minted by Save & Finish, so
+    // until setup is done this machine cannot download its own update — it
+    // can only see that one exists. Say so here rather than letting the app
+    // report "you're up to date" on the old version.
+    if (hasUpdate && !state.configured)
+      upNotes.push("Setup is not finished, so this machine cannot download " +
+                   "the update yet — fill in the Settings tab and click " +
+                   "“Save & Finish” first.");
     $("#up-laptop-note").textContent = upNotes.join(" ");
     if (state.githubTokenSet)
       $("#githubToken").placeholder = "•••••••• (saved — leave blank to keep)";

@@ -356,6 +356,21 @@ function handleDashboardAction(url) {
   return false;
 }
 
+/** a > b, comparing v-prefixed semver-ish strings numerically. A string
+ *  compare would call v0.9.0 newer than v0.20.0. */
+function isNewerVersion(a, b) {
+  const parts = (v) =>
+    String(v || '')
+      .replace(/^v/, '')
+      .split('.')
+      .map((n) => parseInt(n, 10) || 0);
+  const [left, right] = [parts(a), parts(b)];
+  for (let i = 0; i < 3; i += 1) {
+    if ((left[i] || 0) !== (right[i] || 0)) return (left[i] || 0) > (right[i] || 0);
+  }
+  return false;
+}
+
 let updateCheckRunning = false;
 /** One click, whole chain: make the SIDECAR fetch/cache the newest GitHub
  *  release, then make the APP check the freshly-updated loopback feed. This
@@ -366,6 +381,10 @@ async function checkForUpdatesFromTray() {
   updateCheckRunning = true;
   try {
     const base = `http://127.0.0.1:${serverManager.serverPort()}`;
+    // What the SIDECAR knows GitHub has. Kept so the two halves can be
+    // compared below: the server finding a release the app cannot offer is a
+    // specific, reportable situation, not "no update".
+    let sidecarLatest = null;
     try {
       await fetch(`${base}/setup/install/update-check`, { method: 'POST' });
       // Wait (bounded) for the sidecar's GitHub check/download to finish.
@@ -373,6 +392,7 @@ async function checkForUpdatesFromTray() {
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 3000));
         const state = await (await fetch(`${base}/setup/state`)).json();
+        sidecarLatest = (state.updates || {}).latest || sidecarLatest;
         const task = (state.tasks || {})['update-check'];
         if (!task || task.state !== 'running') break;
       }
@@ -382,15 +402,30 @@ async function checkForUpdatesFromTray() {
     await updater.checkNow();
     const s = updater.getState();
     if (s.downloaded) return; // the tray item + tooltip already offer the restart
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Meeting Master',
-      message: s.available
-        ? `Update v${s.available} found — downloading now. The tray shows "Restart to update" when it's ready.`
-        : s.error
-          ? `Update check failed: ${s.error}`
-          : `You're up to date (v${app.getVersion()}).`,
-    });
+
+    const current = app.getVersion();
+    const waiting = isNewerVersion(sidecarLatest, current) ? sidecarLatest : null;
+    let message;
+    if (!s.supported) {
+      // The check could not run. Say why, and say what is being missed.
+      message = s.error || 'This machine is not set up to install updates yet.';
+      if (waiting) message += `\n\nv${waiting} is waiting; this machine is on v${current}.`;
+    } else if (s.available) {
+      message = `Update v${s.available} found — downloading now. The tray shows "Restart to update" when it's ready.`;
+    } else if (s.error) {
+      message = `Update check failed: ${s.error}`;
+    } else if (waiting) {
+      // The server cached a newer release but the app's feed did not offer it.
+      // "Up to date" would be flatly wrong, and it is what sent an operator
+      // hunting for a fault that was really a half-finished setup.
+      message =
+        `The server has v${waiting} cached, but this machine's update feed is still ` +
+        `offering v${current}. Try again in a minute; if it keeps happening, the ` +
+        `Logs tab on the dashboard has the reason.`;
+    } else {
+      message = `You're up to date (v${current}).`;
+    }
+    dialog.showMessageBox({ type: 'info', title: 'Meeting Master', message });
   } finally {
     updateCheckRunning = false;
   }

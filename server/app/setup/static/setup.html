@@ -108,10 +108,14 @@
            intercepted by main.js and installs the already-downloaded update
            immediately. A server running on its own installs the cached
            installer itself, no app restart involved. -->
+      <!-- "available", not "ready": this row is drawn from what the SERVER
+           found on GitHub, which says nothing about whether the app has
+           downloaded it yet. Promising a ready install and then answering
+           "you're up to date" is the exact confusion this wording avoids. -->
       <div class="sub" id="up-app-update-row" hidden>
-        <span class="lbl">A new version is ready for this machine</span>
+        <span class="lbl">A new version is available for this machine</span>
         <a class="linkbtn" href="/setup/action/app-update"
-           title="Installs the downloaded update now and restarts the app (a few seconds). Nothing is lost — the server comes back up with it.">Install now &amp; restart</a>
+           title="Downloads the update if needed, then installs it and restarts the app (a few seconds). Nothing is lost — the server comes back up with it.">Download &amp; install</a>
       </div>
       <div class="sub" id="up-server-update-row" hidden>
         <span class="lbl">A new version is downloaded and ready to install</span>

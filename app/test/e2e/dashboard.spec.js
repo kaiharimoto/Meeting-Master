@@ -210,7 +210,11 @@ test('a cached update offers an install control inside the app window', async ({
 
   const appRow = page.locator('#up-app-update-row');
   await expect(appRow).toBeVisible();
-  await expect(appRow.locator('a')).toHaveText(/Install now/);
+  // The wording is deliberately "available"/"Download & install": this row is
+  // drawn from the server's GitHub check, which knows nothing about whether
+  // the app has the installer yet.
+  await expect(appRow.locator('a')).toHaveText(/install/i);
+  await expect(appRow.locator('.lbl')).toHaveText(/available/);
   await expect(page.locator('#up-status')).toHaveText('update available');
   // The self-install button is for a server running on its own, not this one.
   await expect(page.locator('#up-server-update-row')).toBeHidden();
@@ -258,4 +262,24 @@ test('no update, no install controls', async ({ page }) => {
   await expect(page.locator('#up-status')).toHaveText('up to date');
   await expect(page.locator('#up-app-update-row')).toBeHidden();
   await expect(page.locator('#up-server-update-row')).toBeHidden();
+});
+
+// Field report: a v0.19.3 server showed "update available: v0.20.0" and an
+// install control, but the app answered "You're up to date (v0.19.3)". Setup
+// had never been finished, so there was no bearer token — and the laptop feed
+// that serves the update is bearer-gated. The card knew about the release; it
+// just could not fetch it, and said nothing about why.
+test('an unfinished setup says why the update cannot be fetched', async ({ page }) => {
+  await page.addInitScript((state) => {
+    window.__origFetch = window.fetch;
+    window.fetch = async (url, opts) => {
+      if (String(url).includes('/setup/state')) return { ok: true, json: async () => state };
+      return window.__origFetch(url, opts);
+    };
+  }, { ...withUpdates({ sidecar: true }), configured: false });
+  await page.goto(DASH_URL);
+
+  await expect(page.locator('#up-status')).toHaveText('update available');
+  await expect(page.locator('#up-laptop-note')).toContainText('cannot download');
+  await expect(page.locator('#up-laptop-note')).toContainText('Save & Finish');
 });
