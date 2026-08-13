@@ -15,10 +15,25 @@ month before anyone noticed. Two consecutive sessions started from v0.7.0
 believing it was current. A short-lived branch for a risky experiment is fine;
 a long-lived one is how work gets lost.
 
-As of v0.20.2 there are no other branches: the five stale ones were deleted
-(every commit on them was already on `main`, one set of three having been
-redone there rather than merged), and `build-installers.yml` builds `main`
-only. Commit to `main`, push to `main`, tag from `main`.
+From v0.20.2 `build-installers.yml` builds `main` and nothing else — the push
+trigger used to name a topic branch too, which is half of how the mess above
+happened. Commit to `main`, push to `main`, tag from `main`.
+
+**Two pieces of that cleanup are still owed, both needing the GitHub web UI:**
+
+1. **The default branch pointer is still `claude/meeting-notes-generator-o80jz1`**
+   (Settings → General → Default branch → `main`). It is 27 commits behind.
+   Until it moves, a fresh clone lands on a v0.19-era tree.
+2. **Five stale branches to delete**, once the pointer has moved off the first
+   one. Every commit on all five is already on `main`; checked, not assumed:
+
+   | branch | state |
+   | --- | --- |
+   | `claude/meeting-notes-generator-o80jz1` | merged, 27 behind — currently the default |
+   | `claude/pdf-layout-typography-phzoi2` | 3 unmerged commits (tip `90f6d38`), **superseded**: the same PDF type scale / large print / `**emphasis**` work was redone on `main` as `fcba549` in v0.20.0 |
+   | `claude/program-improvement-ideas-ohvtfe` | merged, 12 behind |
+   | `claude/transcript-prompt-feedback-mdtj9g` | identical to `main` |
+   | `claude/transcription-alignment-suggestions-erw76y` | merged, 7 behind |
 
 ## Every session that ships, ships a release
 
