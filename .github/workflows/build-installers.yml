@@ -36,10 +36,20 @@ permissions:
   contents: read
 
 env:
-  # whisper.cpp source ref to build. 'master' tracks upstream; pin to a tag
-  # (e.g. v1.7.5) for byte-reproducible builds. The commit it resolves to keys
-  # the build cache below, so bug-fix commits are picked up automatically.
-  WHISPER_CPP_REF: master
+  # whisper.cpp source ref to build. PINNED TO A TAG, and it must stay pinned.
+  #
+  # This was 'master' until v0.20.2, which meant every release shipped whatever
+  # upstream happened to be that morning. It cost us: whisper.cpp v1.8.0 turned
+  # flash attention ON by default, the Vulkan path for it kills whisper-cli on
+  # an AMD RX 7900 XTX (exit 0xC000001D, illegal instruction, during model
+  # load), and so v0.20.0 — a release about PDFs and the transcript reader —
+  # broke every transcription on the one machine this app runs on. Nothing in
+  # this repository had changed.
+  #
+  # Bumping this is a deliberate act: read upstream's release notes, build,
+  # and transcribe a real meeting on the home PC before tagging. The commit the
+  # tag resolves to keys the build cache below.
+  WHISPER_CPP_REF: v1.9.2
   # LunarG Vulkan SDK version. This SDK provides glslc, which ggml's Vulkan
   # backend uses to compile its compute shaders AT BUILD TIME — the source-only
   # Vulkan loader is not enough. Bump this if the download 404s (LunarG prunes
@@ -164,6 +174,26 @@ jobs:
           Get-ChildItem "$rel" -Filter *.dll | Copy-Item -Destination installer/server/bin/ -Force
           Write-Host "Staged into installer/server/bin:"
           Get-ChildItem installer/server/bin | ForEach-Object { Write-Host "  $($_.Name)" }
+
+      # The pipeline steers whisper-cli away from the accelerator paths that
+      # crash on the target GPU, and its fallback ladder is how a driver bug
+      # costs a slow transcript instead of the meeting (see
+      # server/app/pipeline/transcribe.py). Both depend on these flags existing
+      # in the build we ship. Checked against the SOURCE rather than by running
+      # the binary, so this needs no GPU and no Vulkan loader on the runner —
+      # it holds on a cache hit too, since the cache restores the checkout.
+      - name: Verify whisper-cli has the flags the pipeline relies on
+        shell: pwsh
+        run: |
+          $cli = "whisper.cpp/examples/cli/cli.cpp"
+          if (-not (Test-Path $cli)) { throw "$cli not found — the whisper.cpp checkout is not where the build left it." }
+          $src = Get-Content $cli -Raw
+          foreach ($flag in @("--no-flash-attn", "--no-gpu")) {
+            if ($src -notmatch [regex]::Escape($flag)) {
+              throw "whisper.cpp $env:WHISPER_CPP_REF has no '$flag'. The transcription fallback ladder passes it (server/app/pipeline/transcribe.py) and whisper.cpp answers an unknown argument by printing usage and exiting 0 — i.e. a silent no-op run. Update both together."
+            }
+          }
+          Write-Host "whisper-cli flags OK."
 
       # Static ffmpeg — extract only ffmpeg.exe into the installer's bin/.
       - name: Download and stage ffmpeg

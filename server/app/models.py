@@ -176,6 +176,12 @@ class Transcript(BaseModel):
     # audio. Not an error: the transcript is still delivered, and the operator
     # decides. None means it looked clean.
     warning: str | None = None
+    # Set when the transcript is FINE but the machine that made it is not —
+    # whisper.cpp crashed on the GPU and the job only finished because the
+    # pipeline retried it on a slower path (see pipeline/transcribe.py). A
+    # silent degradation reads as "the home PC got slow", so it is said out
+    # loud, separately from `warning`, which is about the text itself.
+    notice: str | None = None
 
 
 class PdfInfo(BaseModel):

@@ -41,6 +41,8 @@ let lastPolledState = null;
 // Which job's transcript-quality warning has already been raised, so a poll
 // every few seconds doesn't re-raise the same card.
 let transcriptWarningShownFor = null;
+// Same, for the separate "the home PC finished this the slow way" notice.
+let transcriptNoticeShownFor = null;
 
 // Jobs whose recipient list the operator has confirmed this session (the
 // preset list lives on the server and is otherwise invisible from here).
@@ -359,6 +361,21 @@ async function pollOnce() {
       });
     } else if (!job.transcript.warning) {
       clearProblem('transcript-quality');
+    }
+    // Separate from `warning`, and deliberately so: the TEXT is fine, the
+    // machine is not. whisper.cpp crashed on the home PC's GPU and the job
+    // only finished because the server retried it on a slower path. Nothing
+    // to redo — but silence here reads as "the home PC has got slow lately",
+    // which sends nobody to the actual cause.
+    if (job.transcript.notice && transcriptNoticeShownFor !== job.id) {
+      transcriptNoticeShownFor = job.id;
+      showProblem({
+        id: 'transcript-slow-path',
+        title: 'The transcript is fine — the home PC had to work around its GPU',
+        detail: job.transcript.notice,
+      });
+    } else if (!job.transcript.notice) {
+      clearProblem('transcript-slow-path');
     }
   }
   if (job.summary !== null && job.summary !== undefined) {

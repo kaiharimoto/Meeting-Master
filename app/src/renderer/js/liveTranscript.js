@@ -74,7 +74,11 @@ function onLiveEvent(payload) {
     const note = '[skipped ahead — live transcription fell behind]';
     record(note, payload.atMs, 'note');
     appendLine(note, 'live-note');
-  } else if (payload.type === 'error' && payload.message) {
+  } else if ((payload.type === 'error' || payload.type === 'notice') && payload.message) {
+    // 'notice' is live transcription telling you it had to change how it
+    // works (the GPU crashed, so it moved to the CPU) and kept going; 'error'
+    // is it giving up. Both belong in the draft as notes — a reader looking
+    // back at a thin stretch needs to know which of the two happened.
     record(payload.message, payload.atMs, 'note');
     appendLine(payload.message, 'live-note');
   }

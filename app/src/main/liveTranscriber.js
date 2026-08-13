@@ -19,6 +19,11 @@
 //   (amortizes process start); if the machine can't keep up, the oldest
 //   audio is dropped with a single 'lag' notice — live text is advisory,
 //   the post-meeting transcript is the quality path.
+// - A GPU that CRASHES whisper-cli demotes the session to the CPU instead of
+//   ending live transcription. Same story as the server's pipeline, same
+//   cause: whisper.cpp v1.8.0 turned flash attention on by default and the
+//   Vulkan path for it kills the process on an AMD RX 7900 XTX. See
+//   server/app/pipeline/transcribe.py for the long version.
 // - Everything is generation-guarded (serverManager.js idiom) so a stop
 //   invalidates all in-flight async work.
 
@@ -40,6 +45,13 @@ const PROMPT_TAIL_CHARS = 400; // whisper's initial-prompt window is ~224 tokens
 // (-l auto), so pin English — the meetings this app targets are English and
 // the post-meeting pipeline still honors the server's WHISPER_LANGUAGE.
 const LANGUAGE = 'en';
+
+// Windows reports an unhandled exception as its NTSTATUS code, always
+// 0xC0000000 or above (0xC000001D is the illegal instruction the AMD Vulkan
+// flash-attention path produced). A whisper-cli error exit is a small number,
+// so the two ranges never overlap. POSIX has no equivalent — a crash arrives
+// as a signal name instead.
+const WINDOWS_EXCEPTION_MIN = 0xc0000000;
 
 let emit = () => {};
 
@@ -92,6 +104,10 @@ function start({ attendees = [], model = 'small' } = {}) {
     consecutiveFailures: 0,
     flushTimer: null,
     atMs: 0,
+    // Started here, awaited by the first window: reading --help takes tens of
+    // milliseconds and the first window is seconds away, so nothing waits.
+    flags: locator.supportedFlags(cliPath),
+    gpuDisabled: false,
   };
   return { ok: true };
 }
@@ -173,6 +189,8 @@ async function transcribeWindow(pcm, atMs) {
 
   try {
     fs.writeFileSync(wavPath, encodeWav(pcm));
+    const flags = await s.flags;
+    if (!isCurrent(gen)) return;
     const prompt = buildPrompt(s);
     const args = [
       '-m', s.modelPath,
@@ -181,11 +199,30 @@ async function transcribeWindow(pcm, atMs) {
       '-of', base,
       '-l', LANGUAGE,
       '-np',
+      // whisper.cpp v1.8.0+ turns flash attention on unless told otherwise,
+      // and that is the path that crashes on AMD Vulkan. Older builds have
+      // it off already and would choke on the flag, hence the check.
+      ...(flags.has('--no-flash-attn') ? ['--no-flash-attn'] : []),
+      ...(s.gpuDisabled && flags.has('--no-gpu') ? ['--no-gpu'] : []),
       ...(prompt ? ['--prompt', prompt] : []),
     ];
-    const ok = await runWhisper(s, args);
+    const result = await runWhisper(s, args);
     if (!isCurrent(gen)) return;
-    if (!ok) {
+    if (!result.ok) {
+      // A CRASH is the GPU's fault, not this window's: demote the session to
+      // the CPU and let the next window prove it. Spending the three-strikes
+      // budget on a driver bug would end live transcription for a meeting the
+      // machine can still transcribe, just more slowly.
+      if (result.crashed && !s.gpuDisabled && flags.has('--no-gpu')) {
+        session.gpuDisabled = true;
+        emit({
+          type: 'notice',
+          atMs,
+          message:
+            '[the GPU crashed — live transcription continued on the CPU, which is slower]',
+        });
+        return;
+      }
       onFailure(gen, 'whisper-cli exited with an error');
       return;
     }
@@ -217,6 +254,10 @@ function buildPrompt(s) {
   return (names + tail).trim();
 }
 
+/** Run one window. Resolves { ok, crashed } — `crashed` means whisper-cli
+ *  DIED (GPU/driver) rather than exiting with an error it understood, which
+ *  is the only failure worth changing the session's settings over. Our own
+ *  timeout kill is deliberately not counted as a crash. */
 function runWhisper(s, args) {
   return new Promise((resolve) => {
     const child = spawn(s.cliPath, args, {
@@ -226,20 +267,27 @@ function runWhisper(s, args) {
     });
     s.child = child;
     let settled = false;
-    const finish = (ok) => {
+    let killedByUs = false;
+    const finish = (ok, crashed = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       if (s.child === child) s.child = null;
-      resolve(ok);
+      resolve({ ok, crashed });
     };
     const timer = setTimeout(() => {
+      killedByUs = true;
       killTree(child);
       finish(false);
     }, WHISPER_TIMEOUT_MS);
     child.stderr.on('data', () => {}); // drain so the process never blocks
     child.on('error', () => finish(false));
-    child.on('close', (code) => finish(code === 0));
+    child.on('close', (code, signal) => {
+      const crashed =
+        !killedByUs &&
+        (Boolean(signal) || (typeof code === 'number' && code >= WINDOWS_EXCEPTION_MIN));
+      finish(code === 0, crashed);
+    });
   });
 }
 

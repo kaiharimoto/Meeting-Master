@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.20.1"
+APP_VERSION = "0.20.2"
 
 
 def config_home() -> Path:
@@ -121,9 +121,24 @@ class Settings(BaseSettings):
     # for slightly better continuity across window boundaries; for meeting
     # audio with real silences in it, that is the wrong side of the trade.
     WHISPER_MAX_CONTEXT: int = 0
+    # Flash attention. whisper.cpp turned this ON by default in v1.8.0; on the
+    # AMD RX 7900 XTX this pipeline targets, the Vulkan flash-attention path
+    # KILLS whisper-cli during model load (exit 0xC000001D, illegal
+    # instruction) — which is how an app update that changed nothing here broke
+    # every transcription in v0.20.0. Off is what the builds that worked did.
+    # Turn it on if your GPU handles it; the fallback ladder in
+    # pipeline/transcribe.py recovers either way.
+    WHISPER_FLASH_ATTN: bool = False
+    # Set false to transcribe on the CPU always (correct, many times slower).
+    # Normally unnecessary: a GPU that crashes is detected and worked around
+    # per job. Worth setting when a machine's GPU is known bad, to skip the
+    # few wasted seconds each job spends discovering that again.
+    WHISPER_GPU: bool = True
     # Extra whisper-cli flags, appended verbatim (shell-style splitting). An
     # escape hatch for tuning thresholds (-et, -lpt, …) or enabling VAD on a
-    # build that has it, without waiting for a release.
+    # build that has it, without waiting for a release. NOTE: the fallback
+    # ladder's own flags are appended after these, so they win — use
+    # WHISPER_FLASH_ATTN / WHISPER_GPU to steer it rather than -fa / -ng here.
     WHISPER_EXTRA_ARGS: str = ""
 
     # --- Which model writes the notes ---

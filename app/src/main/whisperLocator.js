@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { app } = require('electron');
 
 // Whitelist — model names are interpolated into URLs and file paths, so an
@@ -57,6 +58,78 @@ function cliPath() {
     }
   }
   return null;
+}
+
+// ---- Which flags this whisper-cli understands -------------------------------
+//
+// whisper.cpp answers an argument it does not recognise by printing
+// "error: unknown argument" and then exiting **0** with no output file — a run
+// that looks like a success and transcribed nothing. So flags that only exist
+// in newer builds (--no-flash-attn, added in v1.8.0) are never guessed at:
+// --help is read once per binary and only what it advertises gets passed.
+// Mirrors _supported_flags() in server/app/pipeline/transcribe.py.
+
+const LONG_STANDING_FLAGS = Object.freeze(['--flash-attn', '--no-gpu']);
+const HELP_TIMEOUT_MS = 15000;
+
+let flagProbe = null; // { key, promise }
+
+function binaryKey(cli) {
+  try {
+    const stat = fs.statSync(cli);
+    return `${cli}:${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return cli;
+  }
+}
+
+/** The long options `whisper-cli --help` advertises, as a Set. Memoized per
+ *  binary (an update replaces the exe, which changes the key). */
+function supportedFlags(cli) {
+  const key = binaryKey(cli);
+  if (flagProbe && flagProbe.key === key) return flagProbe.promise;
+  const promise = new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(cli, ['--help'], {
+        cwd: path.dirname(cli), // sibling DLLs must resolve on Windows
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch {
+      resolve(new Set(LONG_STANDING_FLAGS));
+      return;
+    }
+    let text = '';
+    const collect = (chunk) => {
+      text += String(chunk);
+    };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect); // whisper.cpp prints usage to stderr
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const found = text.match(/--[A-Za-z][A-Za-z0-9-]*/g) || [];
+      resolve(new Set(found.length ? found : LONG_STANDING_FLAGS));
+    };
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        // Already gone.
+      }
+      finish();
+    }, HELP_TIMEOUT_MS);
+    child.on('error', () => {
+      text = '';
+      finish();
+    });
+    child.on('close', finish);
+  });
+  flagProbe = { key, promise };
+  return promise;
 }
 
 function modelsDir() {
@@ -103,4 +176,13 @@ function support() {
   };
 }
 
-module.exports = { MODELS, cliPath, modelsDir, modelPath, modelDownloaded, support };
+module.exports = {
+  MODELS,
+  LONG_STANDING_FLAGS,
+  cliPath,
+  supportedFlags,
+  modelsDir,
+  modelPath,
+  modelDownloaded,
+  support,
+};

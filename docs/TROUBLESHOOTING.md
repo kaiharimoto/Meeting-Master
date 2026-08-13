@@ -368,6 +368,52 @@ see [ARCHITECTURE.md](ARCHITECTURE.md) ("Two transcripts, and which one becomes
 the notes"). The notes always come from the home server's full-quality pass over
 the uploaded recording, and that is enforced by a test rather than by convention.
 
+## Transcription crashes instead of failing
+
+The job fails within seconds of reaching **Transcribing**, and the error is an
+exit code rather than a sentence:
+
+```
+RuntimeError: whisper.cpp failed (exit 3221225501): ...
+whisper_backend_init_gpu: using Vulkan0 backend
+```
+
+3221225501 is `0xC000001D`, STATUS_ILLEGAL_INSTRUCTION. whisper-cli did not
+report a problem — it **died**, during model load, before reading any audio.
+That is the GPU driver or a compute shader, never the recording.
+
+**This happened for real in v0.20.0 and v0.20.1**, and nothing in Meeting
+Master caused it. CI compiles whisper.cpp from upstream source at release time
+and was tracking `master`; upstream's v1.8.0 turned **flash attention on by
+default**, and the Vulkan flash-attention path takes the process down on an AMD
+RX 7900 XTX (the AMD proprietary driver's Vulkan device, `KHR_coopmat`). An app
+update about PDFs shipped a different transcription engine as a side effect.
+
+Fixed in **v0.20.2**, three ways:
+
+- The server no longer asks for flash attention (`WHISPER_FLASH_ATTN=false`).
+- A crash is no longer a verdict. The same audio is retried with flash
+  attention off, then with the cooperative-matrix shaders off, then on the
+  CPU. The job finishes; the app says which path it took ("The transcript is
+  fine — the home PC had to work around its GPU") so a slow run isn't
+  mistaken for the machine getting old.
+- CI pins the whisper.cpp version instead of building whatever upstream
+  pushed that morning, so this class of surprise needs somebody to choose it.
+
+If you see it anyway:
+
+- **Update the AMD driver** (Adrenalin). A Vulkan crash in a compute shader is
+  a driver bug more often than not.
+- **Check the job's notice.** If every meeting is quietly landing on the CPU,
+  set `WHISPER_GPU=false` in `%APPDATA%\MeetingMaster\server.env` to stop
+  paying the crash-then-retry cost on every job — then work on the driver.
+- **Reproduce it by hand** with the command under "Transcription failed or
+  produced garbage" below, adding `--no-flash-attn`. If that fixes it, say so
+  in an issue: it means a newer whisper.cpp changed the default back.
+- **A different exit code in the same range** (`0xC0000005` access violation,
+  `0xC0000135` a missing DLL) is the same category. `0xC0000135` specifically
+  means a DLL beside `whisper-cli.exe` is missing — reinstall the app.
+
 ## Transcription failed or produced garbage
 
 - **Check the job record** (the app shows the error; `GET /jobs/{id}` → `error`).

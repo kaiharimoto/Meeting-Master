@@ -68,6 +68,22 @@ the code, not the test.
   pins the exhaustive list of writers.
 - **The PDF transcript appendix is opt-in and off by default,** and all three
   IPC hops carry the argument. `pdfWiring.test.js`.
+- **whisper-cli is only ever passed flags its own `--help` advertised,** on
+  both the server and the laptop. whisper.cpp answers an unknown argument by
+  printing usage and **exiting 0**, so a wrong guess is a run that reports
+  success and transcribed nothing. `whisperFlags.test.js`,
+  `test_transcribe_gpu.py`.
+
+## whisper.cpp is a pinned dependency, not a moving one
+
+`WHISPER_CPP_REF` in `build-installers.yml` is a tag. It was `master` until
+v0.20.2, and that cost a working release: upstream v1.8.0 turned flash
+attention on by default, which kills whisper-cli on the target AMD card, so
+v0.20.0 — a release about PDFs — broke every transcription with no change in
+this repository. Bumping the pin means reading upstream's notes, building, and
+transcribing a real meeting before tagging. The pipeline survives the next one
+regardless (`transcribe.py` retries a crashed job on safer paths), but that is
+a net, not a plan.
 
 ## Shape of the thing
 
