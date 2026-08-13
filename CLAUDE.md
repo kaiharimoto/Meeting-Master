@@ -55,6 +55,13 @@ alone only runs the build. Releases stay `prerelease: true` until the builds
 are code-signed and the licensed fonts are bundled — the home server's
 auto-update feed reads them either way.
 
+**If you cannot push a tag, dispatch the workflow instead.** Actions →
+build-installers → Run workflow on `main`. The release job takes
+`workflow_dispatch` as well as a `v*` tag, reads the version from
+`app/package.json`, and `action-gh-release` creates the tag at that commit —
+so the result is identical to step 4. v0.20.2 shipped this way, from a session
+whose credentials could push commits to `main` but got 403 on `refs/tags/*`.
+
 Minor bump for features, patch for fixes. Nothing here is at 1.0, and the two
 halves ship as one product, so their version numbers are the same number.
 
