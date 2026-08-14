@@ -22,18 +22,27 @@ happened. Commit to `main`, push to `main`, tag from `main`.
 **Two pieces of that cleanup are still owed, both needing the GitHub web UI:**
 
 1. **The default branch pointer is still `claude/meeting-notes-generator-o80jz1`**
-   (Settings → General → Default branch → `main`). It is 27 commits behind.
-   Until it moves, a fresh clone lands on a v0.19-era tree.
-2. **Five stale branches to delete**, once the pointer has moved off the first
-   one. Every commit on all five is already on `main`; checked, not assumed:
+   (Settings → General → Default branch → `main`). It is 27 behind as of v0.20.2
+   and further behind now. Until it moves, a fresh clone lands on a v0.19-era
+   tree. This is not hypothetical: the v0.21.0 session started on a **v0.7.0**
+   branch, diagnosed a bug against code that was thirteen minor versions stale,
+   and had to be told by the user that it was on the wrong tree.
+2. **Six stale branches to delete**, once the pointer has moved off the first
+   one. Nothing is lost — re-verified against `main` at v0.21.0 with
+   `git rev-list --count origin/main..<branch>`, not assumed:
 
-   | branch | state |
-   | --- | --- |
-   | `claude/meeting-notes-generator-o80jz1` | merged, 27 behind — currently the default |
-   | `claude/pdf-layout-typography-phzoi2` | 3 unmerged commits (tip `90f6d38`), **superseded**: the same PDF type scale / large print / `**emphasis**` work was redone on `main` as `fcba549` in v0.20.0 |
-   | `claude/program-improvement-ideas-ohvtfe` | merged, 12 behind |
-   | `claude/transcript-prompt-feedback-mdtj9g` | identical to `main` |
-   | `claude/transcription-alignment-suggestions-erw76y` | merged, 7 behind |
+   | branch | commits not on `main` | note |
+   | --- | --- | --- |
+   | `claude/meeting-notes-generator-o80jz1` | 0 | currently the default — delete last |
+   | `claude/pdf-layout-typography-phzoi2` | 3 (tip `90f6d38`) | **superseded**: the same PDF type scale / large print / `**emphasis**` work was redone on `main` as `fcba549` in v0.20.0. Confirmed present: nine `--fs-*` tokens in `print.css`, emphasis instructions in `summarize.py` and `extract.py` |
+   | `claude/program-improvement-ideas-ohvtfe` | 0 | |
+   | `claude/transcript-prompt-feedback-mdtj9g` | 0 | |
+   | `claude/transcription-alignment-suggestions-erw76y` | 0 | |
+   | `claude/whisper-vulkan-gpu-error-aijuxj` | 0 | missing from this list until v0.21.0 — tip `74951ef` is the v0.20.2 commit itself |
+
+   **Both items need the web UI.** These credentials get 403 on `refs/tags/*`
+   *and* on branch deletion (`git push origin --delete` → 403), so an agent
+   session cannot do either no matter how carefully it verifies them.
 
 ## Every session that ships, ships a release
 
@@ -54,6 +63,10 @@ Windows installer and cuts a GitHub Release on any `v*` tag; pushing to `main`
 alone only runs the build. Releases stay `prerelease: true` until the builds
 are code-signed and the licensed fonts are bundled — the home server's
 auto-update feed reads them either way.
+
+**Expect to need this.** Two consecutive sessions (v0.20.2, v0.21.0) could push
+commits to `main` but got 403 on `refs/tags/*`. Treat the dispatch route as the
+normal one, not the fallback.
 
 **If you cannot push a tag, dispatch the workflow instead.** Actions →
 build-installers → Run workflow on `main`. The release job takes
