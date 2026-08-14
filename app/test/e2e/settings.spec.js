@@ -54,6 +54,10 @@ test.beforeEach(async ({ page }) => {
         };
       },
       onJobProgress: () => () => {},
+      openServerAdmin: async () => {
+        window.__adminOpened = (window.__adminOpened || 0) + 1;
+        return { ok: true };
+      },
     };
   });
   await page.goto(INDEX_URL);
@@ -83,4 +87,32 @@ test('Settings auto-opens unconfigured; Apply decodes the code and Save persists
   expect(saved).toHaveLength(1);
   expect(saved[0].serverUrl).toBe(EXPECTED_URL);
   expect(saved[0].token).toBe(EXPECTED_TOKEN);
+});
+
+
+test('the home server settings button is gated on being connected', async ({ page }) => {
+  // The remote dashboard authenticates with the saved bearer token, so without
+  // a server URL and a token the button would only ever open a 401.
+  const adminBtn = page.locator('#settings-admin-btn');
+  await expect(page.locator('#settings-modal')).toBeVisible();
+  await expect(adminBtn).toBeDisabled();
+  await expect(page.locator('#settings-admin-note')).toContainText('Connect to a home server first');
+
+  // Pair the laptop, and it becomes available.
+  await page.evaluate(() => {
+    window.api.getFullConfig = async () => ({
+      serverUrl: 'https://homepc.tail-abc.ts.net',
+      hasToken: true,
+      emailMode: 'home',
+      pageSize: 'Letter',
+      smtpUser: '',
+      hasSmtpPassword: false,
+    });
+  });
+  await page.locator('#settings-cancel-btn').click();
+  await page.locator('#settings-btn').click();
+  await expect(adminBtn).toBeEnabled();
+
+  await adminBtn.click();
+  expect(await page.evaluate(() => window.__adminOpened)).toBe(1);
 });

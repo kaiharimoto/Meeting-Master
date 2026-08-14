@@ -19,6 +19,7 @@ const modelManager = require('./modelManager');
 const liveTranscriber = require('./liveTranscriber');
 const liveFlagger = require('./liveFlagger');
 const miniManager = require('./miniManager');
+const adminWindow = require('./adminWindow');
 
 /**
  * @param {() => import('electron').BrowserWindow|null} getMainWindow
@@ -339,6 +340,12 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
   // Mini mode: the strip window is a remote control for the recording that
   // lives in the MAIN window's renderer (see miniManager.js).
   handleLocal(CHANNELS.MINI_OPEN, () => miniManager.open(getMainWindow));
+
+  // Remote server administration. handleLocal, not handle: this must be
+  // callable only from our own file:// pages. In server mode the loopback
+  // dashboard shares this preload, and it has no business opening a window
+  // that carries the bearer token.
+  handleLocal(CHANNELS.ADMIN_OPEN, () => adminWindow.open(getMainWindow));
 
   handleLocal(CHANNELS.MINI_CMD, (cmd) => {
     const c = String(cmd || '');

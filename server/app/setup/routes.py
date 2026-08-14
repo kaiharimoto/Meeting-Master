@@ -65,11 +65,46 @@ DEFAULT_EMAIL_TEMPLATE = (
 )
 
 
+# Headers that only a reverse proxy adds. Their PRESENCE is the tell: the
+# browser on the home PC talks to uvicorn directly and sends none of them.
+_PROXY_HEADERS = ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "forwarded")
+
+
 def require_loopback(request: Request) -> None:
-    """403 unless the request originates from localhost."""
+    """403 unless the request really originates from this machine.
+
+    The peer address alone is not enough, and the reason is worth knowing.
+    ``tailscale serve`` proxies tailnet traffic from 127.0.0.1, so a remote
+    request arrives with a LOOPBACK peer. What saves us today is a chain of
+    third-party defaults: Tailscale sets X-Forwarded-For, and uvicorn's
+    ProxyHeadersMiddleware (proxy_headers=True, forwarded_allow_ips=127.0.0.1
+    by default) rewrites the client to the tailnet address before we see it.
+
+    That chain is invisible from here and would break silently. Note especially
+    that turning proxy_headers OFF — the instinctive "we're not behind a proxy"
+    hardening — is what would OPEN this hole, because the peer would go back to
+    reading 127.0.0.1. See desktop.py, where those options are now explicit.
+
+    So check two things the peer address cannot tell us, neither of which the
+    genuine local browser can trip:
+      * any proxy header at all — a direct client sends none;
+      * the Host header — ``tailscale serve`` passes the request's own Host
+        through, so a tailnet request says <machine>.<tailnet>.ts.net.
+    Remote settings management does not need this door: it has /admin/*, which
+    is bearer-gated and never returns the token.
+    """
     client = getattr(request, "client", None)
     host = getattr(client, "host", None)
-    if host not in _LOOPBACK_HOSTS:
+    # getattr, like `client` above: this is called with hand-built request
+    # doubles in tests, and a missing header map must not become a 500.
+    headers = getattr(request, "headers", {}) or {}
+    proxied = any(name in headers for name in _PROXY_HEADERS)
+    # Strip the port, and the brackets an IPv6 literal arrives wrapped in.
+    hostname = (headers.get("host") or "").rsplit(":", 1)[0].strip("[]").lower()
+    # No Host header at all (HTTP/1.0, some test clients) leaves only the peer
+    # check — don't fail closed on its absence, just don't credit it either.
+    host_ok = hostname in _LOOPBACK_HOSTS or not hostname
+    if host not in _LOOPBACK_HOSTS or proxied or not host_ok:
         raise HTTPException(
             status_code=403,
             detail="Setup is only available on the home PC (http://127.0.0.1).",
@@ -131,15 +166,28 @@ def _read_template(settings) -> str:
     return DEFAULT_EMAIL_TEMPLATE
 
 
-async def build_state() -> dict:
+async def build_state(*, redact: bool = False) -> dict:
+    """The whole settings picture the dashboard renders.
+
+    ``redact=True`` strips the two fields that ARE credentials — the bearer
+    token and the connection code that carries it — so the same payload can be
+    served to an authenticated remote client (routes/admin.py). Everything else
+    here is configuration, not secrets: passwords and tokens were already
+    reported as ``hasPassword`` / ``githubTokenSet`` booleans rather than values.
+
+    Redaction lives here, in the one function that assembles the payload, so a
+    field added later is not silently exposed by a second copy that never
+    learned about it.
+    """
     settings = config.get_settings()
     recipients = _read_recipients(settings)
     return {
         "configured": settings.is_configured,
-        "connectionCode": connection_code(settings),
+        "connectionCode": None if redact else connection_code(settings),
         "serverUrl": server_url(settings),
-        # Loopback-only route — safe to surface the token so the UI can show it.
-        "token": settings.BEARER_TOKEN or None,
+        # The token itself: fine on the loopback-only route (the UI shows it),
+        # never over the network — see the redact note above.
+        "token": None if redact else (settings.BEARER_TOKEN or None),
         "email": {
             "user": settings.SMTP_USER,
             "from": settings.SMTP_FROM,
@@ -247,16 +295,32 @@ class SaveBody(BaseModel):
 _NO_CACHE = {"Cache-Control": "no-cache"}
 
 
-@router.get("")
-async def setup_page() -> HTMLResponse:
+def render_page(mount: str = "/setup") -> HTMLResponse:
+    """The dashboard HTML, pointed at whichever mount is serving it.
+
+    One page, two mounts (see routes/admin.py). dashboard.js reads
+    window.MM_API_BASE and makes every request relative to it, so the only
+    difference between the local and remote dashboards is the string injected
+    here — not a second copy of a 900-line file.
+    """
     # Version-stamp the asset URLs so no cache layer (browser OR the app
     # window's Chromium) can ever pair an old dashboard.js with a new backend.
     html = (_STATIC_DIR / "setup.html").read_text(encoding="utf-8")
     for asset in ("dashboard.css", "dashboard.js"):
         html = html.replace(
-            f"/setup/assets/{asset}", f"/setup/assets/{asset}?v={config.APP_VERSION}"
+            f"/setup/assets/{asset}", f"{mount}/assets/{asset}?v={config.APP_VERSION}"
+        )
+    if mount != "/setup":
+        # Before dashboard.js loads, so its `var API` sees it.
+        html = html.replace(
+            "<script", f'<script>window.MM_API_BASE={json.dumps(mount)}</script><script', 1
         )
     return HTMLResponse(html, headers=_NO_CACHE)
+
+
+@router.get("")
+async def setup_page() -> HTMLResponse:
+    return render_page("/setup")
 
 
 # Dashboard buttons whose ACTION lives in the Electron app (opening the notes
@@ -311,13 +375,29 @@ async def get_state() -> dict:
 
 @router.post("/save")
 async def save(body: SaveBody) -> dict:
+    return await apply_save(body)
+
+
+async def apply_save(body: SaveBody, *, allow_token: bool = True, redact: bool = False) -> dict:
+    """Validate and persist a settings save. Shared by /setup/save and the
+    bearer-gated /admin/config (routes/admin.py).
+
+    ONE copy of the clamps, the don't-clobber-a-blank-secret rules and
+    _reject_impossible_context, because two would drift and the remote one
+    would be the copy nobody re-reads.
+
+    ``allow_token=False`` makes the request unable to touch BEARER_TOKEN: a
+    remote client changing the shared secret would 401 itself mid-request and
+    leave the only fix on a machine it cannot reach.
+    """
     settings = config.get_settings()
 
     # Preserve the existing token on re-saves: the dashboard's Settings tab is
     # revisited routinely (model changes, recipients), and rotating the token
     # on every save would silently 401 the already-connected laptop. A new
     # token is minted only on true first-run (no token supplied AND none saved).
-    token = (body.token or "").strip() or settings.BEARER_TOKEN or secrets.token_urlsafe(32)
+    supplied = (body.token or "").strip() if allow_token else ""
+    token = supplied or settings.BEARER_TOKEN or secrets.token_urlsafe(32)
 
     # Recipients JSON array + email template file live in the config home.
     recipients = [r.strip() for r in body.recipients if r.strip()]
@@ -407,7 +487,7 @@ async def save(body: SaveBody) -> dict:
 
     config.write_env(values)
     log.info("Setup saved (server is now configured=%s)", config.get_settings().is_configured)
-    return await build_state()
+    return await build_state(redact=redact)
 
 
 def _reject_impossible_context(values: dict, saved) -> None:
@@ -418,6 +498,13 @@ def _reject_impossible_context(values: dict, saved) -> None:
     stages = (
         ("summary", int(values.get("SUMMARY_NUM_PREDICT", saved.SUMMARY_NUM_PREDICT))),
         ("Q&A extraction", int(values.get("EXTRACT_NUM_PREDICT", saved.EXTRACT_NUM_PREDICT))),
+        # The live stage shares NUM_CTX and was missing from this check. It is
+        # the one where an unusable setting is discovered at the worst possible
+        # moment — the operator is in the meeting when the ticks start failing.
+        (
+            "live suggestions",
+            int(values.get("LIVE_EXTRACT_NUM_PREDICT", saved.LIVE_EXTRACT_NUM_PREDICT)),
+        ),
     )
     for stage, num_predict in stages:
         needed = (

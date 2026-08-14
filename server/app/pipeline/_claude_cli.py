@@ -81,7 +81,7 @@ class ClaudeCliError(RuntimeError):
     """The CLI is missing, not logged in, or exited non-zero."""
 
 
-async def _run(settings: Settings, system_prompt: str, user_prompt: str, *, model: str | None) -> str:
+async def _run(settings: Settings, system_prompt: str, user_prompt: str) -> str:
     exe = resolve_cli(settings)
     if not exe:
         raise ClaudeCliError(
@@ -93,7 +93,9 @@ async def _run(settings: Settings, system_prompt: str, user_prompt: str, *, mode
     cmd = [exe, "-p", "--output-format", "text"]
     if system_prompt:
         cmd += ["--append-system-prompt", system_prompt]
-    chosen = (model or settings.CLAUDE_MODEL or "").strip()
+    # CLAUDE_MODEL is the ONLY source of the model here. There is deliberately
+    # no per-call override: the one that existed took an Ollama tag.
+    chosen = (settings.CLAUDE_MODEL or "").strip()
     if chosen:
         cmd += ["--model", chosen]
 
@@ -149,7 +151,7 @@ async def chat_text(
     num_predict: int,  # noqa: ARG001 - Ollama sizing knobs have no CLI equivalent
     temperature: float,  # noqa: ARG001
 ) -> str:
-    return await _run(settings, system_prompt, user_prompt, model=None)
+    return await _run(settings, system_prompt, user_prompt)
 
 
 async def chat_json(
@@ -160,8 +162,6 @@ async def chat_json(
     *,
     num_predict: int,  # noqa: ARG001
     temperature: float,  # noqa: ARG001
-    model: str | None = None,
-    keep_alive: str | None = None,  # noqa: ARG001 - nothing stays resident here
 ):
     """One CLI turn whose reply is parsed as JSON.
 
@@ -170,8 +170,14 @@ async def chat_json(
     to work for a human pasting into a chatbot. Parsing is _ollama._loads_loose,
     which strips code fences and finds the first balanced object: exactly the
     shape of a CLI answer that opens with a sentence of preamble.
+
+    This takes NO `model` argument, matching chat_text. It used to, and callers
+    passing an Ollama tag (run_live's settings.live_model) reached the CLI as
+    `--model gemma4:26b`, which fails. The model for this backend comes from
+    CLAUDE_MODEL and nowhere else; _provider strips the Ollama-only kwargs
+    before dispatch, and this signature is the second line of defence.
     """
     from . import _ollama  # late import — sibling module, avoids a cycle
 
-    text = await _run(settings, system_prompt, user_prompt, model=model)
+    text = await _run(settings, system_prompt, user_prompt)
     return _ollama._loads_loose(text)

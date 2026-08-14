@@ -81,7 +81,21 @@ def _serve() -> None:
 
         settings = get_settings()
         log.info("Starting uvicorn on %s:%s", _HOST, settings.SERVER_PORT)
-        uvicorn.run(fastapi_app, host=_HOST, port=settings.SERVER_PORT, log_level="info")
+        # proxy_headers/forwarded_allow_ips are uvicorn's DEFAULTS, stated here
+        # because the loopback-only /setup guard depends on them and a silent
+        # default is a poor thing to depend on. `tailscale serve` proxies from
+        # 127.0.0.1, so without this the guard would see every tailnet request
+        # as local and hand out BEARER_TOKEN. Counter-intuitively, turning
+        # proxy_headers OFF is what would open that hole — do not "harden" it.
+        # See setup/routes.py:require_loopback.
+        uvicorn.run(
+            fastapi_app,
+            host=_HOST,
+            port=settings.SERVER_PORT,
+            log_level="info",
+            proxy_headers=True,
+            forwarded_allow_ips="127.0.0.1",
+        )
     except Exception:
         log.exception("Server thread crashed — the setup page will be unreachable")
 

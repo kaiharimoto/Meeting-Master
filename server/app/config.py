@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 # Surfaced by /health and the dashboards. Keep in step with app/package.json.
-APP_VERSION = "0.20.2"
+APP_VERSION = "0.21.0"
 
 
 def config_home() -> Path:
@@ -250,8 +250,14 @@ class Settings(BaseSettings):
 
     @property
     def live_model(self) -> str:
-        """The model the mid-meeting live path uses (falls back to the summary
-        model). Always read the live model through here."""
+        """The OLLAMA model the mid-meeting live path uses. Always read it here.
+
+        Falls back to OLLAMA_MODEL, and note that this is independent of
+        AI_PROVIDER: live suggestions run on Ollama even when Claude writes the
+        post-meeting notes (see pipeline/extract.py:warm_live_model for why).
+        So the fallback is always a real, installed Ollama tag — never a Claude
+        model name, and never blank.
+        """
         return self.LIVE_MODEL.strip() or self.OLLAMA_MODEL
 
     @property

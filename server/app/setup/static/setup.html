@@ -279,6 +279,12 @@
         difficult meetings, and this machine can reach it even when the
         work network cannot.
       </p>
+      <p class="hint">
+        This choice applies to the <strong>after the meeting</strong> stages —
+        the summary and the Q&amp;A extraction. Live suggestions during a meeting
+        always run locally on Ollama, because they need a model held in VRAM and
+        answering every few seconds; see the Live suggestions card below.
+      </p>
       <div class="row2">
         <div>
           <label for="aiProvider">AI provider</label>
@@ -365,7 +371,7 @@
       </p>
       <div class="sub">
         <button class="ghost small" id="ai-test" type="button"
-                title="Run a tiny real request through the model with the context window above">Test AI now</button>
+                title="Run a tiny real request through the after-the-meeting provider with the context window above. Live suggestions are a separate path — test them in the Live suggestions card below.">Test the summary AI</button>
       </div>
       <div class="taskmsg" id="ai-test-result"></div>
     </div>
@@ -416,13 +422,19 @@
         time in a side panel. Everything about the loop is configured here — the
         laptop reads these settings at the start of each meeting.
       </p>
+      <p class="hint">
+        These always run on <strong>Ollama</strong>, on this machine, whichever
+        provider writes the notes after the meeting. A tick has seconds to
+        answer and relies on the model staying loaded in VRAM between asks,
+        which is not what the Claude CLI is good at.
+      </p>
       <label class="check-row" for="liveSuggestions">
         <input id="liveSuggestions" type="checkbox" />
         Send live suggestions to the laptop during meetings
       </label>
       <div class="row2">
         <div>
-          <label for="liveModel">Live model (blank = the summary model)</label>
+          <label for="liveModel">Live model (blank = the Ollama summary model)</label>
           <input id="liveModel" type="text" autocomplete="off"
                  placeholder="e.g. a smaller, faster installed model" list="ollama-model-list" />
         </div>

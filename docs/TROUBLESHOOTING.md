@@ -236,10 +236,24 @@ a popup).
 
 - **"Live suggestions are switched off on the home server."** Turn them on:
   dashboard → **Settings** → **Live suggestions** → tick the box → **Save**.
+- **They fail every tick while the post-meeting summary works fine.** Fixed in
+  v0.21.0; if you are on an older build, this is that bug. With the AI provider
+  set to **Claude**, the live path handed the Claude CLI the *Ollama* model name
+  from `LIVE_MODEL` (`claude -p --model qwen2.5:…`), which the CLI rejects, so
+  every ask failed while the summary — which never passed a model — kept
+  working. There is no value of `LIVE_MODEL` that avoids it on an older build:
+  blank falls back to `OLLAMA_MODEL` and fails identically. Work around it by
+  setting the provider back to **Ollama**, or by turning live suggestions off
+  for that meeting. From v0.21.0 live suggestions always run on Ollama whichever
+  provider writes the notes, and the combination cannot be saved.
 - **"The home server's AI is not answering…" / "Last request failed…"** The ask
   reached the server and failed. Click **Test live suggestions** on that same
   card — it runs the real request over a fixed sample and reports the actual
-  error, the model, and the latency.
+  error, the model, and the latency. Note this is a *different* test from
+  **Test the summary AI** in the AI models card: that one exercises the
+  post-meeting path, and it will report success while the live path is broken.
+  From the meeting room, reach both through **Settings → Home server settings…**
+  rather than walking to the home PC.
 - **"Live suggestions are paused — … Retrying every 2 minutes."** Three failures
   in a row. Almost always the model being too slow to answer inside a meeting.
 - **"The home server's GPU is busy processing another meeting."** A previous

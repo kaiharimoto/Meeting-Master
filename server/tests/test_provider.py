@@ -190,3 +190,77 @@ def test_usage_limit_does_not_trigger_the_halve_context_retry():
 def test_ollama_context_errors_still_retry():
     for message in ["CUDA out of memory", "kv cache is full", "context window exceeded"]:
         assert worker._looks_like_context_error(RuntimeError(message), config.get_settings())
+
+
+# --- The live path never reaches Claude with an Ollama tag -------------------
+# The regression block for a real production failure: with AI_PROVIDER=claude_cli,
+# every mid-meeting tick failed while the post-meeting summary worked fine.
+# run_live passed model=settings.live_model — an OLLAMA tag — through _provider,
+# and the Claude backend handed it to the CLI as `--model qwen2.5:14b-instruct-q6_K`.
+# The CLI exits non-zero on an unknown model, so /live/questions answered 502
+# every 45 seconds for a whole meeting.
+
+
+def test_the_claude_backend_takes_no_model_argument():
+    """The seam itself. `model=` used to be accepted here and forwarded to
+    --model; now it is a TypeError — loud, at the call, instead of a malformed
+    command line discovered mid-meeting."""
+    with pytest.raises(TypeError):
+        chat_json(claude_settings(), model="qwen2.5:14b-instruct-q6_K")
+    with pytest.raises(TypeError):
+        chat_json(claude_settings(), keep_alive="30m")
+
+
+def test_provider_strips_ollama_only_kwargs_before_claude_sees_them():
+    """Callers may still pass model/keep_alive — the dispatcher drops them
+    rather than letting them reach a backend that would misuse them."""
+    settings = claude_settings()
+    parsed = asyncio.run(
+        _provider.chat_json(
+            None, settings, "sys", "user",
+            num_predict=10, temperature=0.0,
+            model="gemma4:26b", keep_alive="30m",
+        )
+    )
+    assert parsed["ok"] is True
+
+
+def test_claude_is_only_ever_run_with_its_own_model(monkeypatch, tmp_path):
+    """Whatever the Ollama model is called, it must not appear on the CLI's
+    argv. Asserted against the recorded command line, not the return value."""
+    log = tmp_path / "calls.jsonl"
+    monkeypatch.setenv("FAKE_CLAUDE_LOG", str(log))
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "json")
+    settings = claude_settings(
+        OLLAMA_MODEL="gemma4:26b",
+        LIVE_MODEL="qwen2.5:14b-instruct-q6_K",
+        CLAUDE_MODEL="opus",
+    )
+    asyncio.run(
+        _provider.chat_json(
+            None, settings, "sys", "user",
+            num_predict=10, temperature=0.0,
+            model=settings.live_model, keep_alive=settings.live_keep_alive,
+        )
+    )
+    argv = json.loads(log.read_text().strip().splitlines()[0])["argv"]
+    assert "--model" in argv and argv[argv.index("--model") + 1] == "opus"
+    for ollama_tag in ("qwen2.5:14b-instruct-q6_K", "gemma4:26b", "30m"):
+        assert ollama_tag not in argv
+
+
+def test_the_live_stage_never_spawns_the_claude_cli(monkeypatch, tmp_path):
+    """The end-to-end shape of the fix: live suggestions run on Ollama even
+    when Claude writes the post-meeting notes. The stub records every
+    invocation, so an empty log is the assertion."""
+    from app.pipeline import extract
+
+    log = tmp_path / "calls.jsonl"
+    monkeypatch.setenv("FAKE_CLAUDE_LOG", str(log))
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "json")
+    settings = claude_settings(LIVE_MODEL="qwen2.5:14b-instruct-q6_K")
+
+    result = asyncio.run(extract.run_live("Priya: what did it come in at?", [], [], [], settings))
+
+    assert result is not None
+    assert not log.exists(), "the live path must not have run the Claude CLI"

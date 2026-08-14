@@ -79,7 +79,10 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    Meeting item. Insights you never got round to are offered again in
    **Edit summary**, where Key Insights is finalised. Everything about the loop
    (on/off, which model, how often, how patient) is configured in one place:
-   the home server dashboard's **Settings → Live suggestions**. The draft is
+   the home server dashboard's **Settings → Live suggestions**. Away from home,
+   reach that same dashboard from the laptop with **Settings → Home server
+   settings…** (v0.21.0) — it opens over Tailscale, so a model or a toggle can
+   be changed from the meeting room. The draft is
    advisory; the full-quality transcript still comes after the meeting, and
    anything the live pass missed is caught by the post-meeting question
    detection.

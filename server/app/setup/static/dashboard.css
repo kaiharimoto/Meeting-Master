@@ -378,3 +378,17 @@ button.small { padding: 6px 11px; font-size: 13px; }
    it), so framed is the one place it works — hiding it here left the Updates
    card announcing a cached update with nothing to click. */
 .framed #open-notes-link { display: none !important; }
+
+/* Served remotely at /admin (see server/app/routes/admin.py): the same page,
+   over Tailscale, from the laptop. Two kinds of thing make no sense there.
+
+   The connection code carries the bearer token, and the remote mount redacts
+   it — the card would render an empty box promising a credential. Hiding it in
+   CSS rather than branching in JS is deliberate: both mounts then run byte-for-
+   byte identical script, which is the property that keeps them from drifting.
+
+   The action links are handled by the Electron shell on the home PC and can
+   only work there. */
+.remote #code-card,
+.remote #open-notes-link,
+.remote #up-app-update-row { display: none !important; }

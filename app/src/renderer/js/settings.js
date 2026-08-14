@@ -38,6 +38,8 @@ let backdrop,
   smtpNote,
   errorEl,
   saveBtn,
+  adminBtn,
+  adminNote,
   cancelBtn;
 
 // The most recent getFullConfig() result — used to decide whether a blank
@@ -116,11 +118,14 @@ export function initSettings(context, opts = {}) {
   smtpNote = document.getElementById('settings-smtp-note');
   errorEl = document.getElementById('settings-error');
   saveBtn = document.getElementById('settings-save-btn');
+  adminBtn = document.getElementById('settings-admin-btn');
+  adminNote = document.getElementById('settings-admin-note');
   cancelBtn = document.getElementById('settings-cancel-btn');
 
   settingsBtn.addEventListener('click', () => openSettings());
   applyBtn.addEventListener('click', onApplyCode);
   saveBtn.addEventListener('click', onSave);
+  if (adminBtn) adminBtn.addEventListener('click', onOpenAdmin);
   cancelBtn.addEventListener('click', closeSettings);
   emailModeEl.addEventListener('change', syncSmtpVisibility);
   if (openRecordingsBtn) {
@@ -259,6 +264,9 @@ export async function openSettings({ welcome = false } = {}) {
   smtpUserEl.value = cfg.smtpUser || '';
   smtpPasswordEl.value = '';
   smtpNote.hidden = !cfg.hasSmtpPassword;
+  // The remote dashboard needs a URL AND a token to authenticate; without
+  // both, the button would open a window that can only 401.
+  syncAdminAvailability(Boolean(cfg.serverUrl) && Boolean(cfg.hasToken));
   syncSmtpVisibility();
   await populateMicSelect(cfg);
   await refreshLiveSection(cfg);
@@ -327,6 +335,31 @@ async function populateMicSelect(cfg) {
     missing.disabled = true;
     micSelectEl.append(missing);
     micSelectEl.value = ''; // record with the default until it returns
+  }
+}
+
+function syncAdminAvailability(ready) {
+  if (!adminBtn) return;
+  adminBtn.disabled = !ready;
+  if (adminNote) {
+    adminNote.textContent = ready
+      ? "Opens the home server's own dashboard over Tailscale — models, live " +
+        'suggestions, email, everything the setup page shows — so a setting can ' +
+        'be changed from here instead of only from the home PC.'
+      : 'Connect to a home server first (paste a connection code above).';
+  }
+}
+
+async function onOpenAdmin() {
+  clearErrors();
+  if (!ctx || !ctx.api || typeof ctx.api.openServerAdmin !== 'function') {
+    showError(errorEl, 'The server dashboard is only available in the desktop app.');
+    return;
+  }
+  try {
+    await ctx.api.openServerAdmin();
+  } catch (err) {
+    showError(errorEl, err.message);
   }
 }
 

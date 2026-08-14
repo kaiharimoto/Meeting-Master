@@ -110,6 +110,8 @@ contextBridge.exposeInMainWorld('api', {
   // Usability batch (v0.10.0)
   getPreflight: () => call(CHANNELS.PREFLIGHT_GET),
   miniOpen: () => call(CHANNELS.MINI_OPEN),
+  // Opens the home server's dashboard over Tailscale (v0.21.0).
+  openServerAdmin: () => call(CHANNELS.ADMIN_OPEN),
   miniCmd: (cmd) => call(CHANNELS.MINI_CMD, cmd),
   miniStatus: (payload) => call(CHANNELS.MINI_STATUS, payload),
   onMiniCmd: (cb) => {

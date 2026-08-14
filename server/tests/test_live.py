@@ -174,3 +174,46 @@ def test_a_busy_gpu_is_a_409_not_a_failure(client):
         assert client.post("/live/questions", json=_payload(), headers=AUTH).status_code == 200
     finally:
         store.update(job, state=JobState.failed)  # keep later tests' lists sane
+
+
+# --- Live suggestions are Ollama's job, whoever writes the notes -------------
+
+
+def test_live_runs_on_ollama_while_the_summary_runs_on_claude(client, monkeypatch):
+    """The configuration the operator actually wants: Claude for the
+    post-meeting summary, the local model for mid-meeting suggestions.
+
+    CLAUDE_CLI_PATH points at nothing, so if the live path ever went near the
+    Claude backend this would fail with "not installed" rather than answering.
+    """
+    from app import config
+
+    monkeypatch.setenv("AI_PROVIDER", "claude_cli")
+    monkeypatch.setenv("CLAUDE_CLI_PATH", "/nonexistent/claude")
+    config.get_settings.cache_clear()
+    try:
+        resp = client.post("/live/questions", json=_payload(), headers=AUTH)
+        assert resp.status_code == 200
+        assert "questions" in resp.json()
+
+        # And the warmup, which is the first thing a meeting does.
+        warm = client.post("/live/warmup", headers=AUTH)
+        assert warm.status_code == 200
+        assert warm.json()["ok"] is True
+    finally:
+        config.get_settings.cache_clear()
+
+
+def test_config_reports_the_provider_that_will_answer(client, monkeypatch):
+    """The rail shows this. Reporting the summary provider here would be the
+    same lie in a different place."""
+    from app import config
+
+    monkeypatch.setenv("AI_PROVIDER", "claude_cli")
+    config.get_settings.cache_clear()
+    try:
+        cfg = client.get("/live/config", headers=AUTH).json()
+        assert cfg["provider"] == "ollama"
+        assert cfg["model"]  # a real Ollama tag, never blank
+    finally:
+        config.get_settings.cache_clear()

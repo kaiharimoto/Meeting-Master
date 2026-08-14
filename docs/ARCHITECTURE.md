@@ -361,6 +361,52 @@ dashboard (which therefore works even before first-run setup).
 | `GET /events` | `GET /setup/events` | Server-Sent Events: `hello` snapshot (`serverTime, configured, version, jobs[]`), then `job` (trimmed record on every store change) and `log` (`{line}`) events, `: ping` comments every 15 s, `Last-Event-ID` replay from a 256-event ring. |
 | `GET /logs/tail?lines=200` | `GET /setup/logs` | `{"lines": [...]}` from an in-memory 500-line log ring (`RingLogHandler`). |
 
+### Remote server administration (v0.21.0)
+
+Every server setting used to be reachable from exactly one place: the dashboard
+at `http://127.0.0.1:8080/setup`, loopback-only because `GET /setup/state`
+returns `BEARER_TOKEN`. That is the right guard for a page that shows a
+credential, and the wrong situation for an operator in a meeting room thirty
+miles from the home PC — which is how a one-field fix cost a whole meeting's
+live suggestions.
+
+So the same dashboard is served at a second mount with a different guard:
+
+| | `/setup/*` | `/admin/*` |
+| --- | --- | --- |
+| Guard | loopback-only, **unauthenticated** | **Bearer token**, any origin |
+| Reachable from | the home PC only | the laptop, over Tailscale |
+| `BEARER_TOKEN` in `state` | yes (the UI renders the connection code) | **redacted**, with `tokenSet` instead |
+| Writing `BEARER_TOKEN` | yes | **400** — a remote rotation would 401 itself mid-request |
+| `connection-code` | yes | **not mounted** — it is the token in another wrapper |
+| SMTP password, GitHub token | write-only (blank = keep) | write-only (blank = keep) |
+
+Route names mirror each other exactly, and `server/app/routes/admin.py` contains
+no logic — every handler is a one-line delegation to the body in
+`server/app/setup/routes.py`, the same "written once, mounted twice" idiom as
+live monitoring above. `dashboard.js` reads `window.MM_API_BASE` (injected only
+by the `/admin` page) and makes every request relative to it, so both mounts
+serve a byte-identical script; `tests/test_admin.py` pins all of that.
+
+The laptop opens it in a dedicated `BrowserWindow` (`app/src/main/adminWindow.js`)
+whose session attaches the bearer token in `onBeforeSendHeaders` — in the MAIN
+process, scoped to `<origin>/admin*`. The window gets **no preload**, so the
+token and `window.api` never enter a renderer that loaded a document over the
+network. `app/test/unit/adminWiring.test.js` asserts each of those properties
+against the source, because none of them is visible to a functional test.
+
+**Why `require_loopback` checks more than the peer address.** `tailscale serve`
+proxies from `127.0.0.1`, so a tailnet request reaches uvicorn with a loopback
+peer. What corrects it today is a chain of third-party defaults: Tailscale sets
+`X-Forwarded-For`, and uvicorn's `ProxyHeadersMiddleware` (`proxy_headers=True`,
+`forwarded_allow_ips="127.0.0.1"`) rewrites the client before the app sees it.
+Those options are now passed explicitly in `desktop.py` rather than inherited —
+and note that turning `proxy_headers` **off**, the instinctive "we are not
+behind a proxy" hardening, is what would *open* the hole. `require_loopback`
+additionally rejects any request carrying a forwarding header at all, and any
+whose `Host` is not itself a loopback name; that second check needs no
+cooperation from either dependency.
+
 ### One app, two modes (v0.3.0)
 
 One installer ships everything. The Electron app reads `APP_MODE` from

@@ -283,8 +283,9 @@ async def run_live(
         "Transcript excerpt:\n\n"
         f"{window_text}"
     )
+    # _ollama, NOT _provider: see the note on warm_live_model below.
     async with httpx.AsyncClient(timeout=_live_timeout(settings)) as client:
-        parsed = await _provider.chat_json(
+        parsed = await _ollama.chat_json(
             client, settings, LIVE_SYSTEM_PROMPT, user_prompt,
             num_predict=settings.LIVE_EXTRACT_NUM_PREDICT,
             temperature=settings.EXTRACT_TEMPERATURE,
@@ -314,9 +315,20 @@ async def warm_live_model(settings: Settings) -> None:
     otherwise pay a cold model load on top of its own work — frequently the
     difference between a suggestion arriving and a tick timing out. Raises on
     failure so the caller can report WHY live suggestions won't work.
+
+    OLLAMA ALWAYS, whatever AI_PROVIDER says — and this is a decision, not an
+    oversight, so please don't "fix" the inconsistency by routing it back
+    through _provider. AI_PROVIDER chooses who writes the notes AFTER the
+    meeting. The live path is a different problem: it ticks every
+    LIVE_INTERVAL_SEC (45s by default), and it is fast enough to be useful only
+    because the model stays resident in VRAM between ticks (keep_alive) and
+    answers into a small budget. The Claude CLI spawns a process per call, keeps
+    nothing resident, needs a network round trip, and spends subscription usage
+    every tick — it loses on every one of those counts. Local is the right
+    backend here on the merits.
     """
     async with httpx.AsyncClient(timeout=_live_timeout(settings)) as client:
-        await _provider.chat_json(
+        await _ollama.chat_json(
             client, settings,
             'You are a health check. Respond with ONLY the JSON {"ok": true}.',
             "Reply now.",

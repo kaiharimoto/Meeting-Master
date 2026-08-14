@@ -38,15 +38,40 @@ def _backend(settings: Settings):
     return _claude_cli if uses_claude_cli(settings) else _ollama
 
 
+# Kwargs that only mean something to Ollama. `model` is an Ollama TAG
+# ("gemma4:26b"), and `keep_alive` is a VRAM residency hint with no CLI
+# equivalent — neither survives a trip to another backend.
+_OLLAMA_ONLY_KWARGS = ("model", "keep_alive")
+
+
+def _for_backend(settings: Settings, kwargs: dict) -> dict:
+    """Drop kwargs the selected backend cannot understand.
+
+    This module is a TRANSLATION layer, not a pass-through. Forwarding blindly
+    is what broke live suggestions once already: run_live passes
+    model=settings.live_model — an Ollama tag — and the Claude backend handed it
+    straight to the CLI as `--model qwen2.5:14b-instruct-q6_K`, which exits
+    non-zero. Every tick of a meeting failed while the post-meeting stages, which
+    pass no model at all, kept working.
+
+    Filtering HERE rather than at each call site is deliberate: a new caller
+    should not have to know which kwargs are provider-specific, and the next
+    Ollama-only knob added to _ollama.py only has to be named in the tuple above.
+    """
+    if not uses_claude_cli(settings):
+        return kwargs
+    return {k: v for k, v in kwargs.items() if k not in _OLLAMA_ONLY_KWARGS}
+
+
 async def chat_text(client, settings: Settings, system_prompt: str, user_prompt: str, **kwargs):
     return await _backend(settings).chat_text(
-        client, settings, system_prompt, user_prompt, **kwargs
+        client, settings, system_prompt, user_prompt, **_for_backend(settings, kwargs)
     )
 
 
 async def chat_json(client, settings: Settings, system_prompt: str, user_prompt: str, **kwargs):
     return await _backend(settings).chat_json(
-        client, settings, system_prompt, user_prompt, **kwargs
+        client, settings, system_prompt, user_prompt, **_for_backend(settings, kwargs)
     )
 
 

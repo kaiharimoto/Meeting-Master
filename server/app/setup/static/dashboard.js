@@ -1,13 +1,30 @@
 // Meeting Master — home-server dashboard logic.
-// Talks only to the loopback-only /setup/* API:
-//   GET  /setup/state          config + deps + install-task state (polled)
-//   POST /setup/save           email/model settings -> connection code
-//   POST /setup/install/{c}    guided installs
-//   GET  /setup/jobs           trimmed job list (fallback/initial)
-//   GET  /setup/logs           log ring tail
-//   GET  /setup/events         SSE: hello/job/log (live updates)
+//
+// This page is served at TWO mounts and the code is identical at both — see
+// server/app/routes/admin.py. window.MM_API_BASE tells it which one it is
+// running under, so every request below is relative to `API`, never a literal
+// "/setup". Hardcoding the prefix again is how the remote mount would quietly
+// stop working.
+//   /setup   loopback-only, on the home PC itself (the default)
+//   /admin   bearer-gated, opened from the laptop over Tailscale
+//
+// Endpoints, relative to API:
+//   GET  /state          config + deps + install-task state (polled)
+//   POST /save           email/model settings -> connection code
+//   POST /install/{c}    guided installs
+//   GET  /jobs           trimmed job list (fallback/initial)
+//   GET  /logs           log ring tail
+//   GET  /events         SSE: hello/job/log (live updates)
 (function () {
   "use strict";
+  // Which mount we are under. Injected by the /admin page; absent (and so
+  // "/setup") on the home PC's own dashboard.
+  var API = window.MM_API_BASE || "/setup";
+  var REMOTE = API !== "/setup";
+  // Things that only mean anything on the machine itself: the connection code
+  // (it carries the bearer token, and the remote mount never sends it) and the
+  // action links the Electron shell intercepts locally.
+  if (REMOTE) document.documentElement.classList.add("remote");
   // Inside the Meeting Master app's Dashboard tab (iframe): the meeting UI is
   // one sidebar click away, so the "open notes" link is redundant here. The
   // UPDATE link is not — the app intercepts it, so framed is where it works.
@@ -313,13 +330,13 @@
   }
 
   function refresh() {
-    fetch("/setup/state").then(function (r) { return r.json(); })
+    fetch(API + "/state").then(function (r) { return r.json(); })
       .then(render)
       .catch(function () { schedulePoll(false); });
   }
 
   function install(component) {
-    fetch("/setup/install/" + component, { method: "POST" })
+    fetch(API + "/install/" + component, { method: "POST" })
       .then(function (r) { return r.json(); })
       .then(function (res) { renderTask(component, res.task); schedulePoll(true); })
       .catch(function () { toast("Could not start install"); });
@@ -356,7 +373,7 @@
       claudeModel: $("#claudeModel").value.trim(),
       claudeCliTimeoutSec: parseInt($("#claudeCliTimeoutSec").value, 10) || null
     };
-    fetch("/setup/save", {
+    fetch(API + "/save", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     }).then(function (r) { return r.json(); })
@@ -439,13 +456,13 @@
       if (hasTranscript && job.id) {
         var tLink = document.createElement("a");
         tLink.className = "job-link";
-        tLink.href = "/setup/jobs/" + encodeURIComponent(job.id) + "/transcript";
+        tLink.href = API + "/jobs/" + encodeURIComponent(job.id) + "/transcript";
         tLink.textContent = "transcript";
         row.appendChild(tLink);
 
         var pLink = document.createElement("a");
         pLink.className = "job-link";
-        pLink.href = "/setup/jobs/" + encodeURIComponent(job.id) + "/prompt";
+        pLink.href = API + "/jobs/" + encodeURIComponent(job.id) + "/prompt";
         // Downloads now (the route sets Content-Disposition), so no _blank —
         // it would open and immediately abandon a blank tab.
         pLink.title = "Download the prompt for an external AI (paste its JSON reply back via Edit summary → Import)";
@@ -475,7 +492,7 @@
   }
 
   function loadJobs() {
-    fetch("/setup/jobs").then(function (r) { return r.json(); })
+    fetch(API + "/jobs").then(function (r) { return r.json(); })
       .then(function (payload) { jobs = payload.jobs || []; renderJobs(); })
       .catch(function () { renderJobs(); });
   }
@@ -502,7 +519,7 @@
   }
 
   function loadLog() {
-    fetch("/setup/logs?lines=300").then(function (r) { return r.json(); })
+    fetch(API + "/logs?lines=300").then(function (r) { return r.json(); })
       .then(function (payload) { logLines = payload.lines || []; renderLog(); })
       .catch(function () { renderLog(); });
   }
@@ -520,7 +537,7 @@
 
   function startEvents() {
     if (!window.EventSource) { setConnPill("warn", "Live updates unavailable"); return; }
-    var es = new EventSource("/setup/events");
+    var es = new EventSource(API + "/events");
     es.addEventListener("open", function () { setConnPill("ok", "Live"); });
     es.addEventListener("error", function () { setConnPill("down", "Reconnecting…"); });
     es.addEventListener("hello", function (e) {
@@ -589,7 +606,7 @@
   // ---- AI helpers: installed-model picker, suggested context, live test ----
   var ollamaModels = [];
   function loadOllamaModels() {
-    fetch("/setup/ollama-models").then(function (r) { return r.json(); })
+    fetch(API + "/ollama-models").then(function (r) { return r.json(); })
       .then(function (p) {
         ollamaModels = p.models || [];
         var dl = $("#ollama-model-list");
@@ -614,7 +631,7 @@
   if (testBtn) testBtn.addEventListener("click", function () {
     aiResult("Testing — first load of a big model can take a minute…");
     testBtn.disabled = true;
-    fetch("/setup/ai-test", {
+    fetch(API + "/ai-test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ numCtx: parseInt($("#numCtx").value, 10) || null }),
@@ -649,7 +666,7 @@
   if (liveTestBtn) liveTestBtn.addEventListener("click", function () {
     liveResult("Asking the model for live suggestions — a cold model load can take a minute…");
     liveTestBtn.disabled = true;
-    fetch("/setup/live-test", {
+    fetch(API + "/live-test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -830,7 +847,7 @@
     var vram = parseFloat($("#fit-vram").value) || 24;
     var kv = $("#fit-kv").value;
     fitStatus("Reading your installed models…");
-    fetch("/setup/model-fit?vramGB=" + encodeURIComponent(vram) +
+    fetch(API + "/model-fit?vramGB=" + encodeURIComponent(vram) +
           "&kvCache=" + encodeURIComponent(kv))
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -876,7 +893,7 @@
   startEvents();
 
   // First run lands the operator on Settings so the wizard flow still guides.
-  fetch("/setup/state").then(function (r) { return r.json(); }).then(function (state) {
+  fetch(API + "/state").then(function (r) { return r.json(); }).then(function (state) {
     if (!state.configured && !fromHash) showTab("settings");
   }).catch(function () {});
 })();

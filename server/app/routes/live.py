@@ -120,6 +120,10 @@ async def live_config() -> dict:
         "clientTimeoutSec": max(10, settings.LIVE_TIMEOUT_SEC)
         + _CLIENT_TIMEOUT_MARGIN_SEC,
         "model": settings.live_model,
+        # Always "ollama". Reported so the rail can say WHICH model answered
+        # and not leave the operator wondering why the Claude they selected for
+        # the summary isn't the one making live suggestions.
+        "provider": "ollama",
         "insights": True,
     }
 

@@ -232,5 +232,5 @@ def client():
     from app.main import app
 
     # `with` runs the lifespan: data dir mkdir, load_all, worker task.
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1:8080") as test_client:
         yield test_client

@@ -91,7 +91,7 @@ def test_jobs_list_loopback_mirror(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40000))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40000))
     assert job_id in [j["id"] for j in local.get("/setup/jobs").json()["jobs"]]
 
     remote = TestClient(app, client=("100.64.0.9", 40000))
@@ -113,7 +113,7 @@ def test_log_tail_returns_recent_lines(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40000))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40000))
     logging.getLogger("monitor-test").warning("second marker line")
     mirrored = local.get("/setup/logs").json()["lines"]
     assert any("second marker line" in line for line in mirrored)
@@ -218,7 +218,7 @@ def test_dashboard_assets_whitelist(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40000))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40000))
     page = local.get("/setup")
     assert page.status_code == 200
     assert "dashboard.js" in page.text  # the dashboard shell is served
@@ -286,7 +286,7 @@ def test_transcript_and_prompt_endpoints(client):
     from fastapi.testclient import TestClient
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40001))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40001))
     assert local.get(f"/setup/jobs/{job_id}/transcript").status_code == 200
     assert local.get(f"/setup/jobs/{job_id}/prompt").status_code == 200
     remote = TestClient(app, client=("203.0.113.9", 40002))
@@ -318,7 +318,7 @@ def test_summarize_retry_endpoint(client):
     from fastapi.testclient import TestClient
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40003))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40003))
     assert local.post(f"/setup/jobs/{job_id}/summarize").status_code == 200
 
 

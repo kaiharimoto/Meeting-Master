@@ -137,7 +137,7 @@ def test_require_loopback_dependency_directly():
 def test_state_loopback_ok_remote_403(no_tools):
     app = _setup_app()
 
-    local = TestClient(app, client=("127.0.0.1", 40000))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40000))
     resp = local.get("/setup/state")
     assert resp.status_code == 200
     assert "configured" in resp.json()
@@ -147,12 +147,52 @@ def test_state_loopback_ok_remote_403(no_tools):
     assert remote.get("/setup/state").status_code == 403
 
 
+def test_a_proxied_request_is_never_loopback(no_tools):
+    """`tailscale serve` proxies from 127.0.0.1, so a tailnet request reaches
+    uvicorn with a LOOPBACK peer. Today uvicorn's ProxyHeadersMiddleware
+    rewrites the client from X-Forwarded-For before we see it — but that is a
+    third-party default, and /setup hands out BEARER_TOKEN. These pin the two
+    checks that hold even if that default changes.
+    """
+    app = _setup_app()
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40200))
+
+    # Any forwarding header at all: the home PC's own browser sends none.
+    for header in ("X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "Forwarded"):
+        resp = local.get("/setup/state", headers={header: "100.64.0.9"})
+        assert resp.status_code == 403, f"{header} should not reach /setup"
+
+    # ...including the spoof that claims to BE loopback.
+    assert local.get("/setup/state", headers={"X-Forwarded-For": "127.0.0.1"}).status_code == 403
+
+
+def test_a_tailnet_host_header_is_never_loopback(no_tools):
+    """`tailscale serve` passes the request's own Host through, so a tailnet
+    request says <machine>.<tailnet>.ts.net. This check needs no cooperation
+    from uvicorn or Tailscale — it reads what the client asked for."""
+    app = _setup_app()
+    local = TestClient(
+        app, base_url="http://homepc.tail-abc123.ts.net", client=("127.0.0.1", 40201)
+    )
+    assert local.get("/setup/state").status_code == 403
+
+
+def test_the_real_local_dashboard_still_gets_in(no_tools):
+    """The guard above must not lock out the client it exists for: the Electron
+    window loads http://127.0.0.1:<port>/setup (serverManager.js), and someone
+    may type localhost instead."""
+    app = _setup_app()
+    for base in ("http://127.0.0.1:8080", "http://localhost:8080"):
+        local = TestClient(app, base_url=base, client=("127.0.0.1", 40202))
+        assert local.get("/setup/state").status_code == 200, base
+
+
 # --- (c) save with no token generates one ----------------------------------
 def test_save_generates_token_and_configures(fresh_home, no_tools):
     config_mod, home = fresh_home
     assert config_mod.get_settings().is_configured is False
 
-    client = TestClient(_setup_app(), client=("127.0.0.1", 40000))
+    client = TestClient(_setup_app(), base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40000))
     body = {
         "smtpUser": "me@gmail.com",
         "smtpAppPassword": "app-pass-1234",
@@ -213,7 +253,7 @@ def test_jobs_return_503_when_unconfigured(monkeypatch):
 
     app = FastAPI()
     app.include_router(jobs_mod.router)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1:8080")
 
     resp = client.get("/jobs/anything")
     assert resp.status_code == 503
@@ -230,7 +270,7 @@ def test_save_ai_params_persists_and_clamps(client, tmp_path, monkeypatch):
     from app.config import get_settings
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40010))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40010))
     before = local.get("/setup/state").json()
     assert before["aiParams"]["numCtx"] >= 2048
 
@@ -274,7 +314,7 @@ def test_save_live_params_persists_and_clamps(client):
     from app.config import get_settings
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40013))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40013))
     before = local.get("/setup/state").json()
     assert before["liveParams"]["liveSuggestions"] is True
 
@@ -331,7 +371,7 @@ def test_live_test_endpoint_reports_what_came_back(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40014))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40014))
     result = local.post("/setup/live-test", json={}).json()
     assert set(result) >= {
         "ok", "enabled", "model", "latencyMs", "intervalSec",
@@ -352,7 +392,7 @@ def test_ai_helper_endpoints(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40011))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40011))
     models = local.get("/setup/ollama-models")
     assert models.status_code == 200 and "models" in models.json()
 
@@ -380,7 +420,7 @@ def test_server_update_install_is_reachable(client, monkeypatch):
     assert updates.APPLY_TASK == "server-update"
     assert "server-update" in bootstrap._COMPONENTS
 
-    local = TestClient(app, client=("127.0.0.1", 40016))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40016))
     # Inside the app (MM_SIDECAR=1) the APP owns installing, so the task must
     # refuse with a message pointing there rather than half-installing.
     monkeypatch.setenv("MM_SIDECAR", "1")
@@ -408,7 +448,7 @@ def test_model_fit_measures_installed_models_against_the_card(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40017))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40017))
     data = local.get("/setup/model-fit?vramGB=24").json()
     assert data["error"] is None, data["error"]
     assert data["vramGB"] == 24.0 and data["kvCache"] == "f16"
@@ -453,7 +493,7 @@ def test_save_rejects_a_context_too_small_for_its_own_output(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40019))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40019))
     before = local.get("/setup/state").json()
     base = {
         "recipients": before.get("recipients") or [],

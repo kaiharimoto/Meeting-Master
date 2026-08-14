@@ -211,7 +211,7 @@ def test_setup_state_includes_updates(client):
 
     from app.main import app
 
-    local = TestClient(app, client=("127.0.0.1", 40000))
+    local = TestClient(app, base_url="http://127.0.0.1:8080", client=("127.0.0.1", 40000))
     state = local.get("/setup/state").json()
     assert "updates" in state and "current" in state["updates"]
     assert "githubTokenSet" in state

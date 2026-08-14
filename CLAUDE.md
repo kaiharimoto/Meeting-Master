@@ -95,6 +95,19 @@ the code, not the test.
   pins the exhaustive list of writers.
 - **The PDF transcript appendix is opt-in and off by default,** and all three
   IPC hops carry the argument. `pdfWiring.test.js`.
+- **`/setup` is loopback-only and unauthenticated; `/admin` is the same
+  functionality bearer-gated with the token redacted.** One body, two mounts —
+  `routes/admin.py` delegates and holds no logic of its own, and both mounts
+  serve a byte-identical `dashboard.js`. `test_admin.py` pins it. Related:
+  `require_loopback` rejects forwarded headers and non-loopback `Host`s, because
+  `tailscale serve` proxies from 127.0.0.1 and the peer address alone would let
+  the tailnet read `BEARER_TOKEN`.
+- **Provider-specific kwargs never cross `pipeline/_provider.py`.** `model` and
+  `keep_alive` are Ollama's; the dispatcher strips them for the Claude backend,
+  whose `chat_json` takes no `model` at all. This was a real outage: `run_live`
+  passed an Ollama tag, the CLI got `--model qwen2.5:…`, and every mid-meeting
+  tick failed while the summary — which passes no model — worked fine. Live
+  suggestions now always run on Ollama whichever provider writes the notes.
 - **whisper-cli is only ever passed flags its own `--help` advertised,** on
   both the server and the laptop. whisper.cpp answers an unknown argument by
   printing usage and **exiting 0**, so a wrong guess is a run that reports

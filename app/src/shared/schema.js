@@ -76,6 +76,10 @@ const CHANNELS = Object.freeze({
   MINI_CMD: 'mini:cmd', // mini window -> main; relayed to the main renderer as a push
   MINI_STATUS: 'mini:status', // main renderer -> main; relayed to the mini window
   MINI_STATE: 'mini:state', // main -> mini window push (timer/level/status)
+  // Remote server administration (v0.21.0). Opens the home server's own
+  // dashboard over Tailscale, so a setting can be fixed from the meeting room
+  // instead of only from the home PC.
+  ADMIN_OPEN: 'admin:open',
 });
 
 const JOB_STATES = Object.freeze([
