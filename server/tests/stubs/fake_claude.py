@@ -15,6 +15,17 @@ Behaviour is steered by env vars so one stub covers every path:
                             contains the word "context" — the string that must
                             NOT trigger the halve-NUM_CTX retry
   FAKE_CLAUDE_MODE=empty    exit 0 having printed nothing
+
+  The three modes below put the failure on STDOUT with stderr EMPTY, which is
+  what the real CLI does in -p mode: a failed turn is reported as the turn's
+  output. Every failure mode here used to write to stderr, so the suite proved
+  the opposite of production and the handler's stderr-only read went unnoticed
+  until a meeting's notes were lost to "no error output".
+
+  FAKE_CLAUDE_MODE=login    exit 1, sign-in message on stdout, stderr empty
+  FAKE_CLAUDE_MODE=quota    exit 1, usage-limit message on stdout, stderr empty
+  FAKE_CLAUDE_MODE=silent   exit 1 printing nothing on EITHER stream — the only
+                            case that genuinely has no error text to report
   FAKE_CLAUDE_MODE=hang     sleep past any test timeout, so the caller's own
                             timeout is what ends it
 
@@ -69,6 +80,17 @@ def main() -> int:
         return 1
     if mode == "empty":
         return 0
+    if mode == "login":
+        # Real shape: the CLI's own words, on stdout, nothing on stderr.
+        sys.stdout.write("Invalid API key \u00b7 Please run /login\n")
+        return 1
+    if mode == "quota":
+        sys.stdout.write(
+            "Claude usage limit reached. Your limit will reset at 3pm.\n"
+        )
+        return 1
+    if mode == "silent":
+        return 1
     if mode == "hang":
         import time
 

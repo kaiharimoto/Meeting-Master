@@ -158,6 +158,66 @@ def test_nonzero_exit_surfaces_the_stderr(monkeypatch):
     assert "something went wrong" in str(excinfo.value)
 
 
+# --- The reason must survive, and it arrives on STDOUT -----------------------
+# The regression block for a real production failure. On 2026-09-16 both AI
+# stages of a finished meeting failed seconds apart and the log said only
+# "Claude CLI failed (exit 1): no error output" — twice. The CLI had in fact
+# said why: in -p mode a FAILED turn is reported as the turn's output, on
+# stdout, with stderr empty. The handler read stderr alone and threw the
+# diagnosis away, so a one-setting fix looked like an unexplained outage.
+#
+# Note what let that ship: every failure mode in fake_claude.py wrote to
+# stderr. The suite was green on behaviour the real binary does not have.
+
+
+def test_a_failure_printed_only_on_stdout_still_reaches_the_operator(monkeypatch):
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "login")
+    with pytest.raises(_claude_cli.ClaudeCliError) as excinfo:
+        chat_json(claude_settings())
+    message = str(excinfo.value)
+    assert "Please run /login" in message  # the CLI's words, not swallowed
+    assert "no error output" not in message
+
+
+def test_a_sign_in_failure_names_the_account_the_server_runs_as(monkeypatch):
+    # The confusing half: `claude login` in the desktop session does nothing for
+    # a service running as another user, because credentials live in a profile.
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "login")
+    with pytest.raises(_claude_cli.ClaudeCliError) as excinfo:
+        chat_json(claude_settings())
+    message = str(excinfo.value)
+    assert "claude login" in message
+    assert "account" in message.lower()
+
+
+def test_a_usage_limit_is_reported_as_a_limit_not_a_broken_setup(monkeypatch):
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "quota")
+    with pytest.raises(_claude_cli.ClaudeCliError) as excinfo:
+        chat_json(claude_settings())
+    message = str(excinfo.value)
+    assert "usage limit" in message.lower()
+    assert "Ollama" in message  # the way out, one setting away
+
+
+def test_only_a_truly_silent_exit_says_there_was_no_output(monkeypatch):
+    # "no error output" is now reserved for the one case that earns it, and it
+    # still hands the operator the command to run by hand.
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "silent")
+    with pytest.raises(_claude_cli.ClaudeCliError) as excinfo:
+        chat_json(claude_settings())
+    message = str(excinfo.value)
+    assert "printed nothing on either stream" in message
+    assert "claude -p" in message
+
+
+def test_both_streams_are_read_not_just_one():
+    # Pinned at the seam so a future rewrite cannot quietly drop a stream again.
+    both = _claude_cli._failure_message(1, b"reason on stdout", b"detail on stderr")
+    assert "reason on stdout" in both
+    assert "detail on stderr" in both
+    assert both.index("reason on stdout") < both.index("detail on stderr")
+
+
 def test_empty_output_points_at_the_sign_in(monkeypatch):
     # An expired login exits quietly, which is the confusing failure — say so.
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "empty")

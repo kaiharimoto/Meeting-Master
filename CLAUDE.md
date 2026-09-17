@@ -126,6 +126,18 @@ the code, not the test.
   printing usage and **exiting 0**, so a wrong guess is a run that reports
   success and transcribed nothing. `whisperFlags.test.js`,
   `test_transcribe_gpu.py`.
+- **A failed Claude CLI call reports BOTH streams.** `claude -p` prints the
+  reason a turn failed on **stdout**, the same place a successful answer goes,
+  and exits non-zero with stderr frequently empty. Reading stderr alone turned
+  every ordinary failure — usage limit spent, sign-in lapsed, model rejected —
+  into `Claude CLI failed (exit 1): no error output`, which is what a lost
+  meeting looked like on 2026-09-16. `_claude_cli._failure_message` reads both
+  and maps the common wordings to a next step; `test_provider.py` pins it.
+  The reason this shipped is worth more than the bug: every failure mode in
+  `tests/stubs/fake_claude.py` wrote to stderr, so the suite was green on
+  behaviour the real binary does not have. **A stub encodes what the tool was
+  OBSERVED to do, never what it was assumed to do** — the same lesson as the
+  whisper-cli entry above.
 
 ## whisper.cpp is a pinned dependency, not a moving one
 

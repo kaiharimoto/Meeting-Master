@@ -17,9 +17,12 @@ WHAT THAT COSTS. Two things worth being honest about:
     time can hit one, and it surfaces here as a stage failure. That is why
     Ollama stays the default and this is opt-in: the local model always works,
     and the fallback is one setting away.
-  * It depends on an interactive login persisting on that machine. When it
-    lapses the CLI says so on stderr and the error is passed through intact
-    rather than reduced to "the AI stage failed".
+  * It depends on an interactive login persisting on that machine, under the
+    account the SERVER runs as — a sign-in in another desktop session does not
+    carry over. When it lapses the CLI says so and the error is passed through
+    intact rather than reduced to "the AI stage failed". It says so on STDOUT,
+    not stderr: see _failure_message, which is where believing otherwise cost
+    a meeting.
 
 The prompts are unchanged. summarize.py and extract.py build exactly the same
 system + user text they hand Ollama, which is the same text external_prompt()
@@ -81,6 +84,84 @@ class ClaudeCliError(RuntimeError):
     """The CLI is missing, not logged in, or exited non-zero."""
 
 
+# The CLI's own wording, mapped to the operator's next step. Matching is on
+# lowercased fragments of whatever the CLI printed; anything unrecognized falls
+# through and is reported verbatim, which is still an answer.
+_HINTS = (
+    (
+        ("usage limit reached", "rate limit", "out of credits", "quota"),
+        "This is the subscription's usage limit, not a broken setup — see the "
+        "module docstring. It resets on its own. Either wait and press Start AI "
+        "again, or set the AI provider back to Ollama on the Settings tab to "
+        "get the notes now.",
+    ),
+    (
+        (
+            "please run /login",
+            "invalid api key",
+            "not logged in",
+            "authentication_error",
+            "unauthorized",
+            "oauth token has expired",
+            "credentials",
+        ),
+        "The CLI has no valid sign-in FOR THE ACCOUNT THIS SERVER RUNS AS. A "
+        "`claude login` done in your desktop session does not carry over to a "
+        "service running as another user, because the credentials live in that "
+        "user's profile. Open a terminal as the server's account and run "
+        "`claude login` there.",
+    ),
+    (
+        ("issue with the selected model", "may not exist or you may not have access"),
+        "The CLI rejected the model name. Clear the Claude model box on the "
+        "Settings tab to fall back to whatever the CLI is configured to use.",
+    ),
+)
+
+
+def _hint_for(detail: str) -> str | None:
+    lowered = detail.lower()
+    for fragments, hint in _HINTS:
+        if any(f in lowered for f in fragments):
+            return hint
+    return None
+
+
+def _failure_message(code: int, stdout: bytes, stderr: bytes) -> str:
+    """Why the CLI exited non-zero, in terms the operator can act on.
+
+    READ STDOUT. In `-p` mode the CLI reports a FAILED turn the same way it
+    reports a successful one — as its output, on stdout — and exits non-zero
+    with stderr often completely empty. A handler that looked only at stderr
+    therefore collapsed every ordinary failure (usage limit spent, sign-in
+    lapsed, model rejected) into one useless line:
+
+        Claude CLI failed (exit 1): no error output
+
+    That is not a CLI that failed silently. That is a diagnosis thrown away on
+    the floor. It cost a real meeting on 2026-09-16: both AI stages failed
+    within seconds of each other, the reason was sitting in stdout both times,
+    and the log recorded that there was no reason. Whatever this function is
+    changed to do later, it must keep reading BOTH streams.
+    """
+    out = stdout.decode("utf-8", "replace").strip()
+    err = stderr.decode("utf-8", "replace").strip()
+    # stdout first: it carries the sentence written for a human to read. stderr,
+    # when there is any, carries a lower-level diagnostic worth keeping behind it.
+    detail = "\n".join(part for part in (out, err) if part)
+    if not detail:
+        return (
+            f"Claude CLI failed (exit {code}) and printed nothing on either "
+            "stream. Run it by hand on this machine, signed in as the account "
+            "the server runs as, to see what it says: "
+            "`claude -p --output-format text` with a prompt on stdin."
+        )
+
+    hint = _hint_for(detail)
+    message = f"Claude CLI failed (exit {code}): {detail[-2000:]}"
+    return f"{message}\n\n{hint}" if hint else message
+
+
 async def _run(settings: Settings, system_prompt: str, user_prompt: str) -> str:
     exe = resolve_cli(settings)
     if not exe:
@@ -130,8 +211,7 @@ async def _run(settings: Settings, system_prompt: str, user_prompt: str) -> str:
         raise
 
     if proc.returncode != 0:
-        detail = stderr.decode("utf-8", "replace").strip() or "no error output"
-        raise ClaudeCliError(f"Claude CLI failed (exit {proc.returncode}): {detail[-2000:]}")
+        raise ClaudeCliError(_failure_message(proc.returncode, stdout, stderr))
 
     text = stdout.decode("utf-8", "replace").strip()
     if not text:
