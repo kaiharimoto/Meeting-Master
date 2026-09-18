@@ -37,6 +37,24 @@ CANNED_SUMMARY_SECTIONS = {
     "keyFigures": ["12% price increase, locked 24 months"],
     "topics": ["Pricing", "Timeline"],
 }
+# The meeting-map path returns CHANGES to the map, not the map itself.
+CANNED_MAP_OPS = [
+    {
+        "op": "topic",
+        "id": "t1",
+        "title": "Renewal quote",
+        "rollup": "Vendor quoted 12% up; Marcus is pushing back before signing.",
+    },
+    {
+        "op": "node",
+        "id": "n1",
+        "topic": "t1",
+        "kind": "decision",
+        "text": "Hold the signature until the quote is renegotiated",
+    },
+    {"op": "status", "id": "n1", "status": "open"},
+]
+
 CANNED_QUESTIONS = [
     {
         "question": "What is the renewal price?",
@@ -166,6 +184,11 @@ class _FakeOllamaHandler(BaseHTTPRequestHandler):
         elif "health check" in request:
             # Warmup (POST /live/warmup) and the dashboard's "Test AI now".
             content = json.dumps({"ok": True})
+        elif "live MAP" in request:
+            # The meeting progress map. Checked BEFORE the live-suggestions
+            # branch: this prompt also says "STILL IN PROGRESS", so the broader
+            # test below would otherwise swallow it.
+            content = json.dumps({"ops": CANNED_MAP_OPS})
         elif "STILL IN PROGRESS" in request:
             # Live suggestions: the same Q&A shape as the post-meeting run.
             content = json.dumps({"questions": CANNED_QUESTIONS})

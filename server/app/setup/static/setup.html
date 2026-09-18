@@ -475,6 +475,52 @@
                 title="Run a real live-suggestion request over a fixed sample conversation">Test live suggestions</button>
       </div>
       <div class="taskmsg" id="live-test-result"></div>
+
+      <h3>Meeting progress map</h3>
+      <p class="hint">
+        A picture of where the meeting has got to, drawn from the same live
+        transcript and shown in a pop-out window beside the note-taker's slides.
+        Each ask sends a summary of the map so far and gets back only what
+        changed, so a long meeting costs no more per ask than a short one.
+        Switched on and off independently of the suggestions above — either can
+        run without the other.
+      </p>
+      <label class="check-row" for="liveMap">
+        <input id="liveMap" type="checkbox" />
+        Build a meeting progress map during meetings
+      </label>
+      <div class="row2">
+        <div>
+          <label for="liveMapIntervalSec">Ask every (seconds)</label>
+          <input id="liveMapIntervalSec" type="number" min="20" max="600" step="5" placeholder="90" />
+        </div>
+        <div>
+          <label for="liveMapWindowChars">Transcript window (characters)</label>
+          <input id="liveMapWindowChars" type="number" min="500" max="12000" step="500" placeholder="6000" />
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="liveMapNumPredict">Max output tokens per ask</label>
+          <input id="liveMapNumPredict" type="number" min="128" max="4096" placeholder="900" />
+        </div>
+        <div>
+          <label for="liveMapDigestChars">Map summary sent back (characters)</label>
+          <input id="liveMapDigestChars" type="number" min="500" max="4000" step="100" placeholder="3000" />
+        </div>
+      </div>
+      <p class="hint">
+        The map shares this machine's GPU with the suggestions above, so it asks
+        less often by default — topics turn over far more slowly than questions
+        get answered. Give it more output tokens than a suggestion ask: a reply
+        cut off mid-list parses to nothing at all, which shows up as a map that
+        silently stops growing rather than one that grows slowly.
+      </p>
+      <div class="sub">
+        <button class="ghost small" id="live-map-test" type="button"
+                title="Run a real meeting-map request over a fixed sample conversation">Test live map</button>
+      </div>
+      <div class="taskmsg" id="live-map-test-result"></div>
     </div>
 
     <div class="card savebar">

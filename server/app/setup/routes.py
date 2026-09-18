@@ -227,6 +227,13 @@ async def build_state(*, redact: bool = False) -> dict:
             "liveTimeoutSec": settings.LIVE_TIMEOUT_SEC,
             "liveKeepAliveMin": settings.LIVE_KEEP_ALIVE_MIN,
             "liveExtractNumPredict": settings.LIVE_EXTRACT_NUM_PREDICT,
+            # The meeting progress map: a second live feature with its own
+            # switch, so one can be off while the other runs.
+            "liveMap": settings.LIVE_MAP,
+            "liveMapIntervalSec": settings.LIVE_MAP_INTERVAL_SEC,
+            "liveMapWindowChars": settings.LIVE_MAP_WINDOW_CHARS,
+            "liveMapNumPredict": settings.LIVE_MAP_NUM_PREDICT,
+            "liveMapDigestChars": settings.LIVE_MAP_DIGEST_CHARS,
         },
         "deps": await bootstrap.detect(),
         "tasks": bootstrap.all_task_states(),
@@ -284,6 +291,12 @@ class SaveBody(BaseModel):
     liveTimeoutSec: int | None = None
     liveKeepAliveMin: int | None = None
     liveExtractNumPredict: int | None = None
+    # Meeting progress map — the second live feature, toggled independently.
+    liveMap: bool | None = None
+    liveMapIntervalSec: int | None = None
+    liveMapWindowChars: int | None = None
+    liveMapNumPredict: int | None = None
+    liveMapDigestChars: int | None = None
 
 
 # --- Routes -----------------------------------------------------------------
@@ -476,6 +489,20 @@ async def apply_save(body: SaveBody, *, allow_token: bool = True, redact: bool =
     if body.liveExtractNumPredict is not None:
         values["LIVE_EXTRACT_NUM_PREDICT"] = _clamp(
             int(body.liveExtractNumPredict), 128, 4096
+        )
+    if body.liveMap is not None:
+        values["LIVE_MAP"] = "true" if body.liveMap else "false"
+    if body.liveMapIntervalSec is not None:
+        values["LIVE_MAP_INTERVAL_SEC"] = _clamp(int(body.liveMapIntervalSec), 20, 600)
+    if body.liveMapWindowChars is not None:
+        values["LIVE_MAP_WINDOW_CHARS"] = _clamp(
+            int(body.liveMapWindowChars), 500, 12000
+        )
+    if body.liveMapNumPredict is not None:
+        values["LIVE_MAP_NUM_PREDICT"] = _clamp(int(body.liveMapNumPredict), 128, 4096)
+    if body.liveMapDigestChars is not None:
+        values["LIVE_MAP_DIGEST_CHARS"] = _clamp(
+            int(body.liveMapDigestChars), 500, 4000
         )
 
     # A context window has to leave room for the OUTPUT it reserves plus the
@@ -734,6 +761,14 @@ _LIVE_TEST_WINDOW = (
 )
 
 
+# The map as it would stand when the excerpt above is heard: one topic already
+# open, so the test exercises "reuse this id" and not just "invent one".
+_LIVE_MAP_TEST_DIGEST = (
+    't1 "Renewal quote" — The vendor\'s renewal quote is being reviewed.\n'
+    "   n1 question open   What did the renewal quote come back at?"
+)
+
+
 @router.post("/live-test")
 async def setup_live_test(body: LiveTestBody) -> dict:
     """Run the REAL mid-meeting live path over a fixed scripted excerpt.
@@ -781,6 +816,73 @@ async def setup_live_test(body: LiveTestBody) -> dict:
         # of the previous one — worth saying out loud, not just timing.
         "slowerThanInterval": latency_ms > settings.LIVE_INTERVAL_SEC * 1000,
         "questions": [q.model_dump() for q in (result.questions if result else [])],
+        "error": error,
+    }
+
+
+class LiveMapTestBody(BaseModel):
+    """Overrides for a meeting-map test run. None => use what is saved."""
+
+    liveModel: str | None = None
+    liveTimeoutSec: int | None = None
+    liveMapNumPredict: int | None = None
+
+
+@router.post("/live-map-test")
+async def setup_live_map_test(body: LiveMapTestBody) -> dict:
+    """Run the REAL meeting-map path over the same fixed scripted excerpt.
+
+    Op quality is the whole feature: a model that cannot hold ids straight, or
+    that invents topics, produces a map that is worse than no map. This proves
+    it before a meeting does — same prompt, same model, same parsing, and a
+    digest with a topic already in it so the "reuse an existing id" instruction
+    is actually exercised rather than assumed.
+
+    Never raises; the result IS the diagnosis.
+    """
+    import time
+
+    from ..pipeline import extract
+
+    settings = config.get_settings()
+    overrides: dict = {}
+    if body.liveModel is not None:
+        overrides["LIVE_MODEL"] = body.liveModel.strip()
+    if body.liveTimeoutSec:
+        overrides["LIVE_TIMEOUT_SEC"] = max(15, min(600, int(body.liveTimeoutSec)))
+    if body.liveMapNumPredict:
+        overrides["LIVE_MAP_NUM_PREDICT"] = max(
+            128, min(4096, int(body.liveMapNumPredict))
+        )
+    if overrides:
+        settings = settings.model_copy(update=overrides)
+
+    start = time.monotonic()
+    result = None
+    error = None
+    try:
+        result = await extract.run_map(
+            _LIVE_TEST_WINDOW, ["Priya", "Marcus"], _LIVE_MAP_TEST_DIGEST, settings
+        )
+    except Exception as exc:
+        error = str(exc)
+        log.warning("Meeting map test failed: %s", exc)
+    latency_ms = int((time.monotonic() - start) * 1000)
+
+    ops = [op.model_dump(by_alias=True) for op in (result.ops if result else [])]
+    return {
+        "ok": error is None,
+        "enabled": settings.LIVE_MAP,
+        "model": settings.live_model,
+        "latencyMs": latency_ms,
+        "intervalSec": settings.LIVE_MAP_INTERVAL_SEC,
+        "slowerThanInterval": latency_ms > settings.LIVE_MAP_INTERVAL_SEC * 1000,
+        "ops": ops,
+        # Did it UPDATE the topic it was shown, or open a parallel one? A model
+        # that only ever adds is the failure mode that looks like success.
+        "reusedExistingId": any(
+            op.get("topic") == "t1" or op.get("id") == "t1" for op in ops
+        ),
         "error": error,
     }
 

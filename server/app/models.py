@@ -57,6 +57,57 @@ class ExtractedQuestion(BaseModel):
     confidence: str = "high"
 
 
+class MapOp(BaseModel):
+    """One CHANGE to the meeting progress map (POST /live/map).
+
+    The map itself is never sent back whole. Each live tick hands the model a
+    digest of the map so far and asks only for what changed, so the prompt is
+    bounded by how many topics a meeting has rather than by how long it has run.
+
+    ``op`` picks the shape; the other fields are those that op uses:
+
+    * ``topic``  — upsert a subject: ``id``, ``title``, ``rollup``
+      (the one sentence that stands in for the topic once it collapses).
+    * ``node``   — upsert a point inside a topic: ``id``, ``topic``, ``kind``,
+      ``text``.
+    * ``link``   — relate two nodes: ``from_``/``to`` (``from`` on the wire),
+      ``kind``.
+    * ``status`` — move one node to open/resolved/parked: ``id``, ``status``.
+
+    Everything is optional because the laptop validates and DROPS what it can't
+    use. A local model that invents an id or omits a field must cost one op,
+    never the whole tick.
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    op: str = ""
+    id: str = ""
+    title: str = ""
+    rollup: str = ""
+    topic: str = ""
+    kind: str = ""
+    text: str = ""
+    # "from" is a Python keyword, so the field is from_ and the ALIAS is what
+    # travels on the wire in both directions (see model_config above).
+    from_: str = Field(default="", alias="from")
+    to: str = ""
+    status: str = ""
+
+
+class MapOps(BaseModel):
+    """What POST /live/map answers: changes to apply, nothing more.
+
+    An empty list is a correct and common answer — most excerpts only elaborate
+    what is already on the map. Nothing here is persisted server-side; the map
+    lives in the laptop's main process and dies with the meeting.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    ops: list[MapOp] = Field(default_factory=list)
+
+
 class LiveSuggestions(BaseModel):
     """What the mid-meeting live path offers the operator (POST /live/questions).
 

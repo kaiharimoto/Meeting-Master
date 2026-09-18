@@ -44,7 +44,9 @@
   // Live-suggestion fields work the same way, off state.liveParams. The
   // checkbox is listed separately because it round-trips .checked, not .value.
   var LIVE_FIELDS = ["liveModel", "liveIntervalSec", "liveWindowChars",
-                     "liveTimeoutSec", "liveKeepAliveMin", "liveExtractNumPredict"];
+                     "liveTimeoutSec", "liveKeepAliveMin", "liveExtractNumPredict",
+                     "liveMapIntervalSec", "liveMapWindowChars",
+                     "liveMapNumPredict", "liveMapDigestChars"];
   var editedAi = {};
   var fitLoaded = false; // "Fit to your GPU" is measured on first Settings open
 
@@ -234,6 +236,8 @@
     var liveOn = $("#liveSuggestions");
     if (liveOn && !editedAi.liveSuggestions)
       liveOn.checked = live.liveSuggestions !== false;
+    var mapOn = $("#liveMap");
+    if (mapOn && !editedAi.liveMap) mapOn.checked = live.liveMap !== false;
     if (!editedWhisper && document.activeElement !== $("#whisperModel")) $("#whisperModel").value = state.whisperModel || "";
 
     // Dependency detection.
@@ -368,6 +372,11 @@
       liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
       liveKeepAliveMin: $("#liveKeepAliveMin").value === "" ? null : parseInt($("#liveKeepAliveMin").value, 10),
       liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null,
+      liveMap: $("#liveMap").checked,
+      liveMapIntervalSec: parseInt($("#liveMapIntervalSec").value, 10) || null,
+      liveMapWindowChars: parseInt($("#liveMapWindowChars").value, 10) || null,
+      liveMapNumPredict: parseInt($("#liveMapNumPredict").value, 10) || null,
+      liveMapDigestChars: parseInt($("#liveMapDigestChars").value, 10) || null,
       aiProvider: $("#aiProvider").value,
       claudeCliPath: $("#claudeCliPath").value.trim(),
       claudeModel: $("#claudeModel").value.trim(),
@@ -582,6 +591,74 @@
   if (liveOnBox) liveOnBox.addEventListener("change", function () {
     editedAi.liveSuggestions = true;
   });
+  var mapOnBox = $("#liveMap");
+  if (mapOnBox) mapOnBox.addEventListener("change", function () {
+    editedAi.liveMap = true;
+  });
+  // ---- Meeting progress map: prove the OPS, not just that it answered -----
+  // A model that answers fluently but opens a fresh topic every tick produces
+  // a map that grows forever and says nothing. The digest sent by the test
+  // already contains a topic, so "did it reuse that id" is the question.
+  function mapResult(text, color) {
+    var el = $("#live-map-test-result");
+    el.textContent = text;
+    el.style.color = color || "var(--ink-soft)";
+  }
+  var mapTestBtn = $("#live-map-test");
+  if (mapTestBtn) mapTestBtn.addEventListener("click", function () {
+    mapResult("Asking the model for map changes — a cold model load can take a minute…");
+    mapTestBtn.disabled = true;
+    fetch(API + "/live-map-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        liveModel: $("#liveModel").value.trim(),
+        liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
+        liveMapNumPredict: parseInt($("#liveMapNumPredict").value, 10) || null,
+      }),
+    }).then(function (r) { return r.json(); })
+      .then(function (p) {
+        mapTestBtn.disabled = false;
+        var secs = (p.latencyMs / 1000).toFixed(1);
+        if (!p.ok) {
+          mapResult("✗ " + p.model + " failed after " + secs + "s: " +
+                    (p.error || "unknown error") +
+                    " — try a smaller live model, or raise the give-up time.",
+                    "var(--danger)");
+          return;
+        }
+        var n = (p.ops || []).length;
+        if (n === 0) {
+          mapResult("⚠ " + p.model + " answered in " + secs + "s but changed " +
+                    "nothing, in a sample where a decision is clearly reached. " +
+                    "This model is a poor fit for the map — try a different one, " +
+                    "or raise the max output tokens.", "var(--danger)");
+          return;
+        }
+        var msg = "✓ " + p.model + " returned " + n + " change" +
+                  (n === 1 ? "" : "s") + " in " + secs + "s.";
+        if (!p.reusedExistingId) {
+          // Fluent but useless: every tick would start the map over.
+          mapResult(msg + " But it opened a NEW topic instead of adding to the " +
+                    "one it was shown, so the map would keep restarting instead " +
+                    "of building up. Try a different live model.", "var(--warn-ink)");
+          return;
+        }
+        if (p.slowerThanInterval) {
+          mapResult(msg + " That is SLOWER than the " + p.intervalSec + "s map " +
+                    "interval, so asks would pile up — raise the interval or use " +
+                    "a smaller live model.", "var(--warn-ink)");
+          return;
+        }
+        mapResult(msg + " It added to the topic it was shown rather than " +
+                  "starting a new one, which is what keeps the map readable.");
+      })
+      .catch(function (e) {
+        mapTestBtn.disabled = false;
+        mapResult("✗ " + e, "var(--danger)");
+      });
+  });
+
   var providerSel = $("#aiProvider");
   if (providerSel) providerSel.addEventListener("change", function () {
     editedAi.aiProvider = true;
@@ -673,6 +750,11 @@
         liveModel: $("#liveModel").value.trim(),
         liveTimeoutSec: parseInt($("#liveTimeoutSec").value, 10) || null,
         liveExtractNumPredict: parseInt($("#liveExtractNumPredict").value, 10) || null,
+      liveMap: $("#liveMap").checked,
+      liveMapIntervalSec: parseInt($("#liveMapIntervalSec").value, 10) || null,
+      liveMapWindowChars: parseInt($("#liveMapWindowChars").value, 10) || null,
+      liveMapNumPredict: parseInt($("#liveMapNumPredict").value, 10) || null,
+      liveMapDigestChars: parseInt($("#liveMapDigestChars").value, 10) || null,
       }),
     }).then(function (r) { return r.json(); })
       .then(function (p) {

@@ -11,6 +11,14 @@ is being recorded:
                        the first real tick doesn't pay for it.
   POST /live/questions the newest slice of the laptop's LOCAL draft transcript
                        in, candidate Q&A pairs out.
+  POST /live/map       the same kind of slice plus a digest of the meeting map
+                       so far, CHANGES to that map out.
+
+The last two are separate features with separate toggles (LIVE_SUGGESTIONS and
+LIVE_MAP) and separate loops on the laptop, on purpose: one can be off, or
+failing, without touching the other. They are also separate ASKS rather than
+one combined call, because a single reply carrying both would lose the whole
+tick — both halves — to one malformed JSON object.
 
 Stateless by design — no job, no store, nothing persisted. If these are
 unreachable the laptop degrades quietly (it shows why in its side rail) and the
@@ -28,7 +36,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import verify_token
 from ..config import get_settings
-from ..models import JobState, LiveSuggestions
+from ..models import JobState, LiveSuggestions, MapOps
 from ..pipeline import extract
 from .jobs import require_configured
 
@@ -40,6 +48,12 @@ router = APIRouter(dependencies=[Depends(require_configured), Depends(verify_tok
 # malicious client can't push an unbounded prompt into Ollama.
 _MAX_WINDOW_CHARS = 12000
 _MAX_LIST_ITEMS = 50
+# The map digest is capped SEPARATELY from the transcript window rather than
+# sharing one budget with it. They grow for unrelated reasons — the digest with
+# the number of topics, the window with how much was said since the last ask —
+# and a shared cap would let a long meeting's map quietly crowd out the speech
+# the model is supposed to be reading.
+_MAX_DIGEST_CHARS = 4000
 
 # Added to the server's own budget to give the laptop its HTTP timeout. The
 # client must always be the MORE patient of the two: a client that gives up on
@@ -56,6 +70,20 @@ def _require_enabled() -> None:
             detail=(
                 "Live suggestions are turned off on the home server — enable "
                 "them on the dashboard's Settings tab (AI models → Live "
+                "suggestions)."
+            ),
+        )
+
+
+def _require_map_enabled() -> None:
+    """The map's own switch. Separate from _require_enabled above, so turning
+    off one live feature never silently takes the other with it."""
+    if not get_settings().LIVE_MAP:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The meeting progress map is turned off on the home server — "
+                "enable it on the dashboard's Settings tab (AI models → Live "
                 "suggestions)."
             ),
         )
@@ -99,6 +127,15 @@ class LiveQuestionsRequest(BaseModel):
     alreadyFlagged: list[str] = []
 
 
+class LiveMapRequest(BaseModel):
+    transcriptWindow: str = Field(min_length=1)
+    attendees: list[str] = []
+    # The laptop's rendering of the map so far: full detail for the newest
+    # topics, one rollup line each for the older ones. Empty on the first ask
+    # of a meeting, which is a normal state and not an error.
+    digest: str = ""
+
+
 @router.get("/live/config")
 async def live_config() -> dict:
     """How the laptop should drive its live loop, and whether to run it at all.
@@ -121,6 +158,20 @@ async def live_config() -> dict:
         # and not leave the operator wondering why the Claude they selected for
         # the summary isn't the one making live suggestions.
         "provider": "ollama",
+        # The map is a separate feature with its own switch and its own, slower
+        # cadence. Nested so the laptop reads one object per loop it runs.
+        "map": {
+            "enabled": settings.LIVE_MAP,
+            "intervalSec": max(20, settings.LIVE_MAP_INTERVAL_SEC),
+            "windowChars": max(
+                500, min(_MAX_WINDOW_CHARS, settings.LIVE_MAP_WINDOW_CHARS)
+            ),
+            "digestChars": max(
+                500, min(_MAX_DIGEST_CHARS, settings.LIVE_MAP_DIGEST_CHARS)
+            ),
+            "clientTimeoutSec": max(10, settings.LIVE_TIMEOUT_SEC)
+            + _CLIENT_TIMEOUT_MARGIN_SEC,
+        },
     }
 
 
@@ -173,4 +224,35 @@ async def live_questions(
         log.warning("Live suggestions failed: %s", exc)
         raise HTTPException(
             status_code=502, detail=f"Live suggestions failed: {exc}"
+        ) from exc
+
+
+@router.post("/live/map", response_model=MapOps)
+async def live_map(request: Request, body: LiveMapRequest) -> MapOps:
+    """Changes to the meeting progress map, from the newest speech.
+
+    Same three status codes as /live/questions and for the same reasons — but
+    gated on LIVE_MAP, so the map and the questions rail switch off
+    independently.
+    """
+    _require_map_enabled()
+    _require_gpu_free(request)
+    window = body.transcriptWindow.strip()
+    if not window:
+        raise HTTPException(status_code=422, detail="transcriptWindow is empty.")
+    window = window[-_MAX_WINDOW_CHARS:]
+    # The OLDEST part of the digest goes first when it is too long: it holds the
+    # coldest topics, which are already one rollup line each and are the least
+    # likely to be what the current excerpt is talking about.
+    digest = body.digest.strip()[-_MAX_DIGEST_CHARS:]
+
+    attendees = [a.strip() for a in body.attendees[:_MAX_LIST_ITEMS] if a and a.strip()]
+
+    settings = get_settings()
+    try:
+        return await extract.run_map(window, attendees, digest, settings)
+    except Exception as exc:  # Ollama down/slow/garbled — the laptop says so
+        log.warning("Meeting map failed: %s", exc)
+        raise HTTPException(
+            status_code=502, detail=f"Meeting map failed: {exc}"
         ) from exc

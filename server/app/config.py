@@ -209,6 +209,27 @@ class Settings(BaseSettings):
     # still on the same subject.
     LIVE_EXTRACT_NUM_PREDICT: int = 600
 
+    # --- Meeting progress map (POST /live/map) ---
+    # The second live feature, toggled INDEPENDENTLY of the questions above:
+    # a picture of where the meeting has got to, drawn from the same rough live
+    # transcript and shown in a pop-out window beside the operator's slides.
+    # Each ask sends a digest of the map so far and gets back CHANGES to it, so
+    # the prompt is bounded by topic count rather than by meeting length.
+    LIVE_MAP: bool = True
+    # Deliberately slower than the questions loop: topics turn over far less
+    # often than questions get answered, and the two asks share one GPU.
+    LIVE_MAP_INTERVAL_SEC: int = 90
+    # A wider window than the questions path — a topic shift is only visible
+    # across more of the conversation than a single Q&A pair.
+    LIVE_MAP_WINDOW_CHARS: int = 6000
+    # Roomier than LIVE_EXTRACT_NUM_PREDICT: an ops array is longer and more
+    # structured than a questions array, and a TRUNCATED one parses to nothing
+    # at all — a silently empty map rather than a short one.
+    LIVE_MAP_NUM_PREDICT: int = 900
+    # How much of the map digest may ride in the prompt. Bounds the map's half
+    # of the context so it can never crowd out the transcript it is reading.
+    LIVE_MAP_DIGEST_CHARS: int = 3000
+
     # --- Email (Gmail SMTP with an App Password) ---
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 465
@@ -294,6 +315,11 @@ WRITABLE_KEYS = (
     "LIVE_TIMEOUT_SEC",
     "LIVE_KEEP_ALIVE_MIN",
     "LIVE_EXTRACT_NUM_PREDICT",
+    "LIVE_MAP",
+    "LIVE_MAP_INTERVAL_SEC",
+    "LIVE_MAP_WINDOW_CHARS",
+    "LIVE_MAP_NUM_PREDICT",
+    "LIVE_MAP_DIGEST_CHARS",
     "WHISPER_MODEL_DEFAULT",
     "SMTP_USER",
     "SMTP_APP_PASSWORD",

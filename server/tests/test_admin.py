@@ -30,6 +30,7 @@ READ_ROUTES = ["/admin/state", "/admin/ollama-models", "/admin/jobs", "/admin/lo
 WRITE_ROUTES = [
     ("/admin/ai-test", {}),
     ("/admin/live-test", {}),
+    ("/admin/live-map-test", {}),
 ]
 
 

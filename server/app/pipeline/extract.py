@@ -20,6 +20,8 @@ from ..models import (
     AnsweredQuestion,
     ExtractedQuestion,
     LiveSuggestions,
+    MapOp,
+    MapOps,
     MeetingMeta,
 )
 from . import _ollama, _provider
@@ -264,6 +266,148 @@ async def run_live(
             q for q in questions if q.question.casefold().strip() not in flagged_keys
         ],
     )
+
+
+# ---- Meeting progress map (mid-meeting) --------------------------------------
+# The second live feature. Where the questions path mines a window for finished
+# Q&A pairs, this one maintains a PICTURE of where the meeting has got to, and
+# it does so incrementally: the laptop sends a digest of the map so far, the
+# model returns only what changed.
+#
+# Incremental, rather than re-emitting the whole map each tick, for two reasons
+# that both matter more than the token saving. A re-emitted map has new ids
+# every tick, so the drawing jitters — nodes jump and the operator loses their
+# place in a thing they are watching. And re-emission costs tokens in
+# proportion to meeting length, which is exactly the wrong shape: the second
+# hour of a meeting would be the one that stops working.
+
+# One op per line, one line per change, so a truncated answer loses the last op
+# rather than the whole array.
+_MAP_SCHEMA_HINT = (
+    'Respond with ONLY a JSON object of this exact shape:\n'
+    '{\n'
+    '  "ops": [\n'
+    '    {"op": "topic",  "id": "t1", "title": "short subject",\n'
+    '     "rollup": "one sentence standing in for the whole topic"},\n'
+    '    {"op": "node",   "id": "n1", "topic": "t1",\n'
+    '     "kind": "point|question|decision|action|risk|disagreement",\n'
+    '     "text": "the concrete point, under 14 words"},\n'
+    '    {"op": "link",   "from": "n2", "to": "n1",\n'
+    '     "kind": "leads_to|answers|contradicts|supports"},\n'
+    '    {"op": "status", "id": "n1", "status": "open|resolved|parked"}\n'
+    '  ]\n'
+    '}'
+)
+
+MAP_SYSTEM_PROMPT = (
+    "You are maintaining a live MAP of a meeting that is STILL IN PROGRESS. "
+    "You are given a rough, machine-transcribed excerpt of the last few "
+    "minutes, plus the map as it currently stands. Return only CHANGES to the "
+    "map — never the whole map.\n\n"
+    "A TOPIC is a subject the meeting is actually discussing. A NODE is one "
+    "concrete point inside a topic: a claim, a question, a decision, an action, "
+    "a risk, or a disagreement. A LINK says how two nodes relate.\n\n"
+    "Rules:\n"
+    "- To update something, reuse its id EXACTLY as it appears in the current "
+    "map. Invent a new short id only for something genuinely new.\n"
+    "- Every topic carries a rollup: the one sentence that would stand in for "
+    "the whole topic once it collapses out of view. Keep it current as the "
+    "topic develops — that sentence is all the operator will see of it later.\n"
+    "- Titles under 6 words. Node text under 14 words. Both are read at a "
+    "glance, from across a desk, beside a slide deck.\n"
+    "- Prefer adding a node to an EXISTING topic. Open a new topic only when "
+    "the meeting has genuinely moved on to a different subject.\n"
+    "- Most excerpts add one or two nodes. An empty ops array is the correct "
+    "and expected answer when the excerpt only elaborates what is already on "
+    "the map.\n\n"
+    "Use ONLY what is in the excerpt. Never invent topics, points, names or "
+    "decisions. " + _MAP_SCHEMA_HINT
+)
+
+_MAP_OPS = ("topic", "node", "link", "status")
+# A tick that wants to change more than this is not describing a meeting, it is
+# hallucinating one.
+_MAX_MAP_OPS = 24
+
+
+def _coerce_ops(parsed) -> list[MapOp]:
+    """The model's JSON -> MapOp records, defensively.
+
+    Anything unrecognised is DROPPED rather than raised on. The laptop does the
+    second half of this (an op naming an id it has never seen is discarded
+    there, where the map actually lives); between them, one confused op costs
+    one op and the rest of the tick still lands.
+    """
+    if not isinstance(parsed, dict):
+        return []
+    raw = parsed.get("ops")
+    if not isinstance(raw, list):
+        return []
+    out: list[MapOp] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("op") or "").strip().casefold()
+        if name not in _MAP_OPS:
+            continue
+        try:
+            op = MapOp.model_validate({**item, "op": name})
+        except Exception:  # a field of the wrong type — drop the op, not the tick
+            continue
+        # An op that names nothing can't be applied to anything.
+        if name in ("topic", "node", "status") and not op.id.strip():
+            continue
+        if name == "link" and not (op.from_.strip() and op.to.strip()):
+            continue
+        out.append(op)
+        if len(out) >= _MAX_MAP_OPS:
+            break
+    return out
+
+
+async def run_map(
+    window_text: str,
+    attendees: list[str],
+    digest: str,
+    settings: Settings,
+) -> MapOps:
+    """Ask for the CHANGES the newest speech makes to the meeting map.
+
+    Called mid-meeting by the laptop (POST /live/map), on its own slower
+    cadence than the questions path. ``digest`` is the laptop's rendering of the
+    map so far — full detail for the newest topics, one rollup line for each
+    older one — which is what keeps this prompt bounded by topic count instead
+    of by meeting length.
+
+    Stateless, like everything else on the live path: the map lives in the
+    laptop's main process, and this server neither stores nor remembers it.
+
+    _ollama and settings.live_model, NOT _provider and not a model of its own —
+    see warm_live_model below for the first, and note for the second that a
+    separate map model would make Ollama unload and reload between the
+    questions ask and the map ask on every tick they share.
+    """
+    attendee_line = ", ".join(attendees) if attendees else "(not listed)"
+    map_block = digest.strip() or "(empty — the meeting has just started)"
+    user_prompt = (
+        f"Attendees: {attendee_line}\n\n"
+        "CURRENT MAP:\n"
+        f"{map_block}\n\n"
+        "This is a PARTIAL, ROUGH live transcript of what has been said SINCE "
+        "the map above was last updated (machine-transcribed; names may be "
+        "misspelled). Return the changes it makes to the map.\n\n"
+        "Transcript excerpt:\n\n"
+        f"{window_text}"
+    )
+    async with httpx.AsyncClient(timeout=_live_timeout(settings)) as client:
+        parsed = await _ollama.chat_json(
+            client, settings, MAP_SYSTEM_PROMPT, user_prompt,
+            num_predict=settings.LIVE_MAP_NUM_PREDICT,
+            temperature=settings.EXTRACT_TEMPERATURE,
+            model=settings.live_model,
+            keep_alive=settings.live_keep_alive,
+        )
+    return MapOps(ops=_coerce_ops(parsed))
 
 
 async def warm_live_model(settings: Settings) -> None:

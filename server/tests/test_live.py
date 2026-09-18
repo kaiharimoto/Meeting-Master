@@ -12,7 +12,6 @@ def _payload(**overrides):
         ),
         "attendees": ["Alice", "Bob"],
         "alreadyFlagged": [],
-        "alreadyInsights": [],
     }
     body.update(overrides)
     return body

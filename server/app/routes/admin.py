@@ -103,6 +103,12 @@ async def admin_live_test(body: setup_routes.LiveTestBody) -> dict:
     return await setup_routes.setup_live_test(body)
 
 
+@router.post("/live-map-test")
+async def admin_live_map_test(body: setup_routes.LiveMapTestBody) -> dict:
+    """Live-fire the MEETING MAP path over the same fixed excerpt."""
+    return await setup_routes.setup_live_map_test(body)
+
+
 @router.get("/ollama-models")
 async def admin_ollama_models() -> dict:
     return await setup_routes.setup_ollama_models()
