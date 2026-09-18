@@ -148,11 +148,59 @@ def test_asking_for_flash_attention_still_falls_back_to_off():
 
 def test_the_ladder_sheds_coopmat_before_it_sheds_the_gpu():
     attempts = transcribe._plan_attempts(settings_for(), MODERN_FLAGS)
-    assert attempts[-1].args == ("--no-gpu",)
+    assert attempts[-1].label == "CPU"
+    assert "--no-gpu" in attempts[-1].args
     assert attempts[-2].env == {
         "GGML_VK_DISABLE_COOPMAT": "1",
         "GGML_VK_DISABLE_COOPMAT2": "1",
     }
+
+
+def test_every_rung_keeps_what_the_rung_above_it_switched_off():
+    """A fallback that resets is not a fallback.
+
+    The CPU rung used to be built from scratch as ("--no-gpu",) with an empty
+    environment, so the last rung dropped both WHISPER_FLASH_ATTN=false and the
+    coopmat variables the rung before it had set — and a real job crashed on
+    all three paths with "use gpu = 0" and "flash attn = 1" on the same run.
+    --no-gpu does not unload Vulkan (ggml still enumerates the devices), so
+    those variables still matter once the GPU is out of the picture.
+    """
+    attempts = transcribe._plan_attempts(settings_for(), MODERN_FLAGS)
+    cpu = attempts[-1]
+    assert cpu.args == ("--no-flash-attn", "--no-gpu")
+    assert cpu.env == {
+        "GGML_VK_DISABLE_COOPMAT": "1",
+        "GGML_VK_DISABLE_COOPMAT2": "1",
+    }
+    # ...and the property, not just this ladder: nothing is ever taken back.
+    for above, below in zip(attempts, attempts[1:]):
+        assert set(above.env.items()) <= set(below.env.items())
+    assert all("--no-flash-attn" in a.args for a in attempts)
+
+
+def test_a_flash_attention_ladder_never_climbs_back_to_flash_attention():
+    """Asked for, crashed, switched off — and it stays off all the way down."""
+    attempts = transcribe._plan_attempts(
+        settings_for(WHISPER_FLASH_ATTN=True), MODERN_FLAGS
+    )
+    assert attempts[0].args == ("--flash-attn",)
+    for attempt in attempts[1:]:
+        assert "--flash-attn" not in attempt.args
+        assert "--no-flash-attn" in attempt.args
+
+
+def test_an_old_build_sheds_flash_attention_by_dropping_the_flag():
+    """Pre-v1.8.0 has no --no-flash-attn because off is already its default, so
+    the rung that sheds flash attention sheds --flash-attn instead of passing a
+    flag this binary would answer with usage and exit 0."""
+    attempts = transcribe._plan_attempts(
+        settings_for(WHISPER_FLASH_ATTN=True), transcribe._LONG_STANDING_FLAGS
+    )
+    assert attempts[0].args == ("--flash-attn",)
+    assert attempts[1].label == "GPU with flash attention off"
+    for attempt in attempts[1:]:
+        assert attempt.args == () or attempt.args == ("--no-gpu",)
 
 
 def test_gpu_off_means_only_the_cpu_is_tried():
@@ -186,6 +234,10 @@ def test_a_gpu_crash_finishes_the_job_on_the_cpu(tmp_path, monkeypatch):
     assert transcript.warning is None
     runs = runs_from(log)
     assert [("--no-gpu" in r["argv"]) for r in runs] == [False, False, True]
+    # The rung that finally worked did so with every earlier mitigation still
+    # in place — flash attention off and the coopmat shaders off.
+    assert "--no-flash-attn" in runs[-1]["argv"]
+    assert runs[-1]["env"]["GGML_VK_DISABLE_COOPMAT"] == "1"
 
 
 def test_a_coopmat_crash_stays_on_the_gpu(tmp_path, monkeypatch):
@@ -259,6 +311,9 @@ def test_a_rungs_own_flags_beat_whisper_extra_args(tmp_path, monkeypatch):
     transcribe_wav(tmp_path, WHISPER_EXTRA_ARGS="-fa")
     argv = runs_from(log)[-1]["argv"]
     assert argv.index("-fa") < argv.index("--no-gpu")
+    # The CPU rung is where this used to leak: it passed --no-gpu and nothing
+    # else, so a '-fa' in WHISPER_EXTRA_ARGS was the last word on the run.
+    assert argv.index("-fa") < argv.index("--no-flash-attn")
 
 
 # --- configuration -----------------------------------------------------------

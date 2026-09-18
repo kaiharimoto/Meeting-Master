@@ -414,7 +414,35 @@ Fixed in **v0.20.2**, three ways:
 - CI pins the whisper.cpp version instead of building whatever upstream
   pushed that morning, so this class of surprise needs somebody to choose it.
 
-If you see it anyway:
+### "Every path was tried and every one failed"
+
+When the error ends with that sentence, the ladder walked all the way down and
+the CPU rung died too. Read the tail of the report for the line
+
+```
+whisper_init_with_params_no_state: flash attn = 1
+```
+
+**on a run that also says `use gpu = 0`.** Before v0.21.1 that combination was a
+bug in this repository, not in the driver: the CPU rung was built from scratch
+as `--no-gpu` and nothing else, so it threw away the `--no-flash-attn` the GPU
+rungs had been passing and whisper.cpp v1.8.0+ turned flash attention back on
+for the one run that was supposed to be the safest. It also dropped the
+cooperative-matrix variables the rung above it had just set — which still
+matter with `--no-gpu`, because ggml registers and enumerates the Vulkan
+backend either way (the same crash reports `Found 1 Vulkan devices` and
+`backends = 2` under `use gpu = 0`).
+
+Fixed in **v0.21.1**: the ladder is cumulative, so each rung keeps everything
+the rungs above it switched off. **Update the app** if you are on v0.20.2–v0.21.0
+and a job failed on all three paths.
+
+If you are on v0.21.1 or later and it still happens, the CPU rung is now a
+genuinely plain CPU run, and a crash there is not about the GPU at all —
+`0xC000001D` on the CPU path means the binary used an instruction this
+processor does not have. Say so in an issue and include the whole report.
+
+If you see the original GPU crash anyway:
 
 - **Update the AMD driver** (Adrenalin). A Vulkan crash in a compute shader is
   a driver bug more often than not.

@@ -68,7 +68,9 @@ _LOOP_RUN = 6
 #   3. A crash is not a verdict. When whisper-cli dies rather than fails, the
 #      SAME audio is re-run with each accelerator path switched off in turn and
 #      finally on the CPU. A driver or shader bug then costs a slow transcript,
-#      not the meeting.
+#      not the meeting. Each rung KEEPS what the rungs above it switched off —
+#      see _plan_attempts, where a rung that started fresh handed the CPU run
+#      flash attention back and cost a meeting anyway.
 
 # Windows reports an unhandled exception as its NTSTATUS code, which is always
 # 0xC0000000 or above (0xC0000005 access violation, 0xC000001D illegal
@@ -243,6 +245,24 @@ class _Attempt(NamedTuple):
 def _plan_attempts(settings: Settings, flags: frozenset[str]) -> list[_Attempt]:
     """The GPU first, then the same audio with each suspect path switched off.
 
+    The ladder is CUMULATIVE: a rung keeps everything the rungs above it
+    switched off and sheds one more thing. A rung built from scratch is the
+    opposite of a fallback, and that was a real bug — the CPU rung used to be
+    ``("--no-gpu",)`` with an empty environment, which threw away both the
+    operator's ``WHISPER_FLASH_ATTN=false`` (v1.8.0+ turns it back ON when
+    nothing says otherwise) and the cooperative-matrix shaders the rung before
+    it had just disabled. The last and supposedly safest rung therefore ran
+    with MORE of the crash surface enabled than the run before it:
+
+        whisper_init_with_params_no_state: use gpu    = 0
+        whisper_init_with_params_no_state: flash attn = 1   <- never asked for
+
+    ``--no-gpu`` does not take Vulkan out of the process, either. ggml still
+    registers and enumerates the backend — that same crash reported
+    "ggml_vulkan: Found 1 Vulkan devices" and "backends = 2" on a run with
+    ``use gpu = 0`` — so the coopmat variables still have work to do on the
+    CPU rung.
+
     Only ever walked past the first rung when whisper-cli CRASHED, and a crash
     happens during model load — seconds in, before any transcription work — so
     the healthy case pays for exactly one run and the broken case pays a few
@@ -252,33 +272,45 @@ def _plan_attempts(settings: Settings, flags: frozenset[str]) -> list[_Attempt]:
     fa_off = _FLAG_NO_FLASH_ATTN if _FLAG_NO_FLASH_ATTN in flags else None
     no_gpu = _FLAG_NO_GPU if _FLAG_NO_GPU in flags else None
 
+    # The settings' own answer on flash attention, carried by every rung below.
+    if settings.WHISPER_FLASH_ATTN:
+        args: tuple[str, ...] = (fa_on,) if fa_on else ()
+    else:
+        args = (fa_off,) if fa_off else ()
+    env: dict[str, str] = {}
+
     attempts: list[_Attempt] = []
     if settings.WHISPER_GPU:
-        wanted = fa_on if settings.WHISPER_FLASH_ATTN else fa_off
-        attempts.append(_Attempt("GPU", (wanted,) if wanted else (), {}, None))
-        if settings.WHISPER_FLASH_ATTN and fa_off:
+        attempts.append(_Attempt("GPU", args, dict(env), None))
+        # Switching it off means passing --no-flash-attn where the build has
+        # it, and otherwise just dropping --flash-attn: a build that does not
+        # advertise --no-flash-attn predates v1.8.0, where off is the default.
+        if settings.WHISPER_FLASH_ATTN and (fa_off or fa_on):
+            args = (fa_off,) if fa_off else ()
             attempts.append(_Attempt(
                 "GPU with flash attention off",
-                (fa_off,),
-                {},
+                args,
+                dict(env),
                 "The GPU crashed with flash attention on, so this meeting was "
                 "transcribed with it off. Set WHISPER_FLASH_ATTN=false in "
                 "server.env to stop paying for that crash on every job.",
             ))
+        env = dict(_NO_COOPMAT_ENV)
         attempts.append(_Attempt(
             "GPU without cooperative-matrix shaders",
-            attempts[-1].args,
-            dict(_NO_COOPMAT_ENV),
+            args,
+            dict(env),
             "The GPU crashed until its cooperative-matrix (tensor-core) shaders "
             "were switched off, so this meeting was transcribed without them. "
             "That is a graphics-driver bug — update the AMD driver, and see "
             "docs/TROUBLESHOOTING.md if it persists.",
         ))
     if no_gpu:
+        args += (no_gpu,)
         attempts.append(_Attempt(
             "CPU",
-            (no_gpu,),
-            {},
+            args,
+            dict(env),
             "The GPU could not run whisper.cpp at all, so this meeting was "
             "transcribed on the CPU — correct, but many times slower. See "
             'docs/TROUBLESHOOTING.md, "Transcription crashes instead of '
@@ -287,7 +319,7 @@ def _plan_attempts(settings: Settings, flags: frozenset[str]) -> list[_Attempt]:
     if not attempts:
         # WHISPER_GPU is off but this build has no --no-gpu to honour it with.
         log.warning("WHISPER_GPU=false, but this whisper-cli has no %s flag", _FLAG_NO_GPU)
-        attempts.append(_Attempt("GPU", (), {}, None))
+        attempts.append(_Attempt("GPU", args, dict(env), None))
     return attempts
 
 

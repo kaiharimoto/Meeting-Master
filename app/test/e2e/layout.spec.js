@@ -247,11 +247,18 @@ test('a collapsed panel is unreachable, not merely clipped', async ({ page }) =>
   await expect(panel.locator('.panel-body')).toHaveCSS('grid-template-rows', '0px');
   await expect(page.locator('#generate-pdf-btn')).toBeHidden();
 
-  // Expanding animates the same row back open.
+  // Expanding animates the same row back open. Poll rather than sample: the
+  // row grows over --collapse-t (180ms), so reading it the instant the button
+  // becomes visible catches the transition at 0px about as often as not.
   await page.locator('#generate-heading .panel-toggle').click();
   await expect(page.locator('#generate-pdf-btn')).toBeVisible();
-  const rows = await panel.locator('.panel-body').evaluate(
-    (el) => getComputedStyle(el).gridTemplateRows
-  );
-  expect(parseFloat(rows)).toBeGreaterThan(0);
+  await expect
+    .poll(async () =>
+      parseFloat(
+        await panel
+          .locator('.panel-body')
+          .evaluate((el) => getComputedStyle(el).gridTemplateRows)
+      )
+    )
+    .toBeGreaterThan(0);
 });
