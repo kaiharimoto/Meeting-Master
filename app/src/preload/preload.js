@@ -72,6 +72,8 @@ contextBridge.exposeInMainWorld('api', {
   getJobNames: (jobId) => call(CHANNELS.JOB_NAMES_GET, jobId),
   applyJobNames: (jobId, mapping) => call(CHANNELS.JOB_NAMES_APPLY, jobId, mapping),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
+  saveBinaryFile: (filePath, base64) =>
+    call(CHANNELS.FILE_SAVE_BINARY, filePath, base64),
 
   // In-app recording (v0.8.0)
   recStart: (meta) => call(CHANNELS.REC_START, meta),
@@ -105,6 +107,19 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_event, payload) => cb(payload);
     ipcRenderer.on(CHANNELS.LIVE_MODEL_EVENT, listener);
     return () => ipcRenderer.removeListener(CHANNELS.LIVE_MODEL_EVENT, listener);
+  },
+
+  // Meeting progress map (v0.22.0). getMap() is the PULL half: the map window
+  // opens mid-meeting, so it asks for the current map on load rather than
+  // sitting blank until the next push.
+  mapOpen: () => call(CHANNELS.MAP_OPEN),
+  mapClose: () => call(CHANNELS.MAP_CLOSE),
+  mapPin: (pinned) => call(CHANNELS.MAP_PIN, pinned),
+  getMap: () => call(CHANNELS.MAP_GET),
+  onMapState: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on(CHANNELS.MAP_STATE, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.MAP_STATE, listener);
   },
 
   // Usability batch (v0.10.0)

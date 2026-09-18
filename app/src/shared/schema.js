@@ -80,6 +80,17 @@ const CHANNELS = Object.freeze({
   // dashboard over Tailscale, so a setting can be fixed from the meeting room
   // instead of only from the home PC.
   ADMIN_OPEN: 'admin:open',
+  // Meeting progress map (v0.22.0). Its own event channel rather than riding
+  // LIVE_EVENT: that one carries a push per transcript SEGMENT, at speech rate,
+  // so the map window would wake on every few words and filter almost all of
+  // them out. MAP_STATE fires only when the map actually changes.
+  MAP_OPEN: 'map:open',
+  MAP_CLOSE: 'map:close',
+  MAP_PIN: 'map:pin', // toggle always-on-top from inside the map window
+  MAP_GET: 'map:get', // pull the current map — the window opens mid-meeting
+  MAP_STATE: 'map:state', // main -> BOTH windows push (the whole map)
+  // Generic sibling of FILE_SAVE_TEXT, for the map's PNG export.
+  FILE_SAVE_BINARY: 'file:saveBinary',
 });
 
 const JOB_STATES = Object.freeze([

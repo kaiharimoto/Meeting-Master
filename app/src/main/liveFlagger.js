@@ -45,6 +45,7 @@
 
 const homeClient = require('./homeClient');
 const liveTranscriber = require('./liveTranscriber');
+const gpuLock = require('./liveGpuLock');
 
 // Used until GET /live/config answers (and if it never does).
 const DEFAULTS = {
@@ -119,6 +120,10 @@ function stop() {
     clearTimeout(timer);
     timer = null;
   }
+  // An ask abandoned by the generation bump would otherwise hold the lock until
+  // its HTTP call returned, locking the map loop out of a session it is not
+  // even part of any more.
+  if (inFlight) gpuLock.release();
   inFlight = false;
 }
 
@@ -280,6 +285,15 @@ async function tick() {
     return;
   }
 
+  // The map loop may be mid-ask on the same GPU. Skip rather than queue: the
+  // unread speech keeps its place behind the high-water mark and goes into the
+  // next ask whole, whereas a queued ask would wait out the other's timeout and
+  // then ask about a window that went stale while it waited.
+  if (!gpuLock.tryAcquire('questions')) {
+    schedule(nextDelay());
+    return;
+  }
+
   inFlight = true;
   busyUntilNextTry = false;
   try {
@@ -334,6 +348,7 @@ async function tick() {
         : `Last request failed — ${short(err)}. Retrying.`
     );
   } finally {
+    gpuLock.release();
     inFlight = false;
     if (isCurrent(gen) && enabled) schedule(nextDelay());
   }

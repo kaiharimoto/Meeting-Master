@@ -24,6 +24,7 @@ const {
 } = require('electron');
 const { CHANNELS } = require('../shared/schema');
 const { registerIpcHandlers } = require('./ipc');
+const mapWindow = require('./mapWindow');
 const config = require('./config');
 const sseClient = require('./sseClient');
 const serverManager = require('./serverManager');
@@ -57,9 +58,22 @@ function boundsPath() {
   return path.join(app.getPath('userData'), 'window-state.json');
 }
 
-function loadBounds() {
+// One file, keyed by window. It began life holding the operator window's bounds
+// as a bare object; a saved file in that shape is read as the 'main' key, so an
+// existing install keeps its window where it left it.
+function readBoundsFile() {
   try {
-    const saved = JSON.parse(fs.readFileSync(boundsPath(), 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(boundsPath(), 'utf8'));
+    if (!raw || typeof raw !== 'object') return {};
+    return typeof raw.width === 'number' ? { main: raw } : raw;
+  } catch {
+    return {};
+  }
+}
+
+function loadBounds(key = 'main') {
+  try {
+    const saved = readBoundsFile()[key];
     if (!saved || typeof saved.width !== 'number' || typeof saved.height !== 'number') {
       return null;
     }
@@ -83,18 +97,39 @@ function loadBounds() {
   }
 }
 
-let saveTimer = null;
+// One timer per window key: a shared timer would let the map window's resize
+// cancel the operator window's pending save.
+const saveTimers = new Map();
+
+/**
+ * Remember `win`'s bounds under `key`.
+ *
+ * Takes the window explicitly rather than reaching for the module-global
+ * mainWindow, because there are now two windows worth remembering and the
+ * version that closed over mainWindow would have saved the WRONG window's
+ * bounds every time the map was resized.
+ */
+function saveBoundsFor(key, win) {
+  const pending = saveTimers.get(key);
+  if (pending) clearTimeout(pending);
+  saveTimers.set(
+    key,
+    setTimeout(() => {
+      saveTimers.delete(key);
+      if (!win || win.isDestroyed() || win.isMinimized()) return;
+      try {
+        const all = readBoundsFile();
+        all[key] = win.getNormalBounds();
+        fs.writeFileSync(boundsPath(), JSON.stringify(all));
+      } catch {
+        // Bounds persistence is a nicety — never let it throw.
+      }
+    }, 400)
+  );
+}
+
 function saveBoundsDebounced() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) return;
-    try {
-      fs.writeFileSync(boundsPath(), JSON.stringify(mainWindow.getNormalBounds()));
-    } catch {
-      // Bounds persistence is a nicety — never let it throw.
-    }
-  }, 400);
+  saveBoundsFor('main', mainWindow);
 }
 
 // ---- Titlebar overlay (Windows, operator mode) ------------------------------
@@ -198,6 +233,11 @@ function createOperatorWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // Not housekeeping — load-bearing. window-all-closed only quits once the
+    // LAST window goes, so an always-on-top map left behind would keep the app
+    // running invisibly, with its live loop still asking the home server about
+    // a meeting that ended.
+    mapWindow.close();
   });
 }
 
@@ -304,6 +344,10 @@ function createServerWindow(startHidden) {
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // Server mode deliberately lives on in the tray, so this is not about
+    // letting the app quit — it is that an always-on-top map floating over an
+    // otherwise headless tray app has nothing left to belong to.
+    mapWindow.close();
   });
 
   // A recreated window (tray → Open after a close) must sync to the CURRENT
@@ -603,7 +647,15 @@ app.whenReady().then(() => {
   // Handlers need a live window reference for dialogs and progress events,
   // so hand them a getter instead of the (possibly recreated) window itself.
   // activeWindow prefers the notes studio when it is open (server mode).
-  registerIpcHandlers(activeWindow, { setOverlayTheme, onRecordingStopped });
+  registerIpcHandlers(activeWindow, {
+    setOverlayTheme,
+    onRecordingStopped,
+    // The map window remembers where the operator put it, through the same
+    // keyed store and — the part that matters on a second monitor — the same
+    // off-screen guard as the operator window.
+    loadBounds,
+    saveBounds: saveBoundsFor,
+  });
 
   // Smart zoom: auto factor follows display changes (docking, projectors).
   zoom.init(() => (mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []));

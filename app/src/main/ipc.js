@@ -18,6 +18,8 @@ const whisperLocator = require('./whisperLocator');
 const modelManager = require('./modelManager');
 const liveTranscriber = require('./liveTranscriber');
 const liveFlagger = require('./liveFlagger');
+const liveMap = require('./liveMap');
+const mapWindow = require('./mapWindow');
 const miniManager = require('./miniManager');
 const adminWindow = require('./adminWindow');
 
@@ -233,6 +235,14 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return { ok: true, path: filePath };
   });
 
+  // The binary sibling, for the map's PNG export. Base64 because that is what
+  // survives the contextBridge; a Buffer does not.
+  handle(CHANNELS.FILE_SAVE_BINARY, async (filePath, base64) => {
+    if (!filePath) throw new Error('No file path to save to.');
+    require('fs').writeFileSync(filePath, Buffer.from(String(base64 || ''), 'base64'));
+    return { ok: true, path: filePath };
+  });
+
   // ---- In-app recording (v0.8.0) --------------------------------------------
   // handleLocal: the dashboard page shares this preload and must never be able
   // to start capture or probe the recordings folder.
@@ -281,8 +291,23 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
     };
   }
+  // The map is the one thing two windows both want, so it needs a fan-out that
+  // pushTo (main window only) cannot give it. Deliberately NOT a
+  // BrowserWindow.getAllWindows() broadcast: in server mode the main window
+  // hosts the loopback dashboard, and adminWindow loads remote content with no
+  // preload at all. Naming the two recipients keeps map state out of pages this
+  // app went to some trouble to starve of IPC.
+  function pushToBoth(channel) {
+    return (payload) => {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+      mapWindow.forwardState(channel, payload);
+    };
+  }
+
   liveTranscriber.setEmitter(pushTo(CHANNELS.LIVE_EVENT));
   liveFlagger.setEmitter(pushTo(CHANNELS.LIVE_EVENT));
+  liveMap.setEmitter(pushToBoth(CHANNELS.MAP_STATE));
   modelManager.setEmitter(pushTo(CHANNELS.LIVE_MODEL_EVENT));
 
   handleLocal(CHANNELS.LIVE_SUPPORT_GET, () => whisperLocator.support());
@@ -297,6 +322,7 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
       model,
     });
     liveFlagger.start(); // silent-skip loop; dies with the transcriber session
+    liveMap.start(); // its own loop, its own switch, its own failures
     return out;
   });
 
@@ -304,8 +330,29 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
 
   handleLocal(CHANNELS.LIVE_STOP, () => {
     liveFlagger.stop();
+    // The map window is deliberately left open, and the map with it: the minute
+    // after a meeting ends is when someone reads what it turned into.
+    liveMap.stop();
     return liveTranscriber.stop();
   });
+
+  // ---- Meeting progress map (v0.22.0) ---------------------------------------
+
+  handleLocal(CHANNELS.MAP_OPEN, () =>
+    mapWindow.open({ loadBounds: hooks.loadBounds, saveBounds: hooks.saveBounds })
+  );
+  handleLocal(CHANNELS.MAP_CLOSE, () => {
+    mapWindow.close();
+    return { ok: true };
+  });
+  handleLocal(CHANNELS.MAP_PIN, (pinned) => mapWindow.setPinned(pinned));
+  // A PULL as well as the push above. The map window is opened mid-meeting,
+  // after N ticks have already landed, so a push-only design would leave it
+  // blank until the next one — up to 90 seconds of looking broken.
+  handleLocal(CHANNELS.MAP_GET, () => ({
+    ...liveMap.getState(),
+    pinned: mapWindow.isPinned(),
+  }));
 
   // ---- Usability batch (v0.10.0) --------------------------------------------
 

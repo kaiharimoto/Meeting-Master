@@ -307,6 +307,29 @@ async function postLiveQuestions(payload, timeoutMs) {
   return res.json();
 }
 
+/**
+ * POST /live/map — one mid-meeting ask: recent transcript plus a digest of the
+ * map so far in, CHANGES to that map out.
+ *
+ * Same timeout rule as postLiveQuestions: the budget is passed in from
+ * GET /live/config and is deliberately longer than the server's own.
+ */
+async function postLiveMap(payload, timeoutMs) {
+  const { base, headers } = requireServerConfig();
+  const res = await doFetch(
+    `${base}/live/map`,
+    {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs || 110000),
+    },
+    'asking for the meeting map'
+  );
+  if (!res.ok) await throwHttpError(res, 'asking for the meeting map');
+  return res.json();
+}
+
 /** GET /logs/tail — the last N server log lines. */
 async function getLogTail(lines = 200) {
   const { base, headers } = requireServerConfig();
@@ -319,4 +342,4 @@ async function getLogTail(lines = 200) {
   return res.json();
 }
 
-module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions, getLiveConfig, postLiveWarmup, draftAnswers };
+module.exports = { uploadMeeting, getJob, postPdf, health, listJobs, getLogTail, getJobPrompt, retrySummary, getEmailPreview, getJobNames, applyJobNames, postLiveQuestions, postLiveMap, getLiveConfig, postLiveWarmup, draftAnswers };
