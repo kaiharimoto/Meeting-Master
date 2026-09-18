@@ -87,6 +87,7 @@ export function initRecorder(context) {
     note: document.getElementById('rec-note'),
     guard: document.getElementById('rec-guard'),
     mini: document.getElementById('rec-mini-btn'),
+    map: document.getElementById('rec-map-btn'),
   };
   if (!els.start) return;
 
@@ -120,6 +121,11 @@ export function initRecorder(context) {
   if (els.mini) {
     els.mini.addEventListener('click', () => {
       if (typeof ctx.api.miniOpen === 'function') ctx.api.miniOpen().catch(() => {});
+    });
+  }
+  if (els.map) {
+    els.map.addEventListener('click', () => {
+      if (typeof ctx.api.mapOpen === 'function') ctx.api.mapOpen().catch(() => {});
     });
   }
 
@@ -830,6 +836,9 @@ function updateRecUi() {
   els.meter.hidden = !live;
   if (els.mini) {
     els.mini.hidden = !live || typeof ctx.api.miniOpen !== 'function';
+  }
+  if (els.map) {
+    els.map.hidden = !live || typeof ctx.api.mapOpen !== 'function';
   }
   // The sidebar dot: recording stays visible from any screen.
   const navMeeting = document.getElementById('nav-meeting');

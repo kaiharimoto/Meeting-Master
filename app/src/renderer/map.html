@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- img-src data: is required, not incidental: the PNG export renders the
+       map's own SVG through a data: URL onto a canvas. mini.html's CSP omits
+       it, which is why this page follows mode.html instead. -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+  />
+  <title>Meeting Master — meeting map</title>
+  <!-- Pre-paint, and the reason this page honours the operator's actual
+       appearance settings: file:// is one localStorage origin, so themeBoot
+       resolves the same theme, contrast and text scale the main window uses.
+       (mini.html hardcodes its own palette and ignores all three.) -->
+  <script src="js/themeBoot.js"></script>
+  <!-- app.css for the design tokens and the --fs-* scale; map.css for the map.
+       Linking the real stylesheet rather than copying a palette is what stops
+       the two drifting, and it puts the map inside contrast.test.js's cover. -->
+  <link rel="stylesheet" href="styles/app.css" />
+  <link rel="stylesheet" href="styles/map.css" />
+</head>
+<body class="map-body">
+  <!-- Frameless: this strip is the whole titlebar, and the drag region. -->
+  <header class="map-bar">
+    <span class="map-bar-title">Meeting map</span>
+    <span id="map-rev" class="map-bar-rev" aria-hidden="true"></span>
+    <div class="map-bar-actions">
+      <button id="map-pin" type="button" class="map-icon-btn is-on"
+              title="Keep this window above other windows"
+              aria-pressed="true" aria-label="Keep on top">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76V4h6v6.76l2 2.24v2H7v-2z"/></svg>
+      </button>
+      <button id="map-save" type="button" class="map-icon-btn"
+              title="Save the map as an image" aria-label="Save as image"
+              aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button id="map-close" type="button" class="map-icon-btn"
+              title="Close the map" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="map-save-menu" class="map-menu" hidden role="menu">
+      <button type="button" role="menuitem" data-format="png">Save as PNG</button>
+      <button type="button" role="menuitem" data-format="svg">Save as SVG</button>
+    </div>
+  </header>
+
+  <!-- aria-live off: this updates every 90 seconds beside a live meeting, and
+       a screen reader narrating each change would talk over the room. The
+       status line below carries anything that actually needs saying. -->
+  <main id="map-scroll" class="map-scroll" tabindex="0" aria-label="Meeting map">
+    <p id="map-empty" class="map-empty">
+      Listening… the map draws itself as topics emerge.
+    </p>
+    <!-- The wrapper is what pins a short map to the BOTTOM of the window:
+         time runs downward here, so a half-hour meeting should hang from the
+         bottom edge rather than float in the middle of empty space. -->
+    <div class="map-canvas">
+      <svg id="map-svg" class="map-svg" xmlns="http://www.w3.org/2000/svg" hidden></svg>
+    </div>
+  </main>
+
+  <button id="map-jump" class="map-jump" type="button" hidden>
+    Jump to live ↓
+  </button>
+
+  <p id="map-status" class="map-status" aria-live="off" hidden></p>
+
+  <script type="module" src="js/map.js"></script>
+</body>
+</html>

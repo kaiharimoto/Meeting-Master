@@ -1,0 +1,309 @@
+/* The meeting progress map window.
+ *
+ * Map-specific rules only. Every colour is a token from app.css, which this
+ * page links first — copying a palette here is how the two would drift, and
+ * borrowing them puts the map inside contrast.test.js's WCAG cover for free.
+ *
+ * NO LITERAL font-size ANYWHERE. Every step is calc(... * var(--fs-scale)) via
+ * the --fs-* tokens, the same invariant app.css holds, so the operator's Text
+ * size setting reaches this window too. mapWiring.test.js fails if a literal
+ * appears — this page is read from across a desk, which is exactly when
+ * somebody reaches for that setting.
+ */
+
+.map-body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+/* ---- Titlebar (frameless: this strip IS the window chrome) --------------- */
+
+.map-bar {
+  -webkit-app-region: drag; /* the whole strip moves the window… */
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.map-bar-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+}
+
+.map-bar-rev {
+  font-size: var(--fs-2xs);
+  color: var(--ink-faint);
+}
+
+.map-bar-actions {
+  -webkit-app-region: no-drag; /* …except where the buttons are */
+  margin-left: auto;
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.map-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.map-icon-btn:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+.map-icon-btn.is-on {
+  color: var(--accent);
+  background: var(--accent-ghost);
+}
+.map-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.map-menu {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  top: 100%;
+  right: var(--sp-2);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: var(--sp-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.map-menu button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.map-menu button:hover {
+  background: var(--accent-soft);
+}
+
+/* ---- The scrolling map -------------------------------------------------- */
+
+.map-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+/* min-height on the WRAPPER, not the scroller: flex-end on an overflowing
+   scroll container clips the top of the content in Chromium. */
+.map-canvas {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+}
+
+.map-svg {
+  display: block;
+  max-width: 100%;
+}
+
+.map-empty {
+  margin: 0;
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+/* The spine: the meeting's own timeline, and what every band hangs from. */
+.map-spine {
+  stroke: var(--border);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.map-tick {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+/* Callback arcs, in the left gutter. Dashed for the two relations that mean
+   "this argues with that" — a solid line reads as flow, and a contradiction is
+   not flow. */
+.map-arc {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+.map-arc--answers {
+  stroke: var(--accent);
+}
+.map-arc--contradicts {
+  stroke: var(--danger);
+  stroke-dasharray: 4 3;
+}
+.map-arc--supports {
+  stroke: var(--accent-strong);
+  stroke-dasharray: 1 3;
+}
+
+/* ---- Topic bands -------------------------------------------------------- */
+
+.map-band {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.map-topic--live .map-band {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.map-topic--cold .map-band {
+  fill: var(--surface-2);
+}
+/* A seam should look COMPRESSED, not like a band that happens to be empty:
+   no fill of its own, a dashed edge, the visual weight of a scar. */
+.map-topic--seam .map-band {
+  fill: none;
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+
+.map-topic-title {
+  fill: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.map-seam-title {
+  fill: var(--ink-faint);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+}
+.map-rollup {
+  fill: var(--ink-soft);
+  font-size: var(--fs-2xs);
+}
+
+/* The single moving thing on the page: where the meeting is right now. */
+.map-livedot {
+  fill: var(--accent);
+}
+
+/* ---- Nodes -------------------------------------------------------------- */
+
+.map-node-text {
+  fill: var(--ink);
+  font-size: var(--fs-xs);
+}
+.map-glyph {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  fill: var(--ink-soft);
+}
+.map-node--decision .map-glyph {
+  fill: var(--accent-strong);
+}
+.map-node--action .map-glyph {
+  fill: var(--accent);
+}
+.map-node--risk .map-glyph,
+.map-node--disagreement .map-glyph {
+  fill: var(--danger);
+}
+.map-node--question .map-glyph {
+  fill: var(--warn-ink);
+}
+
+/* Status is never colour alone: resolved is struck through, parked is faded.
+   Both survive a projector and a colour-blind reader. */
+.map-node--resolved .map-node-text {
+  fill: var(--ink-faint);
+  text-decoration: line-through;
+}
+.map-node--parked .map-node-text,
+.map-node--parked .map-glyph {
+  opacity: 0.55;
+}
+
+/* ---- Motion ------------------------------------------------------------- */
+
+.map-topic--live .map-livedot {
+  animation: map-pulse 2.4s ease-in-out infinite;
+}
+.map-node.is-new {
+  animation: map-node-in 420ms ease-out;
+}
+
+@keyframes map-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes map-node-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-topic--live .map-livedot,
+  .map-node.is-new {
+    animation: none;
+  }
+}
+
+/* ---- Status line and the jump pill -------------------------------------- */
+
+.map-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px var(--sp-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-faint);
+  font-size: var(--fs-2xs);
+}
+.map-status[data-state="error"] {
+  color: var(--danger);
+}
+.map-status[data-state="off"] {
+  color: var(--ink-soft);
+}
+
+.map-jump {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-2xs);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
