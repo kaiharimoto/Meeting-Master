@@ -375,12 +375,12 @@ def test_live_test_endpoint_reports_what_came_back(client):
     result = local.post("/setup/live-test", json={}).json()
     assert set(result) >= {
         "ok", "enabled", "model", "latencyMs", "intervalSec",
-        "slowerThanInterval", "questions", "insights", "error",
+        "slowerThanInterval", "questions", "error",
     }
     assert result["ok"] is True and result["error"] is None
     # The sample conversation contains an answered question AND a lesson, so a
     # working model finds both.
-    assert len(result["questions"]) >= 1 and len(result["insights"]) >= 1
+    assert len(result["questions"]) >= 1
 
     remote = TestClient(app, client=("203.0.113.9", 40015))
     assert remote.post("/setup/live-test", json={}).status_code == 403

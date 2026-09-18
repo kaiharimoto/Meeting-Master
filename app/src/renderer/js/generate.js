@@ -13,7 +13,6 @@ import { saveTextAs, fileStem } from './saveText.js';
 import { segmentsToTimestampedText } from './timecode.js';
 import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
 import { refreshFillButton } from './answerFill.js';
-import { applyKeptInsights } from './liveInsights.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -380,10 +379,6 @@ async function pollOnce() {
   }
   if (job.summary !== null && job.summary !== undefined) {
     ctx.state.summary = job.summary;
-    // The server's summary REPLACES the local one, so re-assert any insights
-    // the operator kept from the live rail mid-meeting — they were chosen by
-    // hand and must survive the AI's version arriving.
-    applyKeptInsights(ctx.state);
   }
   // Capture AI-detected Q&A candidates once (they are approved, not auto-added),
   // dropping any that duplicate a card the operator already typed. Guard on

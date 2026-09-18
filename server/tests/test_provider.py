@@ -359,7 +359,7 @@ def test_the_live_stage_never_spawns_the_claude_cli(monkeypatch, tmp_path):
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "json")
     settings = claude_settings(LIVE_MODEL="qwen2.5:14b-instruct-q6_K")
 
-    result = asyncio.run(extract.run_live("Priya: what did it come in at?", [], [], [], settings))
+    result = asyncio.run(extract.run_live("Priya: what did it come in at?", [], [], settings))
 
     assert result is not None
     assert not log.exists(), "the live path must not have run the Claude CLI"

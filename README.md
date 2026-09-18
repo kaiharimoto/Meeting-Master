@@ -68,16 +68,13 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    downloaded once via Settings → Live transcription), a rolling draft
    transcript appears while people talk — whisper.cpp running on the laptop's
    own GPU. When the home server is reachable over Tailscale, its AI also feeds
-   a **Live suggestions** rail beside the Q&A panel, with two kinds of
-   suggestion: **questions** it heard being answered (click **Approve** to turn
-   one into a card) and **key insights** — lessons worth carrying forward
-   (click **Keep** to add one to Key Insights in the summary and the PDF).
-   Either can be **Dismiss**ed, and nothing is added without you. The rail also
+   a **Live suggestions** rail beside the Q&A panel: **questions** it heard
+   being answered, which **Approve** turns into a card. Any of them can be
+   **Dismiss**ed, and nothing is added without you. The rail also
    carries a one-line status, so a home server that is slow, unreachable, busy
    with another meeting, or switched off never looks like a quiet meeting — and
    while you are on another screen the waiting count rides on the sidebar's
-   Meeting item. Insights you never got round to are offered again in
-   **Edit summary**, where Key Insights is finalised. Everything about the loop
+   Meeting item. Everything about the loop
    (on/off, which model, how often, how patient) is configured in one place:
    the home server dashboard's **Settings → Live suggestions**. Away from home,
    reach that same dashboard from the laptop with **Settings → Home server

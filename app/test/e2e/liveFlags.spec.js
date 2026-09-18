@@ -1,9 +1,12 @@
 'use strict';
 
-// Live suggestions rail: peripheral, monitorable while typing. Both kinds of
-// suggestion (answered questions -> cards, key insights -> the summary's Key
-// Insights) and the loop's status line. Everything is pushed through the
-// captured onLiveEvent callbacks — no recording or fake device needed.
+// Live suggestions rail: peripheral, monitorable while typing. Answered
+// questions become cards, plus the loop's status line. Everything is pushed
+// through the captured onLiveEvent callbacks — no recording or fake device
+// needed.
+//
+// The rail used to carry a second kind (candidate key insights); that was
+// retired in v0.22.0 in favour of the meeting progress map.
 
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -43,13 +46,13 @@ function apiStub() {
   };
 }
 
-function pushCandidates(page, questions, insights) {
+function pushCandidates(page, questions) {
   return page.evaluate(
     (payload) =>
       window.__liveCbs.forEach((cb) =>
-        cb({ type: 'flag-candidates', questions: payload.qs, insights: payload.ins })
+        cb({ type: 'flag-candidates', questions: payload.qs })
       ),
-    { qs: questions, ins: insights || [] }
+    { qs: questions }
   );
 }
 
@@ -60,8 +63,6 @@ function pushStatus(page, state, message) {
   );
 }
 
-const I1 = 'Chase the vendor a quarter earlier next renewal.';
-const I2 = 'Tie every SLA concession to the work it depends on.';
 
 const Q1 = {
   question: 'What is the renewal price?',
@@ -186,62 +187,8 @@ test('duplicate pushes collapse into one pending row', async ({ page }) => {
   await expect(page.locator('#live-rail .live-flag-row')).toHaveCount(1);
 });
 
-test('insights arrive in their own group; Keep sends one to Key Insights', async ({ page }) => {
-  const rail = page.locator('#live-rail');
-  const group = page.locator('#live-rail-insight-group');
-  await expect(group).toBeHidden();
 
-  await pushCandidates(page, [Q1], [I1, I2]);
-  await expect(rail).toBeVisible();
-  await expect(group).toBeVisible();
-  // One question + two insights.
-  await expect(page.locator('#live-rail-count')).toHaveText('3');
-  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(2);
-  // Insights are NOT mixed into the question list.
-  await expect(page.locator('#live-rail-list .live-flag-row')).toHaveCount(1);
 
-  // Keep the first: it lands in the summary's Key Insights, ready for the PDF,
-  // without needing the post-meeting AI to run at all.
-  await page.locator('#live-rail-insights button', { hasText: 'Keep' }).first().click();
-  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(1);
-
-  const saved = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('meetingmaster.meeting.v1'))
-  );
-  expect(saved.summary.keyInsights).toEqual([I1]);
-  expect(saved.liveFlags.keptInsights).toEqual([I1]);
-  expect(saved.liveFlags.pendingInsights).toEqual([I2]);
-  // Keeping an insight never creates a Q&A card.
-  expect(saved.cards || []).toHaveLength(0);
-});
-
-test('a dismissed insight is remembered and never offered again', async ({ page }) => {
-  await pushCandidates(page, [], [I1]);
-  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(1);
-
-  await page.locator('#live-rail-insights button', { hasText: 'Dismiss' }).click();
-  await expect(page.locator('#live-rail-insight-group')).toBeHidden();
-
-  await pushCandidates(page, [], [I1]);
-  await page.waitForTimeout(200);
-  await expect(page.locator('#live-rail-insight-group')).toBeHidden();
-
-  const saved = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('meetingmaster.meeting.v1'))
-  );
-  expect(saved.liveFlags.dismissedInsights).toHaveLength(1);
-  expect(saved.liveFlags.pendingInsights).toHaveLength(0);
-});
-
-test('an insight already in the summary is not offered again', async ({ page }) => {
-  await pushCandidates(page, [], [I1]);
-  await page.locator('#live-rail-insights button', { hasText: 'Keep' }).click();
-
-  // The same point, re-noticed a few minutes later by the same loop.
-  await pushCandidates(page, [], [I1.toUpperCase()]);
-  await page.waitForTimeout(200);
-  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(0);
-});
 
 test('the status line says which of "asking", "unreachable" and "off" is happening', async ({
   page,
@@ -272,17 +219,6 @@ test('the status line says which of "asking", "unreachable" and "off" is happeni
   await expect(page.locator('#live-rail')).toBeHidden();
 });
 
-test('a near-duplicate insight, reworded, is not offered a second time', async ({ page }) => {
-  // The live loop re-notices the same lesson every few minutes and words it
-  // differently each time; exact-match filtering let every rewording through.
-  await pushCandidates(page, [], ['Chase the vendor a quarter earlier next renewal.']);
-  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(1);
-
-  await pushCandidates(page, [], ['Chase the vendor a quarter earlier next renewal!']);
-  await pushCandidates(page, [], ['chase the vendor a quarter earlier, next renewal']);
-  await page.waitForTimeout(200);
-  await expect(page.locator('#live-rail-insights .live-insight-row')).toHaveCount(1);
-});
 
 test('the rail is bounded: an untriaged meeting drops the oldest, keeps the newest', async ({
   page,
@@ -302,17 +238,6 @@ test('the rail is bounded: an untriaged meeting drops the oldest, keeps the newe
     'status updates', 'travel spend', 'stale branches', 'on-call duty',
     'query latency', 'approval chains', 'incident templates',
     'shared credentials', 'queue depth'];
-  const insights = VERBS.map((verb, i) => `${verb} ${NOUNS[i]} before next quarter.`);
-  for (const insight of insights) await pushCandidates(page, [], [insight]);
-
-  const rows = page.locator('#live-rail-insights .live-insight-row');
-  await expect(rows).toHaveCount(8);
-  // The newest survive — they are the ones still relevant to what is being said.
-  await expect(rows.last()).toContainText(insights.at(-1));
-  await expect(rows.first()).toContainText(insights[insights.length - 8]);
-  // …and the earliest are gone rather than accumulating forever.
-  await expect(page.locator('#live-rail-insights')).not.toContainText(insights[0]);
-
   const questions = VERBS.map((verb, i) => ({
     question: `Should we ${verb.toLowerCase()} ${NOUNS[i]}?`,
     answer: `Yes, ${NOUNS[i]} needs it.`,
@@ -320,7 +245,13 @@ test('the rail is bounded: an untriaged meeting drops the oldest, keeps the newe
     confidence: 'high',
   }));
   for (const q of questions) await pushCandidates(page, [q]);
-  await expect(page.locator('#live-rail-list .live-flag-row')).toHaveCount(12);
+
+  const rows = page.locator('#live-rail-list .live-flag-row');
+  await expect(rows).toHaveCount(12);
+  // The newest survive — they are the ones still relevant to what is being said.
+  await expect(rows.last()).toContainText(questions.at(-1).question);
+  // …and the earliest are gone rather than accumulating forever.
+  await expect(page.locator('#live-rail-list')).not.toContainText(questions[0].question);
 });
 
 test('suggestions arriving while off the Meeting screen show a count on the sidebar', async ({
@@ -331,7 +262,7 @@ test('suggestions arriving while off the Meeting screen show a count on the side
   await page.locator('#nav-activity').click();
   await expect(page.locator('#screen-meeting')).toBeHidden();
 
-  await pushCandidates(page, [Q1], [I1]);
+  await pushCandidates(page, [Q1, Q2]);
   const badge = page.locator('#nav-meeting .nav-badge');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText('2');

@@ -7,11 +7,13 @@
 // clickable) above the capture modal's backdrop. New arrivals just bump the
 // counter and glide in.
 //
-// Two kinds of suggestion, each with its own destination:
-//   * Questions — Approve turns one into an ordinary editable card.
-//   * Key insights — Keep adds one to the summary's Key Insights, which is its
-//     own section in the PDF (lessons to apply going forward, as distinct from
-//     Key Takeaways' record of what happened).
+// Approve turns a suggestion into an ordinary editable card.
+//
+// The rail used to offer a second kind, candidate key insights, kept into the
+// summary's Key Insights. That was retired in v0.22.0 in favour of the meeting
+// progress map (map.js), which shows where the meeting has got to rather than
+// offering one-line lessons to approve. The summary's Key Insights section is
+// unaffected — it comes from the post-meeting pass over the full transcript.
 //
 // Dismiss remembers the item (per meeting) so neither the live loop nor the
 // post-meeting extraction re-surfaces it. Un-actioned questions are merged into
@@ -33,14 +35,12 @@ import { showToast } from './toast.js';
 import { normQ, isDuplicate } from './extractReview.js';
 import { addCard } from './capture.js';
 import { updateButtons } from './generate.js';
-import { liveFlagsState, normI, keepInsight } from './liveInsights.js';
 
 // A 90-minute meeting nobody triages would otherwise grow an unbounded rail
 // (and an unbounded localStorage record). Past these, the OLDEST pending
 // suggestion is dropped: the newest are the ones still relevant to what is
 // being said, and anything dropped is re-found by the post-meeting pass.
 const MAX_PENDING_QUESTIONS = 12;
-const MAX_PENDING_INSIGHTS = 8;
 
 let ctx = null;
 let els = null;
@@ -51,8 +51,15 @@ let liveSessionActive = false;
 // Last {state, message} from the flagging loop, rendered as the status line.
 let loopStatus = null;
 
+/** ctx.state.liveFlags, with both arrays guaranteed to exist. */
 function flagsState() {
-  return liveFlagsState(ctx.state);
+  const state = ctx.state;
+  if (!state.liveFlags || typeof state.liveFlags !== 'object') state.liveFlags = {};
+  const lf = state.liveFlags;
+  for (const key of ['pending', 'dismissed']) {
+    if (!Array.isArray(lf[key])) lf[key] = [];
+  }
+  return lf;
 }
 
 export function initLiveFlags(context) {
@@ -63,8 +70,6 @@ export function initLiveFlags(context) {
     count: document.getElementById('live-rail-count'),
     empty: document.getElementById('live-rail-empty'),
     status: document.getElementById('live-rail-status'),
-    insightGroup: document.getElementById('live-rail-insight-group'),
-    insightList: document.getElementById('live-rail-insights'),
     screen: document.getElementById('screen-meeting'),
     navMeeting: document.getElementById('nav-meeting'),
   };
@@ -74,7 +79,7 @@ export function initLiveFlags(context) {
     ctx.api.onLiveEvent((payload) => {
       if (!payload) return;
       if (payload.type === 'flag-candidates') {
-        addCandidates(payload.questions, payload.insights);
+        addCandidates(payload.questions);
       } else if (payload.type === 'flag-status') {
         loopStatus = { state: payload.state || '', message: payload.message || '' };
         renderLiveFlags();
@@ -102,7 +107,7 @@ export function initLiveFlags(context) {
   renderLiveFlags();
 }
 
-function addCandidates(questions, insights) {
+function addCandidates(questions) {
   const lf = flagsState();
   let added = 0;
 
@@ -132,41 +137,10 @@ function addCandidates(questions, insights) {
     }
   }
 
-  // Insights are plain strings; dedupe against what is pending, already kept,
-  // dismissed, or already in the summary (the AI can re-notice its own point).
-  // Fuzzily, like questions — the same lesson comes back worded differently
-  // every few minutes, and an exact-match filter lets every rewording through.
-  const insightList = Array.isArray(insights) ? insights : [];
-  if (insightList.length > 0) {
-    const summary = ctx.state.summary;
-    const inSummary =
-      summary && typeof summary === 'object' && Array.isArray(summary.keyInsights)
-        ? summary.keyInsights.map(normI)
-        : [];
-    const known = [
-      ...lf.pendingInsights.map(normI),
-      ...lf.dismissedInsights.map(normI),
-      ...lf.keptInsights.map(normI),
-      ...inSummary,
-    ];
-    for (const raw of insightList) {
-      const text = String(raw || '').trim();
-      const key = normI(text);
-      if (!text || !key) continue;
-      if (known.some((seen) => isDuplicate(key, seen))) continue;
-      known.push(key);
-      lf.pendingInsights.push(text);
-      added += 1;
-    }
-  }
-
   if (added > 0) {
     // Cap AFTER the additions, so the newest always get in.
     if (lf.pending.length > MAX_PENDING_QUESTIONS) {
       lf.pending.splice(0, lf.pending.length - MAX_PENDING_QUESTIONS);
-    }
-    if (lf.pendingInsights.length > MAX_PENDING_INSIGHTS) {
-      lf.pendingInsights.splice(0, lf.pendingInsights.length - MAX_PENDING_INSIGHTS);
     }
     ctx.persist();
     renderLiveFlags();
@@ -181,9 +155,7 @@ function addCandidates(questions, insights) {
 export function renderLiveFlags() {
   if (!els || !els.rail) return;
   const lf = flagsState();
-  const nQ = lf.pending.length;
-  const nI = lf.pendingInsights.length;
-  const n = nQ + nI;
+  const n = lf.pending.length;
 
   const show = liveSessionActive || n > 0;
   els.rail.hidden = !show;
@@ -191,8 +163,6 @@ export function renderLiveFlags() {
   renderNavBadge(n);
   if (!show) {
     els.list.replaceChildren();
-    if (els.insightList) els.insightList.replaceChildren();
-    if (els.insightGroup) els.insightGroup.hidden = true;
     if (els.status) els.status.hidden = true;
     return;
   }
@@ -214,14 +184,6 @@ export function renderLiveFlags() {
   refreshDatalist();
   els.list.replaceChildren();
   lf.pending.forEach((candidate, index) => els.list.append(buildRow(candidate, index)));
-
-  if (els.insightGroup && els.insightList) {
-    els.insightGroup.hidden = nI === 0;
-    els.insightList.replaceChildren();
-    lf.pendingInsights.forEach((text, index) =>
-      els.insightList.append(buildInsightRow(text, index))
-    );
-  }
 }
 
 function renderStatus() {
@@ -377,73 +339,6 @@ function buildRow(candidate, index) {
   });
 
   actions.append(approve, dismiss);
-  row.append(actions);
-  return row;
-}
-
-// An insight row: the lesson, then Keep / Dismiss. Keep writes it straight into
-// the summary's Key Insights (and remembers it, so the post-meeting summary
-// can't overwrite the operator's own choice).
-function buildInsightRow(text, index) {
-  const row = document.createElement('div');
-  row.className = 'live-flag-row live-insight-row';
-
-  const body = document.createElement('div');
-  body.className = 'live-flag-q';
-  body.textContent = text;
-  row.append(body);
-
-  const actions = document.createElement('div');
-  actions.className = 'live-flag-actions';
-
-  const keep = document.createElement('button');
-  keep.type = 'button';
-  keep.className = 'btn btn-primary btn-small';
-  keep.textContent = 'Keep';
-  keep.title = 'Add this to Key Insights in the summary and the PDF';
-  keep.addEventListener('click', () => {
-    const lf = flagsState();
-    lf.pendingInsights.splice(index, 1);
-    keepInsight(ctx.state, text);
-    ctx.persist();
-    renderLiveFlags();
-    updateButtons(ctx);
-    setStatus('Insight added to Key Insights.');
-  });
-
-  const dismiss = document.createElement('button');
-  dismiss.type = 'button';
-  dismiss.className = 'btn btn-secondary btn-small';
-  dismiss.textContent = 'Dismiss';
-  dismiss.addEventListener('click', () => {
-    const lf = flagsState();
-    const key = normI(text);
-    if (key && !lf.dismissedInsights.includes(key)) lf.dismissedInsights.push(key);
-    lf.pendingInsights.splice(index, 1);
-    ctx.persist();
-    renderLiveFlags();
-    showToast({
-      kind: 'info',
-      title: 'Insight dismissed',
-      message: text,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          const state = flagsState();
-          state.dismissedInsights = state.dismissedInsights.filter((d) => d !== key);
-          state.pendingInsights.splice(
-            Math.min(index, state.pendingInsights.length),
-            0,
-            text
-          );
-          ctx.persist();
-          renderLiveFlags();
-        },
-      },
-    });
-  });
-
-  actions.append(keep, dismiss);
   row.append(actions);
   return row;
 }

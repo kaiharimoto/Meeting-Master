@@ -1,8 +1,6 @@
 """Mid-meeting live suggestions: GET /live/config, POST /live/warmup,
 POST /live/questions."""
 
-from .conftest import CANNED_LIVE_INSIGHTS
-
 AUTH = {"Authorization": "Bearer test-token"}
 
 
@@ -39,25 +37,28 @@ def test_happy_path_returns_candidates(client):
     assert q["confidence"] == "high"
 
 
-def test_insights_come_back_alongside_questions(client):
-    """The rail offers two kinds of suggestion from one call."""
-    resp = client.post("/live/questions", json=_payload(), headers=AUTH)
-    assert resp.status_code == 200
-    assert resp.json()["insights"] == CANNED_LIVE_INSIGHTS
-
-
-def test_already_suggested_items_are_filtered(client):
-    """Neither a question nor an insight is ever offered to the operator twice."""
+def test_already_suggested_questions_are_filtered(client):
+    """A question is never offered to the operator twice."""
     resp = client.post(
         "/live/questions",
         json=_payload(
-            alreadyFlagged=["what is the renewal price?"],
-            alreadyInsights=[CANNED_LIVE_INSIGHTS[0].upper()],  # case-insensitive
+            alreadyFlagged=["WHAT IS THE RENEWAL PRICE?"],  # case-insensitive
         ),
         headers=AUTH,
     )
     assert resp.status_code == 200
-    assert resp.json() == {"questions": [], "insights": []}
+    assert resp.json() == {"questions": []}
+
+
+def test_live_reply_carries_no_insights(client):
+    """The live path stopped offering candidate Key Insights in v0.22.0.
+
+    Retired in favour of the meeting progress map. summary.keyInsights is
+    unaffected — it comes from the post-meeting pass over the full transcript.
+    """
+    resp = client.post("/live/questions", json=_payload(), headers=AUTH)
+    assert resp.status_code == 200
+    assert "insights" not in resp.json()
 
 
 def test_empty_window_is_rejected(client):
@@ -76,7 +77,7 @@ def test_config_tells_the_laptop_how_to_run_the_loop(client):
     assert resp.status_code == 200
     cfg = resp.json()
     assert cfg["enabled"] is True
-    assert cfg["insights"] is True
+    assert "insights" not in cfg  # retired in v0.22.0
     assert cfg["model"]  # falls back to OLLAMA_MODEL when LIVE_MODEL is blank
     # The laptop must always be the MORE patient of the two, or it records
     # failures for requests the server is still working on.

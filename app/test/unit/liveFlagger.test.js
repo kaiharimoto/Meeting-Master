@@ -74,7 +74,7 @@ function loadFlagger({
       calls.questions.push({ payload, timeoutMs });
       order.push('ask');
       if (askError) throw askError;
-      return questionsReply || { questions: [], insights: [] };
+      return questionsReply || { questions: [] };
     },
   });
 
@@ -221,7 +221,6 @@ test('suggestions already offered are never asked about twice', async (t) => {
     transcript: SPEECH,
     questionsReply: {
       questions: [{ question: 'What did the quote come back at?', answer: 'Twelve percent.' }],
-      insights: ['Chase the vendor earlier next time.'],
     },
   });
 
@@ -229,16 +228,17 @@ test('suggestions already offered are never asked about twice', async (t) => {
   await runTick(t, 20000);
 
   const candidates = h.events.find((e) => e.type === 'flag-candidates');
-  assert.ok(candidates, 'questions AND insights reach the renderer');
+  assert.ok(candidates, 'questions reach the renderer');
   assert.strictEqual(candidates.questions.length, 1);
-  assert.deepStrictEqual(candidates.insights, ['Chase the vendor earlier next time.']);
 
   h.draft.text += SPEECH; // the conversation moves on
   await runTick(t, 30000);
   assert.strictEqual(h.calls.questions.length, 2, 'new text produces a second ask');
   const latest = h.calls.questions[1].payload;
   assert.deepStrictEqual(latest.alreadyFlagged, ['What did the quote come back at?']);
-  assert.deepStrictEqual(latest.alreadyInsights, ['Chase the vendor earlier next time.']);
+  // Live insights were retired in v0.22.0 (the meeting progress map replaced
+  // them). The loop must not resurrect the field.
+  assert.ok(!('alreadyInsights' in latest), 'the ask carries no insight memory');
   h.flagger.stop();
 });
 

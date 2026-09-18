@@ -4,9 +4,12 @@
 //
 // While live transcription runs, the newest slice of live text goes to the home
 // server's POST /live/questions (Ollama on the home PC) on a fixed interval;
-// what comes back — candidate Q&A pairs AND candidate key insights — is pushed
-// to the renderer as LIVE_EVENT {type:'flag-candidates'} for the side rail's
-// approve/dismiss list.
+// what comes back — candidate Q&A pairs — is pushed to the renderer as
+// LIVE_EVENT {type:'flag-candidates'} for the side rail's approve/dismiss list.
+//
+// It used to carry candidate key insights too. That half was retired in
+// v0.22.0 and replaced by the meeting progress map (liveMap.js), which runs on
+// its own loop and its own server toggle.
 //
 // The home server owns the configuration (GET /live/config, set on its
 // dashboard), so there is exactly one place to tune this and the laptop needs
@@ -74,7 +77,6 @@ let timer = null;
 let inFlight = false;
 let consecutiveFailures = 0;
 let flaggedQuestions = []; // question texts already returned this session
-let seenInsights = []; // insight texts already returned this session
 let highWaterMark = 0; // transcript length at the last successful call
 let cfg = { ...DEFAULTS };
 let enabled = true;
@@ -99,7 +101,6 @@ function start() {
   const gen = ++sessionGeneration;
   consecutiveFailures = 0;
   flaggedQuestions = [];
-  seenInsights = [];
   highWaterMark = 0;
   cfg = { ...DEFAULTS };
   enabled = true;
@@ -209,7 +210,7 @@ async function prepare(gen) {
   schedule(Math.min(FIRST_TICK_MS, cfg.intervalSec * 1000));
 }
 
-const LISTENING = 'Listening for questions and insights…';
+const LISTENING = 'Listening for questions…';
 
 /** The server's own words for why it is busy, or a plain fallback. */
 function busyMessage(err) {
@@ -294,7 +295,6 @@ async function tick() {
           .slice(-cfg.windowChars),
         attendees: liveTranscriber.getAttendees(),
         alreadyFlagged: flaggedQuestions.slice(-MAX_FLAGGED_MEMORY),
-        alreadyInsights: seenInsights.slice(-MAX_FLAGGED_MEMORY),
       },
       cfg.clientTimeoutSec * 1000
     );
@@ -303,13 +303,9 @@ async function tick() {
     highWaterMark = fullText.length;
     lastAskAt = Date.now();
     const questions = Array.isArray(result && result.questions) ? result.questions : [];
-    const insights = (Array.isArray(result && result.insights) ? result.insights : [])
-      .map((i) => String(i || '').trim())
-      .filter(Boolean);
-    if (questions.length > 0 || insights.length > 0) {
+    if (questions.length > 0) {
       flaggedQuestions.push(...questions.map((q) => String(q.question || '')));
-      seenInsights.push(...insights);
-      emit({ type: 'flag-candidates', questions, insights });
+      emit({ type: 'flag-candidates', questions });
     }
     status('listening', LISTENING);
   } catch (err) {

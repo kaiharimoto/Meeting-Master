@@ -56,9 +56,9 @@ connection code in **Overview**.
 ### a2. Live suggestions during meetings (optional)
 
 The **Settings** tab's **Live suggestions** card controls what the laptop is
-offered *while a meeting is running*: questions the AI hears being answered, and
-key insights worth carrying forward. This is the only place it is configured —
-the laptop asks this server for these settings at the start of each meeting.
+offered *while a meeting is running*: questions the AI hears being answered.
+This is the only place it is configured — the laptop asks this server for these
+settings at the start of each meeting.
 
 Defaults work, with one thing worth checking: the summary model (`gemma4:26b`)
 is sized for quality after the meeting, not for answering inside one. If

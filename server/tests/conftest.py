@@ -37,9 +37,6 @@ CANNED_SUMMARY_SECTIONS = {
     "keyFigures": ["12% price increase, locked 24 months"],
     "topics": ["Pricing", "Timeline"],
 }
-# The mid-meeting live path asks for questions AND insights in one reply.
-CANNED_LIVE_INSIGHTS = ["Chase the vendor before the deadline next time."]
-
 CANNED_QUESTIONS = [
     {
         "question": "What is the renewal price?",
@@ -170,10 +167,8 @@ class _FakeOllamaHandler(BaseHTTPRequestHandler):
             # Warmup (POST /live/warmup) and the dashboard's "Test AI now".
             content = json.dumps({"ok": True})
         elif "STILL IN PROGRESS" in request:
-            # Live suggestions: the same Q&A shape plus insights.
-            content = json.dumps(
-                {"questions": CANNED_QUESTIONS, "insights": CANNED_LIVE_INSIGHTS}
-            )
+            # Live suggestions: the same Q&A shape as the post-meeting run.
+            content = json.dumps({"questions": CANNED_QUESTIONS})
         elif "answerer" in request:
             content = json.dumps({"questions": CANNED_QUESTIONS})
         elif "keyTakeaways" in request:

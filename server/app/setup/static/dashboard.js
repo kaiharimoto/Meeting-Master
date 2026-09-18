@@ -685,16 +685,16 @@
                      "var(--danger)");
           return;
         }
-        var nq = (p.questions || []).length, ni = (p.insights || []).length;
-        var found = nq + " question" + (nq === 1 ? "" : "s") + " and " +
-                    ni + " insight" + (ni === 1 ? "" : "s");
-        if (nq === 0 && ni === 0) {
+        var nq = (p.questions || []).length;
+        var found = nq + " question" + (nq === 1 ? "" : "s");
+        if (nq === 0) {
           // The model answered, but found nothing in a sample that contains
-          // both — a real result, and a real problem worth naming.
+          // an answered question — a real result, and a real problem worth
+          // naming.
           liveResult("⚠ " + p.model + " answered in " + secs + "s but found " +
                      "nothing in the sample conversation, which does contain a " +
-                     "question and a lesson. This model is a poor fit for live " +
-                     "suggestions — try a different one.", "var(--danger)");
+                     "question that gets answered. This model is a poor fit for " +
+                     "live suggestions — try a different one.", "var(--danger)");
           return;
         }
         var msg = "✓ " + p.model + " found " + found + " in " + secs + "s.";

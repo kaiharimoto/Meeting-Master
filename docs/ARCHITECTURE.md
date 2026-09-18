@@ -272,9 +272,9 @@ here is degradable.
 
 | Endpoint | What it does |
 | --- | --- |
-| `GET /live/config` | How to drive the loop: `{enabled, intervalSec, windowChars, timeoutSec, clientTimeoutSec, model, insights}`. Fetched once per session. |
+| `GET /live/config` | How to drive the loop: `{enabled, intervalSec, windowChars, timeoutSec, clientTimeoutSec, model, provider}`. Fetched once per session. |
 | `POST /live/warmup` | Loads the live model into VRAM (`keep_alive`) so the first ask doesn't pay for it. Never raises — `{ok, model, latencyMs, error}` IS the diagnosis. |
-| `POST /live/questions` | `{transcriptWindow, attendees, alreadyFlagged, alreadyInsights}` → `{questions: [ExtractedQuestion], insights: ["str"]}`. Ollama unreachable/garbled → `502`; empty window → `422`. |
+| `POST /live/questions` | `{transcriptWindow, attendees, alreadyFlagged}` → `{questions: [ExtractedQuestion]}`. Ollama unreachable/garbled → `502`; empty window → `422`. |
 
 Three answers the laptop must tell apart, hence three status codes — a single
 "it failed" would make the loop punish the server for behaving correctly:
@@ -285,9 +285,12 @@ Three answers the laptop must tell apart, hence three status codes — a single
 | `409` | A pipeline job holds the GPU | "Busy, retrying" — retries on the normal cadence, does **not** count a failure |
 | `502` | The AI genuinely failed | Reports it; three in a row drop to a 2-minute backoff |
 
-`insights` are candidate **Key Insights** — lessons to apply going forward,
-which become the summary's `keyInsights` when the operator keeps one. They are
-not a running summary of the meeting; that is the post-meeting `keyTakeaways`.
+This path used to return `insights` as well — candidate **Key Insights** the
+operator kept into the summary. Retired in v0.22.0: the same tick budget now
+builds the **meeting progress map** instead, which shows where the meeting has
+got to rather than offering one-line lessons to approve. The summary's
+`keyInsights` is unaffected — it comes from the post-meeting pass over the full
+transcript, which was always the higher-quality source.
 
 Four rules this feature is built around, all learned from it not working:
 

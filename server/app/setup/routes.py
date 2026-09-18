@@ -740,8 +740,8 @@ async def setup_live_test(body: LiveTestBody) -> dict:
 
     The one honest answer to "live suggestions don't work": it uses the same
     prompt, model, timeout and parsing a real meeting does, and reports what
-    came back — how long it took, how many questions and insights, and the
-    exact error if any. Never raises; the result IS the diagnosis.
+    came back — how long it took, how many questions, and the exact error if
+    any. Never raises; the result IS the diagnosis.
     """
     import time
 
@@ -765,7 +765,7 @@ async def setup_live_test(body: LiveTestBody) -> dict:
     error = None
     try:
         result = await extract.run_live(
-            _LIVE_TEST_WINDOW, ["Priya", "Marcus"], [], [], settings
+            _LIVE_TEST_WINDOW, ["Priya", "Marcus"], [], settings
         )
     except Exception as exc:
         error = str(exc)
@@ -781,7 +781,6 @@ async def setup_live_test(body: LiveTestBody) -> dict:
         # of the previous one — worth saying out loud, not just timing.
         "slowerThanInterval": latency_ms > settings.LIVE_INTERVAL_SEC * 1000,
         "questions": [q.model_dump() for q in (result.questions if result else [])],
-        "insights": list(result.insights) if result else [],
         "error": error,
     }
 

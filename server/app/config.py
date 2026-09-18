@@ -182,8 +182,10 @@ class Settings(BaseSettings):
     OLLAMA_DISABLE_THINKING: bool = True
 
     # --- Mid-meeting live suggestions (POST /live/questions) ---
-    # Q&A pairs AND key insights the operator can approve while the meeting is
-    # still running. The LAPTOP asks this server how to drive the loop (GET
+    # Q&A pairs the operator can approve while the meeting is still running.
+    # (This used to offer candidate Key Insights too; that half became the
+    # meeting progress map in v0.22.0 — see LIVE_MAP below.)
+    # The LAPTOP asks this server how to drive the loop (GET
     # /live/config), so the whole feature is configured HERE, in one place, on
     # the dashboard's Settings tab.
     LIVE_SUGGESTIONS: bool = True

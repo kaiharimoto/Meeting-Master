@@ -10,7 +10,7 @@ is being recorded:
   POST /live/warmup    load the live model into VRAM once, at session start, so
                        the first real tick doesn't pay for it.
   POST /live/questions the newest slice of the laptop's LOCAL draft transcript
-                       in, candidate Q&A pairs + key insights out.
+                       in, candidate Q&A pairs out.
 
 Stateless by design — no job, no store, nothing persisted. If these are
 unreachable the laptop degrades quietly (it shows why in its side rail) and the
@@ -97,9 +97,6 @@ class LiveQuestionsRequest(BaseModel):
     transcriptWindow: str = Field(min_length=1)
     attendees: list[str] = []
     alreadyFlagged: list[str] = []
-    # Insights the operator has already been offered this session (kept or
-    # dismissed) — excluded so the rail never repeats itself.
-    alreadyInsights: list[str] = []
 
 
 @router.get("/live/config")
@@ -124,7 +121,6 @@ async def live_config() -> dict:
         # and not leave the operator wondering why the Claude they selected for
         # the summary isn't the one making live suggestions.
         "provider": "ollama",
-        "insights": True,
     }
 
 
@@ -169,11 +165,10 @@ async def live_questions(
 
     attendees = [a.strip() for a in body.attendees[:_MAX_LIST_ITEMS] if a and a.strip()]
     flagged = [q.strip() for q in body.alreadyFlagged[:_MAX_LIST_ITEMS] if q and q.strip()]
-    insights = [i.strip() for i in body.alreadyInsights[:_MAX_LIST_ITEMS] if i and i.strip()]
 
     settings = get_settings()
     try:
-        return await extract.run_live(window, attendees, flagged, insights, settings)
+        return await extract.run_live(window, attendees, flagged, settings)
     except Exception as exc:  # Ollama down/slow/garbled — the laptop says so
         log.warning("Live suggestions failed: %s", exc)
         raise HTTPException(

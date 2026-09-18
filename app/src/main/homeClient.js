@@ -284,7 +284,7 @@ async function postLiveWarmup(timeoutMs) {
 
 /**
  * POST /live/questions — one mid-meeting ask: recent transcript in, candidate
- * Q&A pairs + key insights out.
+ * Q&A pairs out.
  *
  * The timeout is passed IN (from GET /live/config) and is deliberately longer
  * than the server's own budget. A client that gives up first turns a slow but

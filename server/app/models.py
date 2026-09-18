@@ -60,14 +60,14 @@ class ExtractedQuestion(BaseModel):
 class LiveSuggestions(BaseModel):
     """What the mid-meeting live path offers the operator (POST /live/questions).
 
-    Two kinds of suggestion, both advisory and both approved one at a time in
-    the laptop's side rail:
+    ``questions`` are Q&A pairs already answered in the conversation, advisory
+    and approved one at a time in the laptop's side rail, where they become
+    ordinary meeting cards.
 
-    * ``questions`` — Q&A pairs already answered in the conversation, which
-      become ordinary meeting cards when approved.
-    * ``insights`` — lessons worth carrying forward, which become Key Insights
-      in the summary/PDF when kept. NOT a summary of what happened (that is the
-      post-meeting Key Takeaways' job).
+    This used to carry ``insights`` as well — candidate Key Insights the
+    operator kept into the summary. Retired in v0.22.0 in favour of the meeting
+    progress map (POST /live/map). ``summary.keyInsights`` is unaffected: it
+    still comes from the post-meeting pass over the full transcript.
 
     Nothing here is ever added automatically, and nothing here is persisted
     server-side: the live path is stateless and the post-meeting pipeline over
@@ -77,7 +77,6 @@ class LiveSuggestions(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     questions: list[ExtractedQuestion] = Field(default_factory=list)
-    insights: list[str] = Field(default_factory=list)
 
 
 class AnsweredQuestion(BaseModel):
