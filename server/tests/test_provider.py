@@ -190,6 +190,45 @@ def test_a_sign_in_failure_names_the_account_the_server_runs_as(monkeypatch):
     assert "account" in message.lower()
 
 
+def test_the_expired_oauth_session_seen_in_production_gets_a_next_step(monkeypatch):
+    """v0.21.1 surfaced the reason but attached no next step to it.
+
+    The home server logged, on 2026-09-18:
+
+        Claude CLI failed (exit 1): Failed to authenticate: OAuth session
+        expired and could not be refreshed
+
+    — correct, and the confirmation that the 2026-09-16 outage was a lapsed
+    sign-in rather than a spent usage limit. But the hint table had guessed the
+    wording as "oauth token has expired", so nothing matched and the operator
+    was told what broke without being told to run `claude login`. Matching is
+    on stems now, and this test holds the REAL string.
+    """
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "oauth")
+    with pytest.raises(_claude_cli.ClaudeCliError) as excinfo:
+        chat_json(claude_settings())
+    message = str(excinfo.value)
+    assert "OAuth session expired" in message  # the CLI's reason, intact
+    assert "claude login" in message  # and what to do about it
+    assert "account the server runs as" in message.lower()
+
+
+def test_every_plausible_sign_in_wording_lands_on_the_sign_in_hint():
+    # Guessing one sentence is what failed. These are the shapes the CLI has
+    # used or plausibly uses; all must reach the same advice.
+    wordings = [
+        "Failed to authenticate: OAuth session expired and could not be refreshed",
+        "Invalid API key \u00b7 Please run /login",
+        "Not logged in. Run `claude login`.",
+        "OAuth token has expired",
+        "401 Unauthorized",
+        "Authentication failed: credentials could not be read",
+        "Please sign in to continue",
+    ]
+    for wording in wordings:
+        assert "claude login" in _claude_cli._failure_message(1, wording.encode(), b""), wording
+
+
 def test_a_usage_limit_is_reported_as_a_limit_not_a_broken_setup(monkeypatch):
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "quota")
     with pytest.raises(_claude_cli.ClaudeCliError) as excinfo:

@@ -139,6 +139,23 @@ the code, not the test.
   OBSERVED to do, never what it was assumed to do** — the same lesson as the
   whisper-cli entry above.
 
+  It then repeated itself one release later, which is why this paragraph
+  exists. v0.21.1 surfaced the reason but attached no next step, because the
+  hint table had *guessed* the sign-in wording as "oauth token has expired".
+  The CLI actually says `Failed to authenticate: OAuth session expired and
+  could not be refreshed` — confirming, on 2026-09-18, that the lost meeting
+  was a lapsed sign-in and not a spent usage limit. v0.21.2 matches on stems
+  (`authenticat`, `oauth`, `api key`, `credential`, `401`…) rather than
+  sentences, and `test_provider.py` holds the verbatim production string.
+  **Adding a hint means pasting a string someone has seen**, and marking it
+  `# OBSERVED <date>`; an unmarked fragment is a guess and is expected to miss.
+
+  Operational note, not a bug: the Claude backend depends on an OAuth session
+  that expires on its own schedule. It WILL lapse again. `claude login` on the
+  home PC, as the account the server runs as, is the fix; Ollama is one setting
+  away meanwhile, and the transcript survives, so Start AI redoes only the AI
+  stages.
+
 ## whisper.cpp is a pinned dependency, not a moving one
 
 `WHISPER_CPP_REF` in `build-installers.yml` is a tag. It was `master` until

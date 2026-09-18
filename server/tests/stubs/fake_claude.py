@@ -23,6 +23,8 @@ Behaviour is steered by env vars so one stub covers every path:
   until a meeting's notes were lost to "no error output".
 
   FAKE_CLAUDE_MODE=login    exit 1, sign-in message on stdout, stderr empty
+  FAKE_CLAUDE_MODE=oauth    exit 1, the VERBATIM expired-session line seen in
+                            production on 2026-09-18, on stdout
   FAKE_CLAUDE_MODE=quota    exit 1, usage-limit message on stdout, stderr empty
   FAKE_CLAUDE_MODE=silent   exit 1 printing nothing on EITHER stream — the only
                             case that genuinely has no error text to report
@@ -83,6 +85,15 @@ def main() -> int:
     if mode == "login":
         # Real shape: the CLI's own words, on stdout, nothing on stderr.
         sys.stdout.write("Invalid API key \u00b7 Please run /login\n")
+        return 1
+    if mode == "oauth":
+        # VERBATIM from the home server's log, 2026-09-18. Not paraphrased, and
+        # not to be "tidied up": this exact string is what the hint table has to
+        # recognize, and an earlier guess at the wording missed it.
+        sys.stdout.write(
+            "Failed to authenticate: OAuth session expired and could not be "
+            "refreshed\n"
+        )
         return 1
     if mode == "quota":
         sys.stdout.write(

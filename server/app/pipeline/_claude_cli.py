@@ -87,6 +87,14 @@ class ClaudeCliError(RuntimeError):
 # The CLI's own wording, mapped to the operator's next step. Matching is on
 # lowercased fragments of whatever the CLI printed; anything unrecognized falls
 # through and is reported verbatim, which is still an answer.
+#
+# MATCH STEMS, NOT SENTENCES, and prefer a string someone has actually SEEN.
+# The first cut of this table guessed "oauth token has expired". What the CLI
+# really says is "Failed to authenticate: OAuth session expired and could not
+# be refreshed" — so on 2026-09-18 the operator got the reason with no next
+# step attached, one release after the entry in CLAUDE.md about stubs encoding
+# assumed behaviour. Observed strings are marked; the rest are still guesses
+# and should be replaced by real ones as they are seen.
 _HINTS = (
     (
         ("usage limit reached", "rate limit", "out of credits", "quota"),
@@ -97,19 +105,26 @@ _HINTS = (
     ),
     (
         (
-            "please run /login",
-            "invalid api key",
-            "not logged in",
-            "authentication_error",
+            "authenticat",  # OBSERVED 2026-09-18: "Failed to authenticate: …"
+            "oauth",  # OBSERVED 2026-09-18: "… OAuth session expired …"
+            "/login",
+            "log in",
+            "login",
+            "sign in",
+            "signed in",
+            "api key",
+            "credential",
             "unauthorized",
-            "oauth token has expired",
-            "credentials",
+            "401",
         ),
-        "The CLI has no valid sign-in FOR THE ACCOUNT THIS SERVER RUNS AS. A "
-        "`claude login` done in your desktop session does not carry over to a "
-        "service running as another user, because the credentials live in that "
-        "user's profile. Open a terminal as the server's account and run "
-        "`claude login` there.",
+        "The Claude sign-in on this machine has lapsed — re-authorizing is the "
+        "whole fix. Open a terminal on this PC, AS THE ACCOUNT THE SERVER RUNS "
+        "AS, and run `claude login`. The account matters: a sign-in done in "
+        "your own desktop session does not reach a service running as another "
+        "user, because the credentials live in that user's profile. Until then, "
+        "set the AI provider back to Ollama on the Settings tab to get this "
+        "meeting's notes now — the transcript is already saved, so Start AI "
+        "will redo just the AI stages.",
     ),
     (
         ("issue with the selected model", "may not exist or you may not have access"),
