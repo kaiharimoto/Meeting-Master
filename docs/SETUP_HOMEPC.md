@@ -56,9 +56,18 @@ connection code in **Overview**.
 ### a2. Live suggestions during meetings (optional)
 
 The **Settings** tab's **Live suggestions** card controls what the laptop is
-offered *while a meeting is running*: questions the AI hears being answered.
-This is the only place it is configured — the laptop asks this server for these
-settings at the start of each meeting.
+offered *while a meeting is running*: questions the AI hears being answered, and
+the **meeting progress map**. This is the only place either is configured — the
+laptop asks this server for these settings at the start of each meeting.
+
+The two have separate switches and run as separate loops, so one can be off (or
+failing) without touching the other. The map asks less often by default, because
+topics turn over far more slowly than questions get answered and both share this
+machine's GPU. **Test live map** proves the real path over a fixed sample and
+reports the question that actually matters: whether the model ADDED to the topic
+it was shown or opened a parallel one. A model that only ever adds is the
+failure that looks like success — it answers fluently and produces a map that
+restarts every ninety seconds.
 
 Defaults work, with one thing worth checking: the summary model (`gemma4:26b`)
 is sized for quality after the meeting, not for answering inside one. If

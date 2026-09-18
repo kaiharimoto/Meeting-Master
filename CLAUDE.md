@@ -108,6 +108,33 @@ the code, not the test.
   pins the exhaustive list of writers.
 - **The PDF transcript appendix is opt-in and off by default,** and all three
   IPC hops carry the argument. `pdfWiring.test.js`.
+- **The meeting progress map is live-only, and bounded.** Three things
+  together, all in `mapWiring.test.js` and `mapOps.test.js`:
+  1. It never reaches `state.transcript`, the AI prompt, the PDF or the saved
+     meeting. It is built from the live draft by a small model over 15-second
+     windows, so it lives on the draft's side of the line above and dies with
+     the session — same rule, different artefact.
+  2. **An id the server was SENT in the digest means that item; any other id is
+     something new.** Small models reuse `n1` on every single tick. Without
+     this rule tick two overwrites tick one, the map stops growing, and it
+     looks like it is working the whole time.
+  3. The digest is bounded by **topic count, not meeting length** — full detail
+     for the newest topics, one rollup line for the rest. If that ever stops
+     being true, the second hour of a meeting becomes the hour the map stops
+     working, which is the hour it is most worth having.
+- **`app/src/renderer/styles/map.css` has no literal `font-size` either,** and
+  `map.html` links the real `app.css` + `themeBoot.js` rather than copying a
+  palette. `mini.html` does copy one, which is exactly why the mini strip
+  ignores the operator's theme, contrast AND text-size settings — don't repeat
+  it on a window someone stares at for an hour. (`mapWiring.test.js` for the
+  stylesheet, `map.spec.js` for the computed response.)
+- **The two live loops never ask at once, and the map window closes with the
+  operator window.** The first is `liveGpuLock`, a TRY-lock (a queued ask would
+  wait out the other's 110 s timeout and then ask with a stale window; a
+  skipped tick costs nothing, because each loop keeps its own high-water mark).
+  The second is not housekeeping: `window-all-closed` only quits on the LAST
+  window, so an always-on-top map left behind keeps the whole app alive with
+  its loop still asking the home server about a meeting that ended.
 - **`/setup` is loopback-only and unauthenticated; `/admin` is the same
   functionality bearer-gated with the token redacted.** One body, two mounts —
   `routes/admin.py` delegates and holds no logic of its own, and both mounts

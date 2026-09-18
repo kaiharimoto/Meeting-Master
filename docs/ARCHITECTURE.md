@@ -242,7 +242,7 @@ There are two transcripts in this system, and they never mix:
 | Made by | whisper.cpp `small`/`base` on the **laptop**, 15-second windows | whisper.cpp `large-v3-turbo` on the **home server**, whole recording |
 | Exists | during the meeting | after the recording is uploaded |
 | Stored | in memory only (`liveTranscript.js`, a module-local string) | `job.transcript`, persisted |
-| Feeds | the operator's own reading, and the live-suggestion loop | the summary, the Q&A extraction, answer drafting, the AI prompt, the PDF |
+| Feeds | the operator's own reading, the live-suggestion loop, and the meeting progress map | the summary, the Q&A extraction, answer drafting, the AI prompt, the PDF |
 
 **The live draft never reaches the AI that writes the notes.** It is a rough
 pass from a small model over short windows and it is not good enough to base a
@@ -254,6 +254,11 @@ assignment to `state.transcript` comes from a server job.
 new one appears, because "keep the live text so the AI has more to work with" is
 a change that looks helpful and silently degrades every meeting.
 
+The **meeting progress map** sits on the live draft's side of that line and dies
+with it: it is built from the draft, held in the main process, never persisted,
+and never an input to the notes. `mapWiring.test.js` pins that it cannot reach
+`state.transcript`, the PDF, or the saved meeting.
+
 **Transcript damage is reported, not hidden.** Whisper hallucinates a filler
 phrase over quiet or non-speech audio and repeats it, sometimes for pages — the
 transcript still *looks* like a transcript, so it flows into the summary as if
@@ -263,18 +268,28 @@ problem card before Start AI, which is the one moment it can change what the
 operator does. The cause is also addressed: `WHISPER_MAX_CONTEXT=0` disables the
 prompt carry-over that makes such a loop self-sustaining.
 
-### Mid-meeting live suggestions
+### Mid-meeting live features
 
-Three bearer-gated endpoints the laptop drives WHILE a meeting is being
-recorded, all stateless (no job, no store, nothing persisted). The post-meeting
-pipeline over the full transcript stays the quality backstop, so every failure
-here is degradable.
+**Two** features, not one, and the distinction is load-bearing: the live
+suggestions rail and the meeting progress map have separate switches, separate
+loops on the laptop and separate failure counters, so one being off — or
+failing all meeting — has no effect on the other.
+
+They are also separate ASKS rather than one combined call. A single reply
+carrying both would lose the whole tick, both halves, to one malformed JSON
+object; a local model gets JSON wrong often enough for that to be a design
+input rather than a worry.
+
+All four endpoints are bearer-gated and stateless (no job, no store, nothing
+persisted). The post-meeting pipeline over the full transcript stays the quality
+backstop, so every failure here is degradable.
 
 | Endpoint | What it does |
 | --- | --- |
-| `GET /live/config` | How to drive the loop: `{enabled, intervalSec, windowChars, timeoutSec, clientTimeoutSec, model, provider}`. Fetched once per session. |
+| `GET /live/config` | How to drive both loops: `{enabled, intervalSec, windowChars, timeoutSec, clientTimeoutSec, model, provider, map: {enabled, intervalSec, windowChars, digestChars, clientTimeoutSec}}`. Fetched once per session. |
 | `POST /live/warmup` | Loads the live model into VRAM (`keep_alive`) so the first ask doesn't pay for it. Never raises — `{ok, model, latencyMs, error}` IS the diagnosis. |
 | `POST /live/questions` | `{transcriptWindow, attendees, alreadyFlagged}` → `{questions: [ExtractedQuestion]}`. Ollama unreachable/garbled → `502`; empty window → `422`. |
+| `POST /live/map` | `{transcriptWindow, attendees, digest}` → `{ops: [MapOp]}` — CHANGES to the map, never the map itself. Same status codes, gated on `LIVE_MAP`. |
 
 Three answers the laptop must tell apart, hence three status codes — a single
 "it failed" would make the loop punish the server for behaving correctly:
@@ -292,7 +307,17 @@ got to rather than offering one-line lessons to approve. The summary's
 `keyInsights` is unaffected — it comes from the post-meeting pass over the full
 transcript, which was always the higher-quality source.
 
-Four rules this feature is built around, all learned from it not working:
+Both loops run on **Ollama and `settings.live_model`**, whatever `AI_PROVIDER`
+says, and they share that one model deliberately: a separate map model would
+make Ollama unload and reload between the two asks on every tick they share.
+They also never ask at once — a try-lock in the main process (`liveGpuLock.js`)
+applies the same rule to the two live loops that `_require_gpu_free` applies to
+the pipeline. It is a TRY-lock, not a queue: a queued ask would wait out the
+other's 110-second timeout and then ask with a window that had gone stale while
+it waited, whereas a skipped tick costs nothing because each loop keeps its own
+high-water mark and the unread speech goes into the next ask whole.
+
+Four rules these features are built around, all learned from them not working:
 
 - **The server owns the configuration.** Everything (on/off, `LIVE_MODEL`,
   interval, window, timeout, keep-alive, token budget) lives in `server.env` and
@@ -310,8 +335,9 @@ Four rules this feature is built around, all learned from it not working:
   inside Ollama and can burn its whole timeout waiting — which made the first
   suggestion of the meeting, the one that tells the operator this works at all,
   the single most likely to fail.
-- **Never compete with the pipeline for the GPU.** `/live/questions` and
-  `/live/warmup` answer `409` while any job is `transcribing` or `summarizing`.
+- **Never compete with the pipeline for the GPU.** `/live/questions`,
+  `/live/map` and `/live/warmup` answer `409` while any job is `transcribing`
+  or `summarizing`.
   A live ask and a pipeline stage are two models wanting the same VRAM; with a
   separate `LIVE_MODEL` they can thrash Ollama into unloading and reloading
   between every call, making both slow. (`normalizing` is brief CPU ffmpeg work
@@ -325,7 +351,73 @@ across two asks survives whole) rather than being a blind tail slice — less
 prompt, and far less already-mined text to filter back out as duplicates.
 
 When `LIVE_SUGGESTIONS` is false, `/live/config` answers `enabled: false`
-(a normal answer, not an error) and the other two return `503`.
+(a normal answer, not an error) and `/live/questions` + `/live/warmup` return
+`503`. `LIVE_MAP` does the same for `/live/map`, independently.
+
+### The meeting progress map (v0.22.0)
+
+A picture of where the meeting has got to, built autonomously from the live
+draft transcript and shown in its own tall, always-on-top window the operator
+parks beside their slides. It replaced the live rail's *key insights* half; the
+rail still offers questions.
+
+**The server returns changes, not a map.** Each ask sends a digest of the map so
+far and gets back ops against it:
+
+| op | Fields | Effect |
+| --- | --- | --- |
+| `topic` | `id, title, rollup` | Upsert a subject. `rollup` is the one sentence that stands in for it once it collapses. |
+| `node` | `id, topic, kind, text` | Upsert a point. `kind` ∈ `point / question / decision / action / risk / disagreement`. |
+| `link` | `from, to, kind` | Relate two nodes. `kind` ∈ `leads_to / answers / contradicts / supports`. |
+| `status` | `id, status` | Move a node to `open / resolved / parked`. |
+
+Incremental for two reasons that both beat the token saving. A re-emitted map
+has new ids every tick, so the drawing **jitters** — and this is a thing someone
+watches, so nodes that move between updates cost more than an optimal
+arrangement buys. And re-emission costs tokens in proportion to **meeting
+length**, which is the wrong shape entirely: the second hour would be the hour
+it stopped working.
+
+So the digest carries full detail for the newest topics and one rollup line for
+each older one, and is **bounded by topic count, not meeting length** — a
+two-hour meeting costs the same per tick as a ten-minute one. It is capped
+separately from the transcript window, because the two grow for unrelated
+reasons and a shared budget would let a long meeting's map crowd out the speech
+being read. `test_live_map.py` and `mapOps.test.js` both pin this.
+
+**The model is not trusted with ids**, because small models reuse them
+constantly. The rule: *an id we sent in the digest means that item; any other id
+is something new*, even when it collides with something we hold but did not
+show. Without it a model emitting `n1` every tick silently overwrites the map it
+just built — and keeps looking like it is working. Ops that cannot be resolved
+are dropped individually: a link to a node we do not hold would draw an arc to
+nowhere, while a node naming an unknown topic joins the newest topic rather than
+vanishing, since it was said just now and losing real content to a fumbled id is
+the worse trade.
+
+**Where it lives.** `app/src/main/liveMap.js`, in the main process, next to the
+live transcript it derives from — not in the renderer's `ctx.state`, which is
+persisted to `localStorage` on every change and merged by top-level key on load,
+so a half-built map would survive a restart into a different meeting. The map is
+live-only: never written to disk, never part of the meeting record, never seen
+by the AI that writes the notes, and cleared by the next `start()`. It is
+exportable by hand as PNG or SVG, and that is the only way it leaves the window.
+
+**Drawing.** A vertical river: a time spine, topics hanging off it newest-last,
+and cross-topic links arcing back up a left gutter nothing else may enter. Age
+ranks (`live` → `warm` → `cold` → `seam`) are computed in the main process so
+both windows agree, and the compression they drive is deterministic and instant
+— no round trip, no "awaiting rollup" state. Layout is one top-down pass with a
+running cursor, deliberately not a force simulation, because a layout that
+settles differently every tick is unwatchable.
+
+**The window** (`app/src/main/mapWindow.js`) follows `miniManager.js` with three
+differences: it is resizable and remembers its bounds, it does **not** close
+when recording stops (the minute after a meeting ends is when someone reads what
+it turned into), and it does not minimize the operator window. It **must** close
+when the operator window does — `window-all-closed` only quits on the last
+window, so a map left behind would keep the whole app alive with its loop still
+asking the home server about a meeting that ended.
 
 ### `POST /jobs/{id}/pdf`
 
@@ -487,6 +579,11 @@ both the main process (`src/main/ipc.js`) and the preload script.
 | `file:pickWav` | renderer → main | `pickWavFile() -> {filePath\|null}` |
 | `file:pickSave` | renderer → main | `pickSavePath(defaultName) -> {filePath\|null}` |
 | `config:get` | renderer → main | `getConfig() -> {serverUrl, emailMode, pageSize, hasToken, configPath}` |
+| `map:open` / `map:close` | renderer → main | `mapOpen()` / `mapClose()` — the pop-out map window |
+| `map:pin` | map window → main | `mapPin(bool)` — toggle always-on-top |
+| `map:get` | renderer → main | `getMap() -> {map, status, live, pinned}` — the **pull**, because the window opens mid-meeting and would otherwise sit blank until the next tick |
+| `map:state` | **main → BOTH windows** | `onMapState(cb)` — the whole map on every change |
+| `file:saveBinary` | renderer → main | `saveBinaryFile(filePath, base64)` — the generic sibling of `file:saveText`, for the map's PNG export |
 
 The preload exposes exactly this surface via `contextBridge` — no
 `ipcRenderer`, no Node globals. `getConfig()` reports `hasToken` as a boolean

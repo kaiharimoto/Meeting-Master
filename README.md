@@ -74,7 +74,19 @@ explained in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    carries a one-line status, so a home server that is slow, unreachable, busy
    with another meeting, or switched off never looks like a quiet meeting — and
    while you are on another screen the waiting count rides on the sidebar's
-   Meeting item. Everything about the loop
+   Meeting item.
+
+   Alongside it, the home server draws a **meeting progress map**: a tall
+   always-on-top window (**Meeting map**, beside Mini mode while recording)
+   showing where the meeting has got to. Topics flow downward as they come up,
+   newest at the bottom; older ones compress to a single sentence the AI keeps
+   current; and when someone circles back to something said twenty minutes ago,
+   an arc runs back up to it. It is meant to sit beside your slides on a second
+   screen. Nothing on it is saved — **Save** exports it as a PNG or SVG if you
+   want to keep it. The map and the suggestions rail are switched on and off
+   separately, so you can run either without the other.
+
+   Everything about the loop
    (on/off, which model, how often, how patient) is configured in one place:
    the home server dashboard's **Settings → Live suggestions**. Away from home,
    reach that same dashboard from the laptop with **Settings → Home server
