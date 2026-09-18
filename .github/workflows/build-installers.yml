@@ -49,6 +49,33 @@ env:
   # and transcribe a real meeting on the home PC before tagging. The commit the
   # tag resolves to keys the build cache below.
   WHISPER_CPP_REF: v1.9.2
+  # The x86 instruction-set baseline compiled into whisper-cli's CPU backend.
+  #
+  # ggml defaults GGML_NATIVE to ON, and on MSVC that means FindSIMD.cmake
+  # COMPILES AND RUNS an AVX-512 probe on the BUILD machine and hands the whole
+  # ggml-cpu target /arch:AVX512 if it succeeds (ggml/src/ggml-cpu/CMakeLists.txt,
+  # "instruction set detection for MSVC only"). GitHub's windows-latest pool
+  # mixes Azure SKUs — Ice Lake Xeons have AVX-512, EPYC Milan does not — so the
+  # instruction set we SHIP was decided by whichever runner happened to compile
+  # the tree, and flipped whenever the cache below expired. Nothing in this
+  # repository had to change for the installer to stop working.
+  #
+  # The home PC is an i7-12700F. Alder Lake has AVX-512 fused off, so an
+  # /arch:AVX512 build dies with 0xC000001D (illegal instruction) the moment it
+  # reaches a CPU kernel — AFTER --help answers and AFTER the model loads, since
+  # neither of those is ggml-cpu code. That is why it read as a GPU fault for
+  # two releases, and why no fallback rung could survive it: --no-gpu still runs
+  # the same ggml-cpu.
+  #
+  # GGML_NATIVE=OFF turns host detection off and enables the explicit options
+  # instead (ggml/CMakeLists.txt:141 — SSE42/AVX/AVX2/BMI2/FMA/F16C on, the
+  # AVX512 family off), i.e. /arch:AVX2 on every runner. Alder Lake, Zen 3, and
+  # anything else that would sit under a 7900 XTX all have AVX2.
+  #
+  # This string is part of the build cache key ON PURPOSE. The cached tree holds
+  # the COMPILED binary, so changing the cmake flags without busting the key
+  # would restore the old one and ship it unchanged.
+  WHISPER_ISA_BASELINE: avx2
   # LunarG Vulkan SDK version. This SDK provides glslc, which ggml's Vulkan
   # backend uses to compile its compute shaders AT BUILD TIME — the source-only
   # Vulkan loader is not enough. Bump this if the download 404s (LunarG prunes
@@ -93,7 +120,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: whisper.cpp
-          key: whisper-${{ runner.os }}-vk${{ env.VULKAN_VERSION }}-${{ steps.whisper.outputs.sha }}
+          key: whisper-${{ runner.os }}-vk${{ env.VULKAN_VERSION }}-isa${{ env.WHISPER_ISA_BASELINE }}-${{ steps.whisper.outputs.sha }}
 
       # The Vulkan SDK is only needed to COMPILE whisper.cpp, so skip it on a
       # cache hit. Uses the official LunarG installer (silent), which is what
@@ -152,10 +179,14 @@ jobs:
           git clone https://github.com/ggml-org/whisper.cpp whisper.cpp
           cd whisper.cpp
           git checkout ${{ steps.whisper.outputs.sha }}
-          cmake -B build -DGGML_VULKAN=ON -DWHISPER_BUILD_EXAMPLES=ON -DCMAKE_PREFIX_PATH="$env:SPIRV_HEADERS_PREFIX"
+          # GGML_NATIVE=OFF: compile for WHISPER_ISA_BASELINE, not for whatever
+          # this runner's CPU happens to support. See the env block above.
+          cmake -B build -DGGML_VULKAN=ON -DWHISPER_BUILD_EXAMPLES=ON -DGGML_NATIVE=OFF -DCMAKE_PREFIX_PATH="$env:SPIRV_HEADERS_PREFIX"
           if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
           cmake --build build --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw "whisper.cpp build failed." }
+          # Read back by the verify step below, which runs on a cache hit too.
+          Set-Content -Path ".isa-baseline" -Value $env:WHISPER_ISA_BASELINE -NoNewline -Encoding ascii
 
       # Copy the CLI + every DLL beside it into the installer's bin/. We grab
       # all *.dll (ggml*.dll, whisper.dll, etc.) rather than name them, so the
@@ -173,6 +204,26 @@ jobs:
           Get-ChildItem "$rel" -Filter *.dll | Copy-Item -Destination installer/server/bin/ -Force
           Write-Host "Staged into installer/server/bin:"
           Get-ChildItem installer/server/bin | ForEach-Object { Write-Host "  $($_.Name)" }
+
+      # A cache entry created before the baseline was pinned holds a binary
+      # compiled with GGML_NATIVE=ON — i.e. for the CPU of the runner that built
+      # it. Nothing downstream can tell: it stages, it answers --help, it loads a
+      # model, and it dies on the first CPU kernel. The build step leaves a
+      # marker and this reads it back, so such a tree fails the build instead of
+      # becoming an installer. Runs on a cache hit, because that is the case it
+      # exists for.
+      - name: Verify the CPU baseline whisper-cli was built for
+        shell: pwsh
+        run: |
+          $marker = "whisper.cpp/.isa-baseline"
+          if (-not (Test-Path $marker)) {
+            throw "whisper.cpp/.isa-baseline is missing. This tree was built before WHISPER_ISA_BASELINE existed, so its instruction set is whatever the runner that compiled it supported — exactly the bug that shipped an AVX-512 whisper-cli to a CPU without it. Bump WHISPER_ISA_BASELINE to force a rebuild."
+          }
+          $got = (Get-Content $marker -Raw).Trim()
+          if ($got -ne $env:WHISPER_ISA_BASELINE) {
+            throw "whisper-cli was built for '$got' but this workflow expects '$env:WHISPER_ISA_BASELINE'."
+          }
+          Write-Host "whisper-cli CPU baseline: $got"
 
       # The pipeline steers whisper-cli away from the accelerator paths that
       # crash on the target GPU, and its fallback ladder is how a driver bug

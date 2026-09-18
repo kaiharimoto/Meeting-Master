@@ -194,6 +194,28 @@ transcribing a real meeting before tagging. The pipeline survives the next one
 regardless (`transcribe.py` retries a crashed job on safer paths), but that is
 a net, not a plan.
 
+**The pin is not the whole dependency — the BUILD MACHINE was one too.** ggml
+defaults `GGML_NATIVE=ON`, and on MSVC that makes CMake compile and run an
+AVX-512 probe *on the runner* and give the whole `ggml-cpu` target
+`/arch:AVX512` if it passes. `windows-latest` mixes Azure SKUs (Ice Lake Xeon
+has AVX-512, EPYC Milan does not), so the instruction set we shipped was decided
+by whichever machine picked up the build and flipped whenever the build cache
+expired. The home PC is an i7-12700F — Alder Lake, AVX-512 fused off — so it got
+an installer it could not run, with the pin unchanged and this repository
+untouched. From v0.22.2 `WHISPER_ISA_BASELINE: avx2` drives `GGML_NATIVE=OFF`,
+and it is **part of the cache key**: the cached tree holds the compiled binary,
+so flags changed without busting the key would restore the old one and ship it.
+A marker file written at build time is read back on every run, cache hit
+included, so a tree built under the old rules fails CI instead of becoming an
+installer.
+
+That bug cost two releases because of *where* it surfaces: `whisper-cli --help`
+answers, the model loads and reports its size, and only the first CPU kernel
+dies — neither of the first two is `ggml-cpu` code. It read as a GPU fault the
+whole time, and the fallback ladder could not help, because `--no-gpu` runs the
+same `ggml-cpu` as every other rung. **A crash that survives every rung of the
+ladder is evidence against the GPU, not for it.**
+
 ## Shape of the thing
 
 Electron app (vanilla ES modules, no bundler) + FastAPI server on the user's

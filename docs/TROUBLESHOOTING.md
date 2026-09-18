@@ -417,30 +417,53 @@ Fixed in **v0.20.2**, three ways:
 ### "Every path was tried and every one failed"
 
 When the error ends with that sentence, the ladder walked all the way down and
-the CPU rung died too. Read the tail of the report for the line
+the CPU rung died too. Read the tail of the report:
 
 ```
-whisper_init_with_params_no_state: flash attn = 1
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+...
+whisper_backend_init_gpu: no GPU found
 ```
 
-**on a run that also says `use gpu = 0`.** Before v0.21.1 that combination was a
-bug in this repository, not in the driver: the CPU rung was built from scratch
-as `--no-gpu` and nothing else, so it threw away the `--no-flash-attn` the GPU
-rungs had been passing and whisper.cpp v1.8.0+ turned flash attention back on
-for the one run that was supposed to be the safest. It also dropped the
-cooperative-matrix variables the rung above it had just set — which still
-matter with `--no-gpu`, because ggml registers and enumerates the Vulkan
-backend either way (the same crash reports `Found 1 Vulkan devices` and
-`backends = 2` under `use gpu = 0`).
+**A crash there is not about the GPU.** Every accelerator is off, the model has
+finished loading, and `0xC000001D` is STATUS_ILLEGAL_INSTRUCTION — the CPU was
+handed an instruction it does not implement. No fallback rung can survive it,
+because `--no-gpu` still runs the same `ggml-cpu` code as every other rung.
 
-Fixed in **v0.21.1**: the ladder is cumulative, so each rung keeps everything
-the rungs above it switched off. **Update the app** if you are on v0.20.2–v0.21.0
-and a job failed on all three paths.
+**This happened for real, twice over, and both halves are worth knowing.**
 
-If you are on v0.21.1 or later and it still happens, the CPU rung is now a
-genuinely plain CPU run, and a crash there is not about the GPU at all —
-`0xC000001D` on the CPU path means the binary used an instruction this
-processor does not have. Say so in an issue and include the whole report.
+The first half was ours. Until v0.22.1 the CPU rung was built from scratch as
+`--no-gpu` and nothing else, so it dropped the `--no-flash-attn` the GPU rungs
+had been passing and whisper.cpp v1.8.0+ turned flash attention back on for the
+one run meant to be safest — `use gpu = 0` with `flash attn = 1` in the same
+report. Real bug, fixed, and it was not the cause.
+
+The second half is why it looked like a GPU fault for two releases. ggml
+defaults `GGML_NATIVE=ON`, and on MSVC that makes CMake **compile and run an
+AVX-512 probe on the build machine** and compile the whole CPU backend with
+`/arch:AVX512` if it passes. GitHub's `windows-latest` pool mixes Azure SKUs —
+some have AVX-512, some do not — so the instruction set in the shipped
+`whisper-cli.exe` was decided by whichever runner compiled it, and changed
+whenever the build cache expired. The home PC is an **i7-12700F**: Alder Lake
+has AVX-512 fused off, so that binary could never run there. Nothing in this
+repository changed on the day it broke.
+
+It is invisible right up until it isn't, which is what makes it worth writing
+down: `whisper-cli --help` answers normally, the model loads and reports its
+size, and only then does the process vanish — because neither of those is
+`ggml-cpu` code.
+
+Fixed in **v0.22.2**: the build pins `GGML_NATIVE=OFF` (an AVX2 baseline, which
+every CPU that would sit under this GPU has), `WHISPER_ISA_BASELINE` is part of
+the build cache key so the flags and the cached binary cannot disagree, and CI
+fails if a tree built under the old rules is ever restored.
+
+If you are on v0.22.2 or later and it still crashes on all three paths, capture
+the faulting module: **Event Viewer → Windows Logs → Application**, the
+`Application Error` entry for `whisper-cli.exe`. `ggml-cpu.dll` means the
+baseline is still wrong for this machine; anything else is a different problem.
+Include that line and the whole report in an issue.
 
 If you see the original GPU crash anyway:
 
