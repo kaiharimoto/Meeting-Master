@@ -10,6 +10,7 @@
 //        b) the app directory          (dev convenience: next to package.json)
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { app } = require('electron');
 
@@ -129,13 +130,14 @@ function get() {
     try {
       const serverManager = require('./serverManager');
       if (!serverUrl) serverUrl = `http://127.0.0.1:${serverManager.serverPort()}`;
-      // The server's OWN token always wins here. It used to be only a
-      // fallback, so a BEARER_TOKEN left in laptop.env by an earlier pairing
-      // (or a Windows environment variable) outranked the one the server
-      // actually checks — and the home PC 401'd against itself: "online",
-      // with live events stuck on "reconnecting…".
+      // Talking to the server on THIS machine: its own token wins, so a
+      // BEARER_TOKEN left in laptop.env by an earlier pairing can't make the
+      // home PC 401 against itself. Talking to ANOTHER machine (a laptop
+      // left in server mode, paired with a code from the real home PC): the
+      // pasted token is the only one that can work. v0.22.4 applied the
+      // first rule unconditionally and 401'd every upload in that case.
       const own = serverManager.serverBearerToken();
-      if (own) bearerToken = own;
+      if (own && targetsThisMachine(serverUrl)) bearerToken = own;
     } catch {
       // Outside Electron main (tests) — leave as configured.
     }
@@ -156,6 +158,30 @@ function get() {
     uiZoom: val('UI_ZOOM'),
     configPath: loadedPath || candidates[0],
   };
+}
+
+/**
+ * Does this server URL point at the machine the app is running on?
+ * Loopback, this computer's hostname (bare or as the first label of a
+ * Tailscale / LAN domain name), or one of its own interface addresses.
+ */
+function targetsThisMachine(url, hostname = os.hostname(), interfaces = os.networkInterfaces()) {
+  if (!url) return true;
+  let host;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  } catch {
+    return false;
+  }
+  if (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(host)) return true;
+  const me = String(hostname || '').toLowerCase();
+  if (me && (host === me || host.startsWith(`${me}.`))) return true;
+  for (const addrs of Object.values(interfaces || {})) {
+    for (const a of addrs || []) {
+      if (String(a.address).toLowerCase() === host) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -270,4 +296,12 @@ function applyConnectionCode(code) {
   return { serverUrl, token };
 }
 
-module.exports = { get, save, applyConnectionCode, parseEnvFile, resolveMode, KEYS };
+module.exports = {
+  get,
+  save,
+  applyConnectionCode,
+  parseEnvFile,
+  resolveMode,
+  targetsThisMachine,
+  KEYS,
+};

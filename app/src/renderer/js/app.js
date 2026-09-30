@@ -201,15 +201,24 @@ function boot() {
   document.getElementById('edit-summary-btn').addEventListener('click', () => openSummaryEdit());
 
   const switchModeBtn = document.getElementById('switch-mode-btn');
-  // In the server-mode notes studio this UI IS on the home server — hide the
-  // "switch to server mode" field to avoid a confusing self-switch.
+  // The button switches to whichever mode this machine is NOT in. It used to
+  // be hidden in server mode, which left a laptop that had been put in server
+  // mode with no way back short of editing laptop.env by hand.
+  let targetMode = 'server';
   if (switchModeBtn && ctx.api && typeof ctx.api.getMode === 'function') {
     ctx.api
       .getMode()
       .then((res) => {
         if (res && res.mode === 'server') {
-          const field = switchModeBtn.closest('.field');
-          if (field) field.hidden = true;
+          targetMode = 'operator';
+          switchModeBtn.textContent = 'Switch to operator mode…';
+          const help = document.getElementById('switch-mode-help');
+          if (help) {
+            help.textContent =
+              'This machine is in home server mode: it runs the AI server and ' +
+              'dashboard itself. On a laptop that uploads to a home PC, switch ' +
+              'to operator mode (the app restarts).';
+          }
           // Server mode: reveal the Dashboard tab (the loopback dashboard
           // embedded in this same window — no second window, no browser).
           const navDash = document.getElementById('nav-dashboard');
@@ -234,12 +243,16 @@ function boot() {
         return;
       }
       const sure = window.confirm(
-        'Switch this machine to home server mode? The app restarts and runs ' +
-          'the AI server + dashboard here instead of the meeting-capture UI.'
+        targetMode === 'server'
+          ? 'Switch this machine to home server mode? The app restarts and runs ' +
+              'the AI server + dashboard here instead of the meeting-capture UI.'
+          : 'Switch this machine to operator mode? The home server on this ' +
+              'machine stops and the app restarts; uploads go to the home server ' +
+              'in your connection code.'
       );
       if (!sure) return;
       try {
-        await ctx.api.setMode('server');
+        await ctx.api.setMode(targetMode);
       } catch (err) {
         showError(err && err.message ? err.message : String(err));
       }

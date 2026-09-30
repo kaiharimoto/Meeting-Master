@@ -115,3 +115,34 @@ test.describe('server boot page', () => {
     await expect(page.locator('#boot-message')).toContainText('dashboard');
   });
 });
+
+// ---- Settings mode switch ---------------------------------------------------
+
+test.describe('settings mode switch', () => {
+  // The button used to be HIDDEN in server mode, so a laptop that had been put
+  // in server mode could not get back: it kept sending its own local server's
+  // token to the real home PC and every upload 401'd.
+  test('in server mode it offers operator mode and switches to it', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__modeSet = [];
+      window.api = {
+        getMode: async () => ({ mode: 'server' }),
+        getSidecarState: async () => ({ state: 'running', url: '' }),
+        setMode: async (mode) => {
+          window.__modeSet.push(mode);
+          return { ok: true, mode };
+        },
+        getConfig: async () => ({ serverUrl: 'http://127.0.0.1:8080', hasToken: true }),
+        getFullConfig: async () => ({ serverUrl: 'http://127.0.0.1:8080', hasToken: true }),
+        onJobProgress: () => () => {},
+      };
+    });
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.goto(pageUrl('index.html'));
+
+    const btn = page.locator('#switch-mode-btn');
+    await expect(btn).toHaveText('Switch to operator mode…');
+    await btn.evaluate((el) => el.click()); // lives in the (closed) Settings sheet
+    await expect.poll(() => page.evaluate(() => window.__modeSet)).toEqual(['operator']);
+  });
+});
