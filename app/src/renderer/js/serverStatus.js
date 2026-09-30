@@ -59,13 +59,19 @@ function popRow(key, value) {
   return row;
 }
 
+function liveEventsText(s) {
+  if (s.sse === 'connected') return 'connected';
+  if (s.sseRejected) return 'token rejected — paste the connection code in Settings';
+  return s.sse === 'connecting' ? 'reconnecting…' : 'off';
+}
+
 function renderPopover() {
   popoverEl.replaceChildren();
   const s = status || {};
   popoverEl.append(
     popRow('Status', pillState(s).label),
     popRow('Server', s.serverUrl || 'not configured'),
-    popRow('Live events', s.sse === 'connected' ? 'connected' : s.sse === 'connecting' ? 'reconnecting…' : 'off'),
+    popRow('Live events', liveEventsText(s)),
     popRow('Last event', ago(s.lastEventAt)),
     popRow('Server version', s.serverVersion || '—')
   );

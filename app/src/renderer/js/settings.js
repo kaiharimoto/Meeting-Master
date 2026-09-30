@@ -387,6 +387,15 @@ async function onSave() {
     return;
   }
 
+  // A code pasted but never Applied used to be silently dropped: Save sent
+  // the URL/token fields, which were still blank, and a blank token means
+  // "keep the saved one" — so re-pairing after the server's token changed
+  // kept the OLD token and every upload went on 401ing. Apply it here.
+  if (codeInput.value.trim()) {
+    onApplyCode();
+    if (!codeError.hidden) return; // unreadable code: say so, save nothing
+  }
+
   const payload = {
     serverUrl: urlInput.value.trim(),
     emailMode: emailModeEl.value,

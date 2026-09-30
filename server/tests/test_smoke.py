@@ -188,3 +188,21 @@ def test_pdf_rejected_before_ready(client, monkeypatch):
     )
     assert response.status_code == 409, response.text
     assert "not ready" in response.json()["detail"]
+
+
+def test_a_rejected_token_says_why_in_the_server_log(client, caplog):
+    """The laptop only ever sees 401; the log must tell missing from wrong."""
+    import logging
+
+    from app import auth
+
+    auth._last_logged.clear()
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        assert client.get("/jobs").status_code == 401
+        assert client.get(
+            "/jobs", headers={"Authorization": "Bearer not-the-token"}
+        ).status_code == 401
+    text = caplog.text
+    assert "no Authorization header was sent" in text
+    assert "does not match" in text
+    assert "not-the-token" not in text  # never log what was sent

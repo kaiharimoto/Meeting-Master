@@ -125,11 +125,17 @@ function get() {
   // what lets the notes studio, SSE and job calls work with no pairing step.
   let serverUrl = val('HOME_SERVER_URL').replace(/\/+$/, '');
   let bearerToken = val('BEARER_TOKEN');
-  if (mode === 'server' && (!serverUrl || !bearerToken)) {
+  if (mode === 'server') {
     try {
       const serverManager = require('./serverManager');
       if (!serverUrl) serverUrl = `http://127.0.0.1:${serverManager.serverPort()}`;
-      if (!bearerToken) bearerToken = serverManager.serverBearerToken();
+      // The server's OWN token always wins here. It used to be only a
+      // fallback, so a BEARER_TOKEN left in laptop.env by an earlier pairing
+      // (or a Windows environment variable) outranked the one the server
+      // actually checks — and the home PC 401'd against itself: "online",
+      // with live events stuck on "reconnecting…".
+      const own = serverManager.serverBearerToken();
+      if (own) bearerToken = own;
     } catch {
       // Outside Electron main (tests) — leave as configured.
     }

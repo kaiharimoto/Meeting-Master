@@ -46,6 +46,22 @@ async function doFetch(url, options, what) {
   }
 }
 
+// What to DO about a 401. The server says "invalid or missing" for every
+// rejection, so on its own the message sends people looking for a missing
+// token when the usual cause is a stale one.
+function tokenHint() {
+  if (process.env.BEARER_TOKEN && config.get().mode !== 'server') {
+    return (
+      '. A BEARER_TOKEN environment variable is set on this PC and overrides ' +
+      'Settings — remove it (Windows: Edit environment variables) and restart the app.'
+    );
+  }
+  return (
+    ". This app's token does not match the home server's: copy the connection " +
+    "code from the home server's dashboard (Overview tab), paste it in Settings, and Save."
+  );
+}
+
 async function throwHttpError(res, what) {
   let body = '';
   try {
@@ -55,7 +71,9 @@ async function throwHttpError(res, what) {
   }
   if (body.length > BODY_SNIPPET_LIMIT) body = `${body.slice(0, BODY_SNIPPET_LIMIT)}…`;
   const detail = body ? ` — ${body}` : '';
-  const err = new Error(`Home server returned ${res.status} while ${what}${detail}`);
+  const err = new Error(
+    `Home server returned ${res.status} while ${what}${detail}${res.status === 401 ? tokenHint() : ''}`
+  );
   // Callers that must ACT on the status (the live loop treats 409 "GPU busy"
   // and 503 "switched off" as normal, not as failures to back off from) get it
   // as a number instead of having to pattern-match the message.

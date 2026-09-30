@@ -130,10 +130,14 @@ async function connect(gen) {
     });
     if (gen !== generation) return;
     if (!res.ok || !res.body) {
+      // A 401 never heals by retrying — it used to show as an endless
+      // "reconnecting…" while /health (unauthenticated) said "online", which
+      // points nowhere. Name it so the popover can say what to do.
+      setStatus({ sseRejected: res.status === 401 });
       throw new Error(`events stream returned HTTP ${res.status}`);
     }
 
-    setStatus({ sse: 'connected', reachability: 'ok' });
+    setStatus({ sse: 'connected', reachability: 'ok', sseRejected: false });
     openedAt = Date.now();
     stopHealthProbe(); // stream liveness supersedes polling /health
 

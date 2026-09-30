@@ -116,3 +116,25 @@ test('the home server settings button is gated on being connected', async ({ pag
   await adminBtn.click();
   expect(await page.evaluate(() => window.__adminOpened)).toBe(1);
 });
+
+test('a code pasted but never Applied is still saved (not silently dropped)', async ({
+  page,
+}) => {
+  // Re-pairing after the server's token changed: paste, go straight to Save.
+  // The old behaviour kept the previously saved token and uploads kept 401ing.
+  await page.locator('#settings-code-input').fill(CONNECTION_CODE);
+  await page.locator('#settings-save-btn').click();
+
+  const saved = await page.evaluate(() => window.__savedConfigs);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].serverUrl).toBe(EXPECTED_URL);
+  expect(saved[0].token).toBe(EXPECTED_TOKEN);
+});
+
+test('an unreadable pasted code blocks Save instead of being ignored', async ({ page }) => {
+  await page.locator('#settings-code-input').fill('not-a-real-code');
+  await page.locator('#settings-save-btn').click();
+
+  await expect(page.locator('#settings-code-error')).toBeVisible();
+  expect(await page.evaluate(() => window.__savedConfigs)).toHaveLength(0);
+});

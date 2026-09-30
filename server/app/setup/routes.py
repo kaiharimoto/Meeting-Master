@@ -137,7 +137,7 @@ def server_url(settings) -> str:
 
 
 def connection_code(settings) -> str | None:
-    token = settings.BEARER_TOKEN
+    token = settings.BEARER_TOKEN.strip()  # what verify_token compares against
     if not token:
         return None
     return encode_connection_code(server_url(settings), token)
