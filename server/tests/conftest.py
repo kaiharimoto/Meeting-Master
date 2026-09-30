@@ -237,6 +237,17 @@ def fake_ollama():
     thread.join(timeout=5)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_ollama_autostart(monkeypatch):
+    """Tests that point OLLAMA_URL at a dead port must never launch a real
+    `ollama serve` on a machine that happens to have Ollama installed."""
+    from app.pipeline import _ollama
+
+    monkeypatch.setattr(_ollama, "_spawn_serve", lambda exe, settings: False)
+    monkeypatch.setattr(_ollama, "_last_start_attempt", 0.0)
+    monkeypatch.setattr(_ollama, "_start_lock", None)
+
+
 @pytest.fixture()
 def client():
     # Clear the settings cache so the env above applies even if some earlier

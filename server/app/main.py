@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from . import updates
 from .config import get_settings
 from .events import EventBroker, RingLogHandler
+from .pipeline import _ollama
 from .routes import admin, health, jobs, live, monitor
 from .setup import routes as setup_routes
 from .store import JobStore
@@ -36,6 +37,11 @@ store = JobStore(get_settings())
 
 def get_store() -> JobStore:
     return store
+
+
+async def _start_ollama_soon(settings) -> None:
+    await asyncio.sleep(5)  # let the server settle before probing
+    await _ollama.ensure_running(settings)
 
 
 @asynccontextmanager
@@ -62,11 +68,18 @@ async def lifespan(app: FastAPI):
     reset_queue()  # bind the job queue to this event loop (see worker.py)
     worker_task = asyncio.create_task(worker_loop(store))
     update_task = asyncio.create_task(updates.periodic_check_loop())
+    # Bring Ollama up now rather than on the first live tick of a meeting.
+    # Everything that calls it also starts it on demand, so this is only a
+    # head start — and a no-op when it is already running.
+    background = [worker_task, update_task]
+    if (settings.AI_PROVIDER == "ollama" or settings.LIVE_SUGGESTIONS
+            or settings.LIVE_MAP):
+        background.append(asyncio.create_task(_start_ollama_soon(settings)))
     log.info("Home AI server ready (data dir: %s)", settings.data_dir)
     try:
         yield
     finally:
-        for task in (worker_task, update_task):
+        for task in background:
             task.cancel()
             try:
                 await task

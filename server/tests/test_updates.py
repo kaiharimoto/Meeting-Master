@@ -215,3 +215,63 @@ def test_setup_state_includes_updates(client):
     state = local.get("/setup/state").json()
     assert "updates" in state and "current" in state["updates"]
     assert "githubTokenSet" in state
+
+
+# ---- a rejected token on a public repo ---------------------------------------
+
+def _fake_github(monkeypatch, *, public: bool):
+    """Route httpx at a fake GitHub that 401s ANY token (expired/revoked) and
+    answers tokenless requests only when the repo is public."""
+    import httpx
+
+    seen = []
+
+    def handler(request):
+        auth = request.headers.get("Authorization")
+        seen.append(auth)
+        if auth or not public:
+            return httpx.Response(401, json={"message": "Bad credentials"})
+        return httpx.Response(200, json=[{"tag_name": "v99.0.0", "assets": []}])
+
+    real_client = httpx.AsyncClient
+
+    def client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(updates.httpx, "AsyncClient", client)
+    return seen
+
+
+def test_a_rejected_token_falls_back_to_tokenless_on_a_public_repo(monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(updates, "_token_rejected", False)
+    seen = _fake_github(monkeypatch, public=True)
+    settings = get_settings().model_copy(update={"GITHUB_TOKEN": "github_pat_expired"})
+
+    releases = asyncio.run(updates._fetch_releases(settings))
+
+    assert releases[0]["tag_name"] == "v99.0.0"
+    assert seen == ["Bearer github_pat_expired", None]
+    # The asset downloads of the same check must not resend the bad token.
+    assert "Authorization" not in updates._github_headers(settings)
+
+
+def test_a_rejected_token_on_a_private_repo_still_fails_with_a_clear_hint(
+    tmp_path, monkeypatch
+):
+    from app.config import get_settings
+
+    monkeypatch.setenv("MEETING_MASTER_HOME", str(tmp_path))
+    monkeypatch.setattr(updates, "_token_rejected", False)
+    _fake_github(monkeypatch, public=False)
+    settings = get_settings().model_copy(update={"GITHUB_TOKEN": "github_pat_expired"})
+    monkeypatch.setattr(updates, "get_settings", lambda: settings)
+
+    asyncio.run(updates.check_updates())
+
+    task = bootstrap.task_state(updates.CHECK_TASK)
+    assert task["state"] == "failed"
+    assert "HTTP 401" in task["message"] and "invalid or expired" in task["message"]
+    assert "Authorization" in updates._github_headers(settings)

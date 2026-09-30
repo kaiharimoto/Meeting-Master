@@ -101,22 +101,44 @@ def snapshot() -> dict:
 
 # ---- GitHub ----------------------------------------------------------------
 
+# Set by _fetch_releases when GitHub rejected the saved token (401) but the
+# repo answered without it — i.e. the repo is public and the token is simply
+# expired/revoked. The asset downloads of that same check then skip it too.
+_token_rejected = False
+
+
 def _github_headers(settings) -> dict:
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "MeetingMaster-HomeServer",
     }
-    if settings.GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {settings.GITHUB_TOKEN}"
+    token = settings.GITHUB_TOKEN.strip()
+    if token and not _token_rejected:
+        headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
 async def _fetch_releases(settings) -> list[dict]:
+    global _token_rejected
+    _token_rejected = False
     url = f"https://api.github.com/repos/{settings.UPDATE_REPO}/releases?per_page=10"
     timeout = httpx.Timeout(30.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.get(url, headers=_github_headers(settings))
+        if resp.status_code == 401 and settings.GITHUB_TOKEN.strip():
+            # GitHub answers 401 to a bad token even on a PUBLIC repo, so an
+            # expired token would block updates that need no token at all.
+            # Retry without it; if that works, keep going and say so.
+            _token_rejected = True
+            retry = await client.get(url, headers=_github_headers(settings))
+            if retry.is_success:
+                log.warning("GitHub rejected the saved token (HTTP 401); "
+                            "%s is public, so continuing without it",
+                            settings.UPDATE_REPO)
+                resp = retry
+            else:
+                _token_rejected = False  # report the original 401 below
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, list) else []
@@ -158,8 +180,11 @@ async def check_updates() -> None:
         code = exc.response.status_code
         hint = (
             " — add a GitHub token on the Settings tab (the repo is private)"
-            if code in (401, 403, 404) and not settings.GITHUB_TOKEN
-            else " — check the GitHub token on the Settings tab" if code in (401, 403)
+            if code in (401, 403, 404) and not settings.GITHUB_TOKEN.strip()
+            else " — the saved GitHub token is invalid or expired; paste a new "
+                 "one on the Settings tab" if code == 401
+            else " — the GitHub token can't read this repo (it needs "
+                 "Contents: read on it), or the API rate limit was hit" if code == 403
             else ""
         )
         _info["error"] = f"GitHub answered HTTP {code}{hint}"
@@ -225,6 +250,10 @@ async def check_updates() -> None:
         message = f"Update available: {tag} (you are on v{APP_VERSION}). Assets cached."
     else:
         message = f"Up to date (v{APP_VERSION}). Laptop update feed cached."
+    if _token_rejected:
+        message += (" Note: GitHub rejected the saved token (expired or revoked) — "
+                    "this repo is public, so updates work without it. Paste a new "
+                    "token on the Settings tab only if the repo goes private.")
     bootstrap._set(CHECK_TASK, state="done", progress=100, message=message)
 
 
