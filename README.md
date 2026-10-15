@@ -194,7 +194,9 @@ Meeting** — including on the home server itself, where the app window is the
 same meeting UI with the server dashboard as a sidebar tab (v0.5.0+). If the local model can't summarize a meeting, **Copy AI prompt**
 hands the transcript + instructions to any external AI, and **Edit summary →
 Import AI output** brings its JSON reply back for the PDF
-(see docs/TROUBLESHOOTING.md).
+(see docs/TROUBLESHOOTING.md). Away from the home server (v0.23.0+)?
+**Load transcript…** takes a transcript you made yourself
+(.txt/.srt/.vtt/whisper .json) and the AI prompt is then built on the laptop.
 
 **Updates are automatic** (v0.2.1+): the home server watches GitHub for new
 releases (add a read-only GitHub token on its dashboard while the repo is

@@ -91,6 +91,8 @@ const CHANNELS = Object.freeze({
   MAP_STATE: 'map:state', // main -> BOTH windows push (the whole map)
   // Generic sibling of FILE_SAVE_TEXT, for the map's PNG export.
   FILE_SAVE_BINARY: 'file:saveBinary',
+  // Offline finish (v0.23.0): read a transcript made off the home server.
+  FILE_OPEN_TEXT: 'file:openText',
 });
 
 const JOB_STATES = Object.freeze([

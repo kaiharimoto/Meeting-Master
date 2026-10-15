@@ -95,8 +95,13 @@ exactly the format Meeting Master needs:
    dashboard's Jobs tab **AI prompt** link downloads the same file.
 2. **Run it** in your online model and copy its JSON reply.
 3. **Import it:** back in Meeting Master, **Edit summary → Import AI output**,
-   paste, **Apply import**, then **Save**. Generate the PDF and send the email
-   as usual.
+   paste, **Apply import**, then **Save**.
+4. **Add the questions:** the reply's Q&A pairs land as *detected questions*,
+   not cards — click **Review & add** in the Q&A panel and **Add selected**.
+   Only cards print, so skipping this step gives a PDF that says "No
+   questions were captured". (v0.23.0+: the Q&A panel opens on import, and
+   **Generate PDF** asks before printing without them.) Then generate the PDF
+   and send the email as usual.
 
 On the **home server machine** (v0.5.0+) the app window IS the full meeting
 UI (with the dashboard as a sidebar tab): open the job from the Activity
@@ -110,6 +115,28 @@ server can call Claude itself with your existing subscription — see
 [SETUP_HOMEPC.md](SETUP_HOMEPC.md) *"Letting Claude write the notes instead"*.
 That machine's network is not the one blocking AI, which is the whole reason
 the prompt had to leave the building in the first place.
+
+## Home server unreachable — finish the meeting with your own transcript
+
+The PDF is rendered on the laptop, so only transcription and the AI depend on
+the home PC. If you transcribed the recording yourself (e.g. a local whisper
+run), v0.23.0+ finishes the meeting with no server at all:
+
+1. **Load transcript…** (Generate & send panel) and pick the file — plain
+   `.txt`, `.srt`, `.vtt`, whisper console output (`[00:00:00.000 --> …]
+   text`), or whisper JSON (whisper.cpp `-oj`, or `{text, segments}`).
+   **Fix names** opens; offline it lists the names already in the meeting
+   (attendees, cards), not names scanned out of the transcript.
+2. **Copy AI prompt** / **Save AI prompt** — built on the laptop when there is
+   no job or the server doesn't answer; it is byte-for-byte the server's
+   prompt.
+3. Continue from step 2 of the section above (run it, import, add the
+   questions, generate the PDF).
+4. Email: with no job, **Send email** needs laptop email mode (Settings);
+   otherwise attach the PDF to an email yourself.
+
+Loading a file into a meeting that already has a server job detaches it from
+that job (you are asked first).
 
 ## Email didn't send — send it yourself
 

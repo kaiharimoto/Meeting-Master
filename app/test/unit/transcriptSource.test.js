@@ -41,7 +41,14 @@ test('every write of state.transcript comes from a server job', () => {
   // The exhaustive list, checked file by file: if a new writer appears, this
   // test fails and whoever added it has to justify the source.
   const writers = {
-    'renderer/js/generate.js': [/ctx\.state\.transcript = job\.transcript;/],
+    // Plus "Load transcript…": a full transcript FILE the operator picked —
+    // their own off-server transcription of the recording, for finishing a
+    // meeting with the home PC unreachable. Not the live draft, which never
+    // touches disk from this pane (first test above).
+    'renderer/js/generate.js': [
+      /ctx\.state\.transcript = job\.transcript;/,
+      /ctx\.state\.transcript = loaded; \/\/ from a transcript file the operator picked/,
+    ],
     'renderer/js/activity.js': [/ctx\.state\.transcript = job\.transcript \|\| null;/],
     // nameFix rewrites misspelled names INSIDE the server transcript; it
     // derives from state.transcript rather than introducing a new source.
@@ -71,7 +78,10 @@ test('every write of state.transcript comes from a server job', () => {
   // it is behind a keyboard shortcut and loads a canned file, not live text.
   const generate = read('renderer/js/generate.js');
   const generateAssignments = generate.match(/(?:ctx\.)?state\.transcript\s*=[^=]/g) || [];
-  assert.strictEqual(generateAssignments.length, 2, 'job.transcript + the dev mock');
+  assert.strictEqual(generateAssignments.length, 3, 'job.transcript + a loaded file + the dev mock');
+  // The loaded file comes only through the open-file bridge and the parser.
+  assert.match(generate, /await api\.openTranscriptFile\(\)/);
+  assert.match(generate, /const loaded = parseTranscriptFile\(name, text\);/);
   assert.match(generate, /ctx\.state\.transcript = mock\.transcript \|\| null;/);
 });
 
@@ -96,6 +106,15 @@ test('the AI prompt and the upload both read the server transcript', () => {
   // "Copy AI prompt" and "Copy/Save transcript" all go through state.transcript,
   // which the test above pins to the server job.
   assert.match(generate, /const text = ctx\.state\.transcript && ctx\.state\.transcript\.text;/);
+  // The offline prompt (no job / server down) is built from that same
+  // state.transcript, via transcriptOrExplain() — never from anything live.
+  const fetchPrompt = generate.slice(
+    generate.indexOf('async function fetchPromptOrExplain()'),
+    generate.indexOf('async function onSaveAiPrompt()')
+  );
+  assert.match(fetchPrompt, /const transcript = transcriptOrExplain\(\);/);
+  assert.match(fetchPrompt, /return buildExternalPrompt\(transcript, ctx\.state\.details\);/);
+  assert.doesNotMatch(read('renderer/js/aiPrompt.js'), /state|liveTranscript|getRecentText/);
   // The upload sends the AUDIO FILE; the meeting JSON carries no transcript
   // FIELD at all, so there is no path for draft text to ride along with it.
   const meetingJson = generate.slice(

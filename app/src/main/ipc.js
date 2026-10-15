@@ -235,6 +235,28 @@ function registerIpcHandlers(getMainWindow, hooks = {}) {
     return { ok: true, path: filePath };
   });
 
+  // Pick + read a transcript made OFF the home server (e.g. a local whisper
+  // run) so a meeting can be finished with no server at all; the renderer
+  // parses the format (renderer/js/localTranscript.js). handleLocal: the
+  // loopback dashboard shares this preload and must not open file dialogs.
+  handleLocal(CHANNELS.FILE_OPEN_TEXT, async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(getMainWindow(), {
+      title: 'Load a transcript',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Transcripts', extensions: ['txt', 'srt', 'vtt', 'json', 'md'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    });
+    if (canceled || filePaths.length === 0) return { filePath: null, text: null };
+    const fs = require('fs');
+    const filePath = filePaths[0];
+    if (fs.statSync(filePath).size > 20 * 1024 * 1024) {
+      throw new Error('That file is over 20 MB — pick the transcript, not the recording.');
+    }
+    return { filePath, text: fs.readFileSync(filePath, 'utf8') };
+  });
+
   // The binary sibling, for the map's PNG export. Base64 because that is what
   // survives the contextBridge; a Buffer does not.
   handle(CHANNELS.FILE_SAVE_BINARY, async (filePath, base64) => {

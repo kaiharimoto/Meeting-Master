@@ -153,6 +153,8 @@ function onModalKeydown(e) {
 // Show/hide the "N detected questions" prompt in the Q&A panel.
 export function renderExtractPrompt() {
   if (!promptHost) return;
+  // The collapsed Q&A panel's one-line summary counts pending questions too.
+  document.dispatchEvent(new CustomEvent('mm:stage'));
   const n = pending().length;
   if (n === 0 || ctx.state.questionsReviewed) {
     promptHost.hidden = true;

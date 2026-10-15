@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('api', {
   getJobNames: (jobId) => call(CHANNELS.JOB_NAMES_GET, jobId),
   applyJobNames: (jobId, mapping) => call(CHANNELS.JOB_NAMES_APPLY, jobId, mapping),
   saveTextFile: (filePath, text) => call(CHANNELS.FILE_SAVE_TEXT, filePath, text),
+  openTranscriptFile: () => call(CHANNELS.FILE_OPEN_TEXT),
   saveBinaryFile: (filePath, base64) =>
     call(CHANNELS.FILE_SAVE_BINARY, filePath, base64),
 

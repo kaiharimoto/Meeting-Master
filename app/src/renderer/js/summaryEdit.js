@@ -192,9 +192,18 @@ async function applyImport() {
     if (s.questions && s.questions.length) {
       const { captureExtracted, renderExtractPrompt } = await import('./extractReview.js');
       ctx.state.questionsReviewed = false;
-      captureExtracted(s.questions);
+      const kept = captureExtracted(s.questions);
+      ctx.persist(); // the questions are their own step — don't lose them to Cancel
       renderExtractPrompt();
-      note = `Imported — ${s.questions.length} detected question(s) await review in the Q&A panel. Review the fields, then Save.`;
+      // A collapsed Q&A panel hides the Review & add bar and used to read
+      // "No questions captured" — open it so the next step is in view.
+      const { revealPanel } = await import('./stage.js');
+      revealPanel('panel-qa');
+      const dupes = s.questions.length - kept;
+      note = kept
+        ? `Imported — ${kept} detected question(s) await review: click Review & add in the Q&A panel to put them in the PDF.` +
+          (dupes ? ` (${dupes} matched questions you already have.)` : '') + ' Review the fields, then Save.'
+        : `Imported — all ${s.questions.length} detected question(s) match questions you already have. Review the fields, then Save.`;
     }
     importNote.textContent = note;
   } catch (err) {

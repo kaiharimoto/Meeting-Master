@@ -106,6 +106,14 @@ the code, not the test.
 - **The live transcript draft never becomes `state.transcript`,** and the AI
   prompt is always built from the server transcript. `transcriptSource.test.js`
   pins the exhaustive list of writers.
+- **The laptop's offline AI prompt is generated, never hand-copied.**
+  `app/src/renderer/js/aiPromptText.js` is written by
+  `cd server && python -m app.tools.export_ai_prompt` from
+  `summarize.external_prompt()`. Change a prompt → re-run it;
+  `test_prompt_parity.py` fails on a stale file and runs the JS under Node
+  against the Python. The one other `state.transcript` writer besides the
+  server job is **Load transcript…** — a file the operator picked, never the
+  live draft (`transcriptSource.test.js`).
 - **The PDF transcript appendix is opt-in and off by default,** and all three
   IPC hops carry the argument. `pdfWiring.test.js`.
 - **The meeting progress map is live-only, and bounded.** Three things

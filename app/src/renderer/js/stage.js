@@ -151,6 +151,14 @@ function nextStep(stage) {
   }
 }
 
+/** Expand a panel now (a manual-style override for the current stage), e.g.
+ *  to put a freshly produced next step in view. */
+export function revealPanel(panelId) {
+  if (!els || !els.screen) return;
+  overrides[panelId] = false;
+  refreshStage();
+}
+
 export function refreshStage() {
   if (!ctx || !els || !els.screen) return;
   const stage = computeStage();
@@ -199,7 +207,20 @@ function renderSummaries() {
       .filter(Boolean)
       .join(' · ')
   );
-  setSummary('panel-qa', cards === 0 ? 'No questions captured' : `${cards} question${cards === 1 ? '' : 's'} captured`);
+  // Detected questions waiting for Review & add are not cards yet, but they
+  // are not "nothing" either — saying "No questions captured" over a pending
+  // list sent an operator to the PDF without them (v0.22.5 field report).
+  const pending = !s.questionsReviewed && Array.isArray(s.extractedQuestions)
+    ? s.extractedQuestions.length
+    : 0;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  let qa = cards === 0 ? 'No questions captured' : `${plural(cards, 'question')} captured`;
+  if (pending) {
+    qa = cards === 0
+      ? `${plural(pending, 'detected question')} to review — open to add them`
+      : `${qa} · ${pending} more to review`;
+  }
+  setSummary('panel-qa', qa);
   setSummary(
     'panel-record',
     rec && rec.filePath

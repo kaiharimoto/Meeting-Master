@@ -13,6 +13,8 @@ import { saveTextAs, fileStem } from './saveText.js';
 import { segmentsToTimestampedText } from './timecode.js';
 import { isTypingTarget, anyModalOpen, matchChord } from './keys.js';
 import { refreshFillButton } from './answerFill.js';
+import { buildExternalPrompt } from './aiPrompt.js';
+import { parseTranscriptFile } from './localTranscript.js';
 
 // Renderer modules can't require() the CommonJS shared/schema.js; keep this
 // list in sync with READY_STATES there.
@@ -66,6 +68,11 @@ export function initGenerate(context) {
   // Explicit file upload — bypasses any attached in-app recording.
   els.pickFile = document.getElementById('pick-file-btn');
   if (els.pickFile) els.pickFile.addEventListener('click', () => guarded(onPickFileExplicit));
+
+  // Offline finish (v0.23.0): a transcript made elsewhere (e.g. a local
+  // whisper run) stands in for the server's when the home PC is unreachable.
+  els.loadTranscript = document.getElementById('load-transcript-btn');
+  if (els.loadTranscript) els.loadTranscript.addEventListener('click', () => guarded(onLoadTranscript));
 
   // Transcript escape hatch (v0.4.0): grab the raw transcript / the exact AI
   // prompt so an EXTERNAL model can write the summary when the local one
@@ -513,6 +520,23 @@ function transcriptForPdf() {
 
 async function onGeneratePdf() {
   const api = requireApi();
+  // Detected/imported questions reach the PDF only once approved as cards.
+  // Left unreviewed they printed as "No questions were captured" (field
+  // report, v0.22.5) — offer the review first.
+  const pending = Array.isArray(ctx.state.extractedQuestions) ? ctx.state.extractedQuestions : [];
+  if (pending.length && !ctx.state.questionsReviewed) {
+    const review = window.confirm(
+      `${pending.length} detected question(s) haven't been added to the Q&A yet, ` +
+        'so they would be missing from the PDF.\n\nOK = review & add them now\n' +
+        'Cancel = generate the PDF without them'
+    );
+    if (review) {
+      const { openExtractModal } = await import('./extractReview.js');
+      openExtractModal();
+      setStatus('Tick the questions to keep and click Add selected, then Generate PDF again.');
+      return;
+    }
+  }
   setStatus('Rendering the PDF…', { busy: true });
   // Works even before/without AI results: the print template shows a
   // placeholder when summary is null.
@@ -657,6 +681,10 @@ export function updateButtons(context) {
   const recBusy = typeof c.recActive === 'function' && c.recActive();
   els.pick.disabled = !hasApi || uploading || recBusy;
   if (els.pickFile) els.pickFile.disabled = !hasApi || uploading || recBusy;
+  if (els.loadTranscript) {
+    els.loadTranscript.disabled =
+      !hasApi || uploading || recBusy || typeof c.api.openTranscriptFile !== 'function';
+  }
   els.generate.disabled = !hasApi; // PDF works even without AI results
   els.open.disabled = !hasApi || !c.state.pdfPath;
   els.send.disabled = !hasApi || !c.state.pdfPath;
@@ -673,11 +701,11 @@ export function updateButtons(context) {
     els.saveTranscript.disabled =
       !transcriptText || !hasApi || typeof c.api.saveTextFile !== 'function';
   }
-  // The server composes the prompt, so both prompt buttons need the job to
-  // still exist there; saving additionally needs the file-write bridge.
-  const promptJobId = c.state.job && c.state.job.id;
-  const promptUnavailable =
-    !hasApi || !promptJobId || !transcriptText || typeof c.api.getJobPrompt !== 'function';
+  // The server's prompt is preferred while its job exists; with no job (a
+  // loaded transcript) or no server, the identical prompt is built locally —
+  // so a transcript is all either prompt button needs. Saving additionally
+  // needs the file-write bridge.
+  const promptUnavailable = !transcriptText;
   if (els.copyPrompt) els.copyPrompt.disabled = promptUnavailable;
   if (els.savePrompt) {
     els.savePrompt.disabled = promptUnavailable || typeof c.api.saveTextFile !== 'function';
@@ -773,14 +801,20 @@ async function onCopyAiPrompt() {
 
 /** The prompt text for this meeting's job, or null with the reason shown. */
 async function fetchPromptOrExplain() {
+  const transcript = transcriptOrExplain();
+  if (!transcript) return null;
   const jobId = ctx.state.job && ctx.state.job.id;
-  if (!jobId) {
-    showError('No AI job for this meeting — upload the recording first (the prompt embeds the transcript held by the server).');
-    return null;
+  if (jobId && ctx.api && typeof ctx.api.getJobPrompt === 'function') {
+    setStatus('Fetching the AI prompt…', { busy: true });
+    try {
+      const { text } = await ctx.api.getJobPrompt(jobId);
+      if (text) return text;
+    } catch {
+      // Server unreachable or the job is gone — fall through to the local
+      // build, which is the same prompt over the transcript held here.
+    }
   }
-  setStatus('Fetching the AI prompt…', { busy: true });
-  const { text } = await ctx.api.getJobPrompt(jobId);
-  return text;
+  return buildExternalPrompt(transcript, ctx.state.details);
 }
 
 /** Save AI prompt: the phone-friendly route out of the app. Copying a whole
@@ -802,6 +836,47 @@ async function savePromptToFile(text) {
     title: 'AI prompt saved',
     message: 'Import the model’s JSON reply via Edit summary → Import AI output.',
   });
+}
+
+/** Load a transcript file made off the home server (e.g. local whisper).
+ *  An explicit, operator-picked full transcript of the recording — never the
+ *  live draft (see test/unit/transcriptSource.test.js). */
+async function onLoadTranscript() {
+  const api = requireApi();
+  const job = ctx.state.job || {};
+  if (job.id && !window.confirm(
+    'This meeting already has a home-server job. Loading a transcript file ' +
+      'replaces its transcript and detaches the meeting from that job ' +
+      '(finish it with Copy AI prompt → Import AI output). Continue?'
+  )) {
+    return;
+  }
+  const { filePath, text } = await api.openTranscriptFile();
+  if (!filePath) {
+    setStatus('No transcript file picked.');
+    return;
+  }
+  const name = filePath.split(/[\\/]/).pop();
+  const loaded = parseTranscriptFile(name, text); // throws a readable error
+  stopPolling();
+  ctx.state.job = { id: null, state: null };
+  ctx.state.transcript = loaded; // from a transcript file the operator picked
+  ctx.state.pdfPath = null;
+  ctx.persist();
+  ctx.renderAll();
+  updateButtons(ctx);
+  renderExtractPrompt();
+  document.dispatchEvent(new CustomEvent('mm:stage'));
+  setStatus(
+    `Transcript loaded from ${name} (${loaded.text.length.toLocaleString()} characters). ` +
+      'Next: Copy AI prompt → paste into your AI → Edit summary → Import AI output.'
+  );
+  showToast({
+    kind: 'success',
+    title: 'Transcript loaded',
+    message: 'Fix names if needed, then Copy AI prompt.',
+  });
+  import('./nameFix.js').then((m) => m.openNameFix()).catch(() => {});
 }
 
 // ---- Dev shortcut ----------------------------------------------------------------
